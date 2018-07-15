@@ -10,6 +10,7 @@ namespace ColorChord.NET
     {
         static void Main(string[] args)
         {
+
         }
     }
 }
