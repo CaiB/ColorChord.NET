@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 
 namespace ColorChord.NET
 {
@@ -23,16 +21,40 @@ namespace ColorChord.NET
         const float NoteJumpability = 1.8F;
         const float NoteAttachFreqIIR = 0.3F;
         const float NoteAttachAmpIIR = 0.35F;
+        const float NoteAttachAmpIIR2 = 0.25F;
+        const float NoteCombineDistance = 0.5F;
+        const float NoteMinAmplitude = 0.001F;
+        const float NoteNewMinDistributionValue = 0.02F;
+        const float NoteOutChop = 0.05F;
+        const int BaseHz = 55;
 
-        public static void RunNoteFinder(float[] Stream, int Head, int Size)
+        static int Freqs = FreqBinCount * Octaves;
+        static int NotePeakCount = FreqBinCount / 2;
+        static int MaxDists = FreqBinCount / 2;
+        static float[] NotePositions = new float[NotePeakCount];
+        static float[] NoteAmplitudes = new float[NotePeakCount];
+        static float[] NoteAmplitudesOut = new float[NotePeakCount];
+        static float[] NoteAmplitudes2 = new float[NotePeakCount];
+        static byte[] PeakToDistMap = new byte[NotePeakCount];
+        static int[] EnduringNoteID = new int[NotePeakCount];
+        static byte[] NoteFounds = new byte[NotePeakCount];
+        static float[] Frequencies = new float[Freqs];
+        static float[] OutBins = new float[Freqs];
+        static float[] FoldedBins = new float[FreqBinCount];
+        static NoteDists[] Dists = new NoteDists[MaxDists];
+
+        public static void Init(int AudioSampleRate)
         {
-            int NotePeakCount = FreqBinCount / 2;
-            int Freqs = FreqBinCount * Octaves;
-            int MaxDists = FreqBinCount / 2;
-            float[] DFTBins = new float[Freqs];
-            float[] Frequencies = new float[Freqs];
-            float[] OutBins = new float[Freqs];
+            for (int i = 0; i < Freqs; i++)
+            {
+                Frequencies[i] = (float)((AudioSampleRate / BaseHz) / Math.Pow(2, (float)i / FreqBinCount));
+            }
+        }
 
+        public static float[] RunNoteFinder(float[] Stream, int Head, int Size)
+        {
+            float[] DFTBins = new float[Freqs];
+            
             DoDFTProgressive32(ref DFTBins, ref Frequencies, Freqs, ref Stream, Head, Size, DFT_Q, DFT_Speedup);
 
             for (int i = 0; i < Freqs; i++)
@@ -52,7 +74,6 @@ namespace ColorChord.NET
             }
 
             //Combine the bins into folded bins.
-            float[] FoldedBins = new float[FreqBinCount];
             for (int i = 0; i < FreqBinCount; i++)
             {
                 float amp = 0;
@@ -66,7 +87,6 @@ namespace ColorChord.NET
             //This is here to reduce the number of false-positive hits.  It helps remove peaks that are meaningless.
             FilterFoldedBinsBlob(FoldedBins, FreqBinCount, FilterStrength, FilterIterations);
 
-            NoteDists[] Dists = new NoteDists[MaxDists];
             for (int i = 0; i < MaxDists; i++)
             {
                 Dists[i].taken = 0;
@@ -98,13 +118,8 @@ namespace ColorChord.NET
             //note_peaks = total number of peaks.
             //note_positions[] = position of the note on the scale.
             //note_amplitudes[] = amplitudes of these note peaks.
-            byte[] NoteFounds = new byte[NotePeakCount];
 
             //First try to find any close peaks.
-            float[] NotePositions = new float[NotePeakCount];
-            float[] NoteAmplitudes = new float[NotePeakCount];
-            byte[] PeakToDistMap = new byte[NotePeakCount];
-            int[] EnduringNoteID = new int[NotePeakCount];
             int CurrentNoteID = 1;
             for (int i = 0; i < NotePeakCount; i++)
             {
@@ -132,6 +147,90 @@ namespace ColorChord.NET
                 }
             }
 
+            //Combine like-notes.
+            for (int i = 0; i < NotePeakCount; i++)
+            {
+                //		printf( "%f %f %d\n", nf->note_amplitudes[i], nf->note_positions[i], nf->enduring_note_id[i] );
+                for (int j = 0; j < NotePeakCount; j++)
+                {
+                    if (i == j) continue;
+                    if (fabsloop(NotePositions[i], NotePositions[j], FreqBinCount) < NoteCombineDistance &&
+                        NoteAmplitudes[i] > 0.0 &&
+                        NoteAmplitudes[j] > 0.0)
+                    {
+                        int a;
+                        int b;
+                        if (NoteAmplitudes[i] > NoteAmplitudes[j])
+                        {
+                            a = i;
+                            b = j;
+                        }
+                        else
+                        {
+                            b = i;
+                            a = j;
+                        }
+                        float newp = avgloop(NotePositions[a], NoteAmplitudes[a], NotePositions[b], NoteAmplitudes[b], FreqBinCount);
+
+                        //Combine B into A.
+                        NoteAmplitudes[a] += NoteAmplitudes[b];
+                        NotePositions[a] = newp;
+                        NoteAmplitudes[b] = 0;
+                        NotePositions[b] = -100;
+                        EnduringNoteID[b] = 0;
+                    }
+                }
+            }
+
+            //Assign dead or decayed notes to new  peaks.
+            for (int i = 0; i < NotePeakCount; i++)
+            {
+                if (NoteAmplitudes[i] < NoteMinAmplitude)
+                {
+                    EnduringNoteID[i] = 0;
+
+                    //Find a new peak for this note.
+                    for (int j = 0; j < DistsCount; j++)
+                    {
+                        if (Dists[j].taken == 0 && Dists[j].amp > NoteNewMinDistributionValue)
+                        {
+                            EnduringNoteID[i] = CurrentNoteID++;
+                            Dists[j].taken = 1;
+                            NoteAmplitudes[i] = Dists[j].amp;//min_note_amplitude + dists[j].amp * note_attach_amp_iir; //TODO: Should this jump?
+                            NotePositions[i] = Dists[j].mean;
+                            NoteFounds[i] = 1;
+                        }
+                    }
+                }
+            }
+
+            //Any remaining notes that could not find a peak good enough must be decayed to oblivion.
+            for (int i = 0; i < NotePeakCount; i++)
+            {
+                if (NoteFounds[i] == 0)
+                {
+                    NoteAmplitudes[i] = NoteAmplitudes[i] * (1.0F - NoteAttachAmpIIR);
+                }
+
+                NoteAmplitudes2[i] = NoteAmplitudes2[i] * (1.0F - NoteAttachAmpIIR2) + NoteAmplitudes[i] * NoteAttachAmpIIR2;
+
+                if (NoteAmplitudes2[i] < NoteMinAmplitude)
+                {
+                    NoteAmplitudes[i] = 0;
+                    NoteAmplitudes2[i] = 0;
+                }
+            }
+            
+            for (int i = 0; i < NotePeakCount; i++)
+            {
+                NoteAmplitudesOut[i] = NoteAmplitudes[i] - NoteOutChop;
+                if (NoteAmplitudesOut[i] < 0)
+                {
+                    NoteAmplitudesOut[i] = 0;
+                }
+            }
+
+            return NoteAmplitudesOut;
         }
 
         private static void FilterFoldedBinsBlob(float[] folded, int bins, float strength, int iter)

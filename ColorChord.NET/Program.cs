@@ -40,6 +40,8 @@ namespace ColorChord.NET
             Console.WriteLine("  Sample rate: " + MixFormat.nSamplesPerSec);
             Console.WriteLine("  Bits per sample: " + MixFormat.wBitsPerSample);
 
+            ColorChord.Init((int)MixFormat.nSamplesPerSec);
+
             ErrorCode = Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK, BufferLength, 0, MixFormatPtr);
             Marshal.ThrowExceptionForHR(ErrorCode);
 
