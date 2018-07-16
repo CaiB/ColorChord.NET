@@ -34,8 +34,10 @@ namespace ColorChord.NET
             while (!Console.KeyAvailable)
             {
                 Console.WriteLine(AudioBufferHead + ":" + AudioBuffer[AudioBufferHead]);
-                ColorChord.RunNoteFinder(AudioBuffer, AudioBufferHead, AudioBuffer.Length);
-                Console.WriteLine(ColorChord.NotePositions[0]);//string.Join(", ", NoteInfo.Select(x => x.ToString()).ToArray()));
+                NoteFinder.RunNoteFinder(AudioBuffer, AudioBufferHead, AudioBuffer.Length);
+                Console.WriteLine(string.Join(", ", NoteFinder.NotePositions.Select(x => x.ToString()).ToArray()));
+                LinearOutput.Update();
+                LinearOutput.Send();
                 Thread.Sleep(100);
             }
             KeepGoing = false;
@@ -63,7 +65,7 @@ namespace ColorChord.NET
             Console.WriteLine("  Sample rate: " + MixFormat.nSamplesPerSec);
             Console.WriteLine("  Bits per sample: " + MixFormat.wBitsPerSample);
 
-            ColorChord.Init((int)MixFormat.nSamplesPerSec);
+            NoteFinder.Init((int)MixFormat.nSamplesPerSec);
 
             ErrorCode = Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK, BufferLength, 0, MixFormatPtr);
             Marshal.ThrowExceptionForHR(ErrorCode);

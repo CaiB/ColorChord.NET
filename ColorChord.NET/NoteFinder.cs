@@ -3,15 +3,15 @@ using System.Runtime.InteropServices;
 
 namespace ColorChord.NET
 {
-    public static class ColorChord
+    public static class NoteFinder
     {
-        const int FreqBinCount = 24;
+        public const int FreqBinCount = 24;
         const int Octaves = 5;
         const float DFT_Q = 20;
         const float DFT_Speedup = 1000;
         const float DFT_IIR = 0.6F;
         const float Amplify = 2;
-        const float Slope = 0;
+        const float Slope = 0.1F;
         const int FilterIterations = 2;
         const float FilterStrength = 0.5F;
         const float DefaultSigma = 1.4F;
@@ -29,10 +29,10 @@ namespace ColorChord.NET
         const int BaseHz = 55;
 
         static int Freqs = FreqBinCount * Octaves;
-        static int NotePeakCount = FreqBinCount / 2;
+        public static int NotePeakCount = FreqBinCount / 2;
         static int MaxDists = FreqBinCount / 2;
         public static float[] NotePositions = new float[NotePeakCount];
-        static float[] NoteAmplitudes = new float[NotePeakCount];
+        public static float[] NoteAmplitudes = new float[NotePeakCount];
         static float[] NoteAmplitudesOut = new float[NotePeakCount];
         public static float[] NoteAmplitudes2 = new float[NotePeakCount];
         static byte[] PeakToDistMap = new byte[NotePeakCount];
