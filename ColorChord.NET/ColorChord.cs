@@ -18,6 +18,11 @@ namespace ColorChord.NET
         const float FilterStrength = 0.5F;
         const float DefaultSigma = 1.4F;
         const int DecomposeIterations = 1000;
+        const float CompressCoefficient = 1;
+        const float CompressExponent = 0.5F;
+        const float NoteJumpability = 1.8F;
+        const float NoteAttachFreqIIR = 0.3F;
+        const float NoteAttachAmpIIR = 0.35F;
 
         public static void RunNoteFinder(float[] Stream, int Head, int Size)
         {
@@ -68,6 +73,64 @@ namespace ColorChord.NET
             }
             int DistsCount = DecomposeHistogram(FoldedBins, FreqBinCount, ref Dists, MaxDists, DefaultSigma, DecomposeIterations);
 
+            //Compress/normalize dist_amps
+            float total_dist = 0;
+
+            for (int i = 0; i < DistsCount; i++)
+            {
+                total_dist += Dists[i].amp;
+            }
+            float muxer = (float)(CompressCoefficient / Math.Pow(total_dist * CompressCoefficient, CompressExponent));
+            total_dist = muxer;
+            for (int i = 0; i < DistsCount; i++)
+            {
+                Dists[i].amp *= total_dist;
+            }
+
+            Array.Sort(Dists);
+
+            //We now have the positions and amplitudes of the normal distributions that comprise our spectrum.  IN SORTED ORDER!
+            //dists_count = # of distributions
+            //dists[].amp = amplitudes of the normal distributions
+            //dists[].mean = positions of the normal distributions
+
+            //We need to use this in a filtered manner to obtain the "note" peaks
+            //note_peaks = total number of peaks.
+            //note_positions[] = position of the note on the scale.
+            //note_amplitudes[] = amplitudes of these note peaks.
+            byte[] NoteFounds = new byte[NotePeakCount];
+
+            //First try to find any close peaks.
+            float[] NotePositions = new float[NotePeakCount];
+            float[] NoteAmplitudes = new float[NotePeakCount];
+            byte[] PeakToDistMap = new byte[NotePeakCount];
+            int[] EnduringNoteID = new int[NotePeakCount];
+            int CurrentNoteID = 1;
+            for (int i = 0; i < NotePeakCount; i++)
+            {
+                for (byte j = 0; j < DistsCount; j++)
+                {
+                    if (Dists[j].taken == 0 && NoteFounds[i] == 0 && fabsloop(NotePositions[i], Dists[j].mean, FreqBinCount) < NoteJumpability && Dists[j].amp > 0.00001) //0.00001 for stability.
+                    {
+                        //Attach ourselves to this bin.
+                        PeakToDistMap[i] = j;
+                        Dists[j].taken = 1;
+                        if (EnduringNoteID[i] == 0)
+                            EnduringNoteID[i] = CurrentNoteID++;
+                        NoteFounds[i] = 1;
+
+                        NotePositions[i] = avgloop(NotePositions[i], (1.0F - NoteAttachFreqIIR), Dists[j].mean, NoteAttachFreqIIR, FreqBinCount);
+
+                        //I guess you can't IIR this like normal.
+                        ////note_positions[i] * (1.-note_attach_freq_iir) + dists[j].mean * note_attach_freq_iir;
+
+                        NoteAmplitudes[i] = NoteAmplitudes[i] * (1.0F - NoteAttachAmpIIR) + Dists[j].amp * NoteAttachAmpIIR;
+                        //XXX TODO: Consider: Always boost power, never reduce?
+                        //					if( dists[i].amp > note_amplitudes[i] )
+                        //						note_amplitudes[i] = dists[i].amp;
+                    }
+                }
+            }
 
         }
 
@@ -140,12 +203,42 @@ namespace ColorChord.NET
             return peak;
         }
 
-        private struct NoteDists
+        //Take the absolute distance between two points on a torus.
+        private static float fabsloop(float a, float b, float modl)
+        {
+            float fa = Math.Abs(a - b);
+            fa = fa % modl;
+            if (fa > modl / 2.0) { fa = modl - fa; }
+            return fa;
+        }
+
+        //Get the weighted - average of two points on a torus.
+        private static float avgloop(float pta, float ampa, float ptb, float ampb, float modl)
+        {
+            float amptot = ampa + ampb;
+
+            //Determine if it should go linearly, or around the edge.
+            if (Math.Abs(pta - ptb) > modl / 2.0)
+            { //Loop around the outside.
+                if (pta < ptb) { pta += modl; }
+                else { ptb += modl; }
+            }
+            float modmid = (pta * ampa + ptb * ampb) / amptot;
+            return modmid % modl;
+        }
+
+        private struct NoteDists : IComparable<NoteDists>
         {
             public float amp;   //Amplitude of normal distribution
             public float mean;  //Mean of normal distribution
             public float sigma; //Sigma of normal distribution
             public byte taken; //Is distribution associated with any notes?
+
+            public int CompareTo(NoteDists other)
+            {
+                float v = this.amp - other.amp;
+	            return ((0.0f < v) ? 1 : 0) - ((v < 0.0f) ? 1 : 0);
+            }
         };
 
         [DllImport("ColorChordLib.dll")]
