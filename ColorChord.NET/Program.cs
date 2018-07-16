@@ -34,8 +34,8 @@ namespace ColorChord.NET
             while (!Console.KeyAvailable)
             {
                 Console.WriteLine(AudioBufferHead + ":" + AudioBuffer[AudioBufferHead]);
-                float[] NoteInfo = ColorChord.RunNoteFinder(AudioBuffer, AudioBufferHead, AudioBuffer.Length);
-                Console.WriteLine(string.Join(", ", NoteInfo.Select(x => x.ToString()).ToArray()));
+                ColorChord.RunNoteFinder(AudioBuffer, AudioBufferHead, AudioBuffer.Length);
+                Console.WriteLine(ColorChord.NotePositions[0]);//string.Join(", ", NoteInfo.Select(x => x.ToString()).ToArray()));
                 Thread.Sleep(100);
             }
             KeepGoing = false;

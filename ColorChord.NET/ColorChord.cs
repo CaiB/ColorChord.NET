@@ -31,10 +31,10 @@ namespace ColorChord.NET
         static int Freqs = FreqBinCount * Octaves;
         static int NotePeakCount = FreqBinCount / 2;
         static int MaxDists = FreqBinCount / 2;
-        static float[] NotePositions = new float[NotePeakCount];
+        public static float[] NotePositions = new float[NotePeakCount];
         static float[] NoteAmplitudes = new float[NotePeakCount];
         static float[] NoteAmplitudesOut = new float[NotePeakCount];
-        static float[] NoteAmplitudes2 = new float[NotePeakCount];
+        public static float[] NoteAmplitudes2 = new float[NotePeakCount];
         static byte[] PeakToDistMap = new byte[NotePeakCount];
         static int[] EnduringNoteID = new int[NotePeakCount];
         static byte[] NoteFounds = new byte[NotePeakCount];
@@ -336,7 +336,7 @@ namespace ColorChord.NET
             public int CompareTo(NoteDists other)
             {
                 float v = this.amp - other.amp;
-	            return ((0.0f < v) ? 1 : 0) - ((v < 0.0f) ? 1 : 0);
+	            return ((v > 0) ? -1 : ((v < 0) ? 1 : 0));
             }
         };
 

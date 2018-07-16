@@ -318,7 +318,7 @@ void UpdateBinsForDFT32( const float * frequencies )
 
 void DoDFTProgressive32( float * outbins, float * frequencies, int bins, const float * databuffer, int place_in_data_buffer, int size_of_data_buffer, float q, float speedup )
 {
-	printf("DFT CALLED WITH %d\n", databuffer[0]);
+	printf("DFT CALLED WITH %d\n", databuffer[place_in_data_buffer]);
 	static float backupbins[FIXBINS];
 	int i;
 	static int last_place;
