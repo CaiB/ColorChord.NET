@@ -33,12 +33,12 @@ namespace ColorChord.NET
             Console.WriteLine("Press any key to stop.");
             while (!Console.KeyAvailable)
             {
-                Console.WriteLine(AudioBufferHead + ":" + AudioBuffer[AudioBufferHead]);
+                //Console.WriteLine(AudioBufferHead + ":" + AudioBuffer[AudioBufferHead]);
                 NoteFinder.RunNoteFinder(AudioBuffer, AudioBufferHead, AudioBuffer.Length);
-                Console.WriteLine(string.Join(", ", NoteFinder.NotePositions.Select(x => x.ToString()).ToArray()));
+                //Console.WriteLine(string.Join(", ", NoteFinder.NotePositions.Select(x => x.ToString()).ToArray()));
                 LinearOutput.Update();
                 LinearOutput.Send();
-                Thread.Sleep(100);
+                Thread.Sleep(10);
             }
             KeepGoing = false;
         }

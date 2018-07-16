@@ -120,6 +120,7 @@ namespace ColorChord.NET
             //note_amplitudes[] = amplitudes of these note peaks.
 
             //First try to find any close peaks.
+            NoteFounds = new byte[NotePeakCount];
             int CurrentNoteID = 1;
             for (int i = 0; i < NotePeakCount; i++)
             {
