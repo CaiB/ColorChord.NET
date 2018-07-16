@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
 using Vannatech.CoreAudio.Constants;
 using Vannatech.CoreAudio.Externals;
 using Vannatech.CoreAudio.Interfaces;
@@ -15,7 +13,10 @@ namespace ColorChord.NET
     class Program
     {
         private const CLSCTX CLSCTX_ALL = CLSCTX.CLSCTX_INPROC_SERVER | CLSCTX.CLSCTX_INPROC_HANDLER | CLSCTX.CLSCTX_LOCAL_SERVER | CLSCTX.CLSCTX_REMOTE_SERVER;
-        private const ulong BufferLength = 10000000;
+        private const ulong BufferLength = 5 * 10000; // 5ms interval
+
+        private static float[] AudioBuffer = new float[8096];
+        private static int AudioBufferHead = 0;
 
         static void Main(string[] args)
         {
@@ -33,6 +34,11 @@ namespace ColorChord.NET
             ErrorCode = Client.GetMixFormat(out IntPtr MixFormatPtr);
             AudioTools.WAVEFORMATEX MixFormat = AudioTools.FormatFromPointer(MixFormatPtr);
             Marshal.ThrowExceptionForHR(ErrorCode);
+
+            Console.WriteLine("Audio format: ");
+            Console.WriteLine("  Channels: " + MixFormat.nChannels);
+            Console.WriteLine("  Sample rate: " + MixFormat.nSamplesPerSec);
+            Console.WriteLine("  Bits per sample: " + MixFormat.wBitsPerSample);
 
             ErrorCode = Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK, BufferLength, 0, MixFormatPtr);
             Marshal.ThrowExceptionForHR(ErrorCode);
@@ -65,14 +71,22 @@ namespace ColorChord.NET
 
                     if (BufferStatus.HasFlag(AUDCLNT_BUFFERFLAGS.AUDCLNT_BUFFERFLAGS_SILENT))
                     {
-                        Console.WriteLine("Silence.");
+                        //Console.WriteLine("Silence.");
+                        AudioBuffer[AudioBufferHead] = 0;
+                        AudioBufferHead = (AudioBufferHead + 1) % AudioBuffer.Length;
                     }
                     else
                     {
                         byte[] AudioData = new byte[NumFramesAvail];
                         Marshal.Copy(DataArray, AudioData, 0, (int)NumFramesAvail);
 
-                        Console.WriteLine("Data! Len: " + AudioData.Length + ", Sample: " + BytesToNiceString(AudioData, 10));
+                        for (int i = 0; i < (AudioData.Length / sizeof(float)); i++)
+                        {
+                            float Sample = BitConverter.ToSingle(AudioData, i * sizeof(float));
+                            AudioBuffer[AudioBufferHead] = Sample;
+                            AudioBufferHead = (AudioBufferHead + 1) % AudioBuffer.Length;
+                        }
+                        //Console.WriteLine("Data! PacketLen: " + BufferFrameCount + " ChunkLen: " + AudioData.Length + ", Sample: " + AudioBuffer[Math.Max(AudioBufferHead - 1, 0)]);
                     }
 
                     ErrorCode = CaptureClient.ReleaseBuffer(NumFramesAvail);
@@ -81,9 +95,11 @@ namespace ColorChord.NET
                     ErrorCode = CaptureClient.GetNextPacketSize(out PacketLength);
                     Marshal.ThrowExceptionForHR(ErrorCode);
                 }
+                //Console.WriteLine("Cycle end.");
             }
             ErrorCode = Client.Stop();
             Marshal.ThrowExceptionForHR(ErrorCode);
+            Thread.Sleep(10 * 60 * 1000);
         }
 
         public static string BytesToNiceString(byte[] Data, int MaxLen = -1)
