@@ -55,7 +55,7 @@ namespace ColorChord.NET
         {
             float[] DFTBins = new float[Freqs];
             
-            DoDFTProgressive32(ref DFTBins, ref Frequencies, Freqs, ref Stream, Head, Size, DFT_Q, DFT_Speedup);
+            DoDFTProgressive32(DFTBins, Frequencies, Freqs, Stream, Head, Size, DFT_Q, DFT_Speedup);
 
             for (int i = 0; i < Freqs; i++)
             {
@@ -340,7 +340,7 @@ namespace ColorChord.NET
             }
         };
 
-        [DllImport("ColorChordLib.dll")]
-        private static extern void DoDFTProgressive32(ref float[] OutBins, ref float[] Frequencies, int Bins, ref float[] DataBuffer, int DataBufferLoc, int DataBufferSize, float Q, float Speedup);
+        [DllImport("ColorChordLib.dll", CallingConvention = CallingConvention.Cdecl)]
+        private static extern void DoDFTProgressive32([In, Out] float[] OutBins, [In, Out] float[] Frequencies, int Bins, float[] DataBuffer, int DataBufferLoc, int DataBufferSize, float Q, float Speedup);
     }
 }

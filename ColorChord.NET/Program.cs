@@ -7,6 +7,7 @@ using Vannatech.CoreAudio.Externals;
 using Vannatech.CoreAudio.Interfaces;
 using Vannatech.CoreAudio.Enumerations;
 using System.Threading;
+using System.Linq;
 
 namespace ColorChord.NET
 {
@@ -18,7 +19,29 @@ namespace ColorChord.NET
         private static float[] AudioBuffer = new float[8096];
         private static int AudioBufferHead = 0;
 
+        private static bool KeepGoing = true;
+        private static bool StreamReady = false;
+
         static void Main(string[] args)
+        {
+            Thread AudioThread = new Thread(new ThreadStart(AudioTask));
+            AudioThread.Start();
+
+            while (!StreamReady) { Thread.Sleep(10); }
+
+            while (Console.KeyAvailable) { Console.ReadKey(); } // Clear any previous presses.
+            Console.WriteLine("Press any key to stop.");
+            while (!Console.KeyAvailable)
+            {
+                Console.WriteLine(AudioBufferHead + ":" + AudioBuffer[AudioBufferHead]);
+                float[] NoteInfo = ColorChord.RunNoteFinder(AudioBuffer, AudioBufferHead, AudioBuffer.Length);
+                Console.WriteLine(string.Join(", ", NoteInfo.Select(x => x.ToString()).ToArray()));
+                Thread.Sleep(100);
+            }
+            KeepGoing = false;
+        }
+
+        private static void AudioTask()
         {
             int ErrorCode;
             Type DeviceEnumeratorType = Type.GetTypeFromCLSID(new Guid(ComCLSIDs.MMDeviceEnumeratorCLSID));
@@ -56,10 +79,9 @@ namespace ColorChord.NET
 
             ErrorCode = Client.Start();
             Marshal.ThrowExceptionForHR(ErrorCode);
+            StreamReady = true;
 
-            while (Console.KeyAvailable) { Console.ReadKey(); } // Clear any previous presses.
-            Console.WriteLine("Press any key to stop.");
-            while (!Console.KeyAvailable)
+            while (KeepGoing)
             {
                 Thread.Sleep((int)(ActualBufferDuration / (BufferLength / 1000) / 2));
 
@@ -101,7 +123,6 @@ namespace ColorChord.NET
             }
             ErrorCode = Client.Stop();
             Marshal.ThrowExceptionForHR(ErrorCode);
-            Thread.Sleep(10 * 60 * 1000);
         }
 
         public static string BytesToNiceString(byte[] Data, int MaxLen = -1)

@@ -10,6 +10,10 @@
 static float * goutbins;
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 uint16_t embeddedbins32[FIXBINS]; 
 
 //NOTES to self:
@@ -314,6 +318,7 @@ void UpdateBinsForDFT32( const float * frequencies )
 
 void DoDFTProgressive32( float * outbins, float * frequencies, int bins, const float * databuffer, int place_in_data_buffer, int size_of_data_buffer, float q, float speedup )
 {
+	printf("DFT CALLED WITH %d\n", databuffer[0]);
 	static float backupbins[FIXBINS];
 	int i;
 	static int last_place;
@@ -349,7 +354,12 @@ void DoDFTProgressive32( float * outbins, float * frequencies, int bins, const f
 	last_place = place_in_data_buffer;
 
 	memcpy( backupbins, outbins, FIXBINS*4 );
+	printf("DFT DONE %d\n", outbins[0]);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
