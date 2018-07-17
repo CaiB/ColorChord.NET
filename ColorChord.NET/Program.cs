@@ -8,6 +8,7 @@ using Vannatech.CoreAudio.Interfaces;
 using Vannatech.CoreAudio.Enumerations;
 using System.Threading;
 using System.Linq;
+using System.IO;
 
 namespace ColorChord.NET
 {
@@ -41,6 +42,16 @@ namespace ColorChord.NET
                 Thread.Sleep(10);
             }
             KeepGoing = false;
+            SaveData();
+        }
+
+        private static void SaveData()
+        {
+            while (StreamReady) { Thread.Sleep(10); }
+            StreamWriter Writer = new StreamWriter("test.csv");
+            for (int i = 0; i < AudioBuffer.Length; i++) { Writer.WriteLine(AudioBuffer[i]); }
+            Writer.Flush();
+            Writer.Close();
         }
 
         private static void AudioTask()
@@ -125,6 +136,7 @@ namespace ColorChord.NET
             }
             ErrorCode = Client.Stop();
             Marshal.ThrowExceptionForHR(ErrorCode);
+            StreamReady = false;
         }
 
         public static string BytesToNiceString(byte[] Data, int MaxLen = -1)
