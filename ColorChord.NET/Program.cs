@@ -15,7 +15,7 @@ namespace ColorChord.NET
     class Program
     {
         private const CLSCTX CLSCTX_ALL = CLSCTX.CLSCTX_INPROC_SERVER | CLSCTX.CLSCTX_INPROC_HANDLER | CLSCTX.CLSCTX_LOCAL_SERVER | CLSCTX.CLSCTX_REMOTE_SERVER;
-        private const ulong BufferLength = 5 * 10000; // 5ms interval
+        private const ulong BufferLength = 200 * 10000; // 200ms interval
 
         private static float[] AudioBuffer = new float[8096];
         private static int AudioBufferHead = 0;
@@ -94,9 +94,9 @@ namespace ColorChord.NET
             Marshal.ThrowExceptionForHR(ErrorCode);
             StreamReady = true;
 
-            while (KeepGoing)
+            while (AudioBufferHead < 1000)//KeepGoing)
             {
-                Thread.Sleep((int)(ActualBufferDuration / (BufferLength / 1000) / 2));
+                Thread.Sleep(1);// (int)(ActualBufferDuration / (BufferLength / 1000) / 2));
 
                 ErrorCode = CaptureClient.GetNextPacketSize(out uint PacketLength);
                 Marshal.ThrowExceptionForHR(ErrorCode);
@@ -117,13 +117,14 @@ namespace ColorChord.NET
                         byte[] AudioData = new byte[NumFramesAvail];
                         Marshal.Copy(DataArray, AudioData, 0, (int)NumFramesAvail);
 
-                        for (int i = 0; i < (AudioData.Length / sizeof(float)); i++)
+                        for (int i = 0; i < (AudioData.Length / (sizeof(float) * MixFormat.nChannels)); i++)
                         {
-                            float Sample = BitConverter.ToSingle(AudioData, i * sizeof(float));
-                            AudioBuffer[AudioBufferHead] = Sample;
+                            float Sample = 0;
+                            for (int c = 0; c < MixFormat.nChannels; c++) { Sample += BitConverter.ToSingle(AudioData, (i * sizeof(float) * MixFormat.nChannels) + (sizeof(float) * c)); }
+                            AudioBuffer[AudioBufferHead] = Sample / MixFormat.nChannels; // Use the average of the channels.
                             AudioBufferHead = (AudioBufferHead + 1) % AudioBuffer.Length;
                         }
-                        //Console.WriteLine("Data! PacketLen: " + BufferFrameCount + " ChunkLen: " + AudioData.Length + ", Sample: " + AudioBuffer[Math.Max(AudioBufferHead - 1, 0)]);
+                        //Console.WriteLine("Data! Buffer: " + BufferFrameCount + " Avail: " + NumFramesAvail + " Packet: " + PacketLength + " ChunkLen: " + AudioData.Length + " Done now at " + AudioBufferHead + " DevPos: " + DevicePosition + " CounterPos: " + CounterPosition);
                     }
 
                     ErrorCode = CaptureClient.ReleaseBuffer(NumFramesAvail);
