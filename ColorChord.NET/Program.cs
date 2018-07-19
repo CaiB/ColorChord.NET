@@ -42,12 +42,12 @@ namespace ColorChord.NET
                 Thread.Sleep(10);
             }
             KeepGoing = false;
-            SaveData();
+            while (StreamReady) { Thread.Sleep(10); } // Wait for the audio system to shut down.
+            //SaveData();
         }
 
         private static void SaveData()
         {
-            while (StreamReady) { Thread.Sleep(10); }
             StreamWriter Writer = new StreamWriter("test.csv");
             for (int i = 0; i < AudioBuffer.Length; i++) { Writer.WriteLine(AudioBuffer[i]); }
             Writer.Flush();
