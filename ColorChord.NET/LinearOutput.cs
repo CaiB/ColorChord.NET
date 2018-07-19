@@ -249,7 +249,7 @@ namespace ColorChord.NET
         }
 
         private static UdpClient Sender = new UdpClient();
-        private static IPEndPoint Destination = new IPEndPoint(IPAddress.Parse("192.168.0.60"), 7777);
+        private static IPEndPoint Destination = new IPEndPoint(IPAddress.Parse("192.168.0.110"), 7777);
 
         public static void Send()
         {

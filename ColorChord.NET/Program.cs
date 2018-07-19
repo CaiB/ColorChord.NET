@@ -15,7 +15,7 @@ namespace ColorChord.NET
     class Program
     {
         private const CLSCTX CLSCTX_ALL = CLSCTX.CLSCTX_INPROC_SERVER | CLSCTX.CLSCTX_INPROC_HANDLER | CLSCTX.CLSCTX_LOCAL_SERVER | CLSCTX.CLSCTX_REMOTE_SERVER;
-        private const ulong BufferLength = 200 * 10000; // 200ms interval
+        private const ulong BufferLength = 50 * 10000; // 50ms interval
 
         private static float[] AudioBuffer = new float[8096];
         private static int AudioBufferHead = 0;
@@ -76,6 +76,8 @@ namespace ColorChord.NET
             Console.WriteLine("  Sample rate: " + MixFormat.nSamplesPerSec);
             Console.WriteLine("  Bits per sample: " + MixFormat.wBitsPerSample);
 
+            int BytesPerFrame = MixFormat.nChannels * (MixFormat.wBitsPerSample / 8);
+
             NoteFinder.Init((int)MixFormat.nSamplesPerSec);
 
             ErrorCode = Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK, BufferLength, 0, MixFormatPtr);
@@ -96,7 +98,7 @@ namespace ColorChord.NET
 
             while (AudioBufferHead < 1000)//KeepGoing)
             {
-                Thread.Sleep(1);// (int)(ActualBufferDuration / (BufferLength / 1000) / 2));
+                Thread.Sleep((int)(ActualBufferDuration / (BufferLength / 1000) / 2));
 
                 ErrorCode = CaptureClient.GetNextPacketSize(out uint PacketLength);
                 Marshal.ThrowExceptionForHR(ErrorCode);
@@ -114,13 +116,13 @@ namespace ColorChord.NET
                     }
                     else
                     {
-                        byte[] AudioData = new byte[NumFramesAvail];
-                        Marshal.Copy(DataArray, AudioData, 0, (int)NumFramesAvail);
+                        byte[] AudioData = new byte[NumFramesAvail * BytesPerFrame];
+                        Marshal.Copy(DataArray, AudioData, 0, (int)(NumFramesAvail * BytesPerFrame));
 
-                        for (int i = 0; i < (AudioData.Length / (sizeof(float) * MixFormat.nChannels)); i++)
+                        for (int i = 0; i < NumFramesAvail; i++)
                         {
                             float Sample = 0;
-                            for (int c = 0; c < MixFormat.nChannels; c++) { Sample += BitConverter.ToSingle(AudioData, (i * sizeof(float) * MixFormat.nChannels) + (sizeof(float) * c)); }
+                            for (int c = 0; c < MixFormat.nChannels; c++) { Sample += BitConverter.ToSingle(AudioData, (i * BytesPerFrame) + ((MixFormat.wBitsPerSample / 8) * c)); }
                             AudioBuffer[AudioBufferHead] = Sample / MixFormat.nChannels; // Use the average of the channels.
                             AudioBufferHead = (AudioBufferHead + 1) % AudioBuffer.Length;
                         }
