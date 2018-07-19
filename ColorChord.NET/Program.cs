@@ -96,7 +96,7 @@ namespace ColorChord.NET
             Marshal.ThrowExceptionForHR(ErrorCode);
             StreamReady = true;
 
-            while (AudioBufferHead < 1000)//KeepGoing)
+            while (KeepGoing)
             {
                 Thread.Sleep((int)(ActualBufferDuration / (BufferLength / 1000) / 2));
 

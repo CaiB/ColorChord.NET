@@ -151,101 +151,120 @@ namespace ColorChord.NET
         private static uint CCtoHEX(float note, float sat, float value)
         {
             float hue = 0.0F;
-            note = note % 1.0F;
-            note *= 12;
+            note = (note % 1.0F) * 12;
             if (note < 4)
             {
                 //Needs to be YELLOW->RED
-                hue = (4 - note) / 24.0F;
+                hue = (4F - note) * 15F;
             }
             else if (note < 8)
             {
                 //            [4]  [8]
                 //Needs to be RED->BLUE
-                hue = (4 - note) / 12.0F;
+                hue = (4F - note) * 30F;
             }
             else
             {
                 //             [8] [12]
                 //Needs to be BLUE->YELLOW
-                hue = (12 - note) / 8.0F + 1.0F/ 6.0F;
+                hue = (12F - note) * 45F + 60F;
             }
-            return HSVtoHEX(hue, sat, value);
+            return HsvToRgb(hue, sat, value);
         }
-
-        private static uint HSVtoHEX(float hue, float sat, float value)
+        
+        private static uint HsvToRgb(double h, double S, double V) // TODO: Copy-pasted, this looks like it could use some optimization.
         {
-
-            float pr = 0;
-            float pg = 0;
-            float pb = 0;
-
-            short ora = 0;
-            short og = 0;
-            short ob = 0;
-
-            float ro = hue * 6 % 6.0F;
-
-            float avg = 0;
-
-            ro = ro + 6 + 1 % 6; //Hue was 60* off...
-
-            if (ro < 1) //yellow->red
+            double H = h;
+            while (H < 0) { H += 360; };
+            while (H >= 360) { H -= 360; };
+            double R, G, B;
+            if (V <= 0)
+            { R = G = B = 0; }
+            else if (S <= 0)
             {
-                pr = 1;
-                pg = 1.0F - ro;
-            }
-            else if (ro < 2)
-            {
-                pr = 1;
-                pb = ro - 1.0F;
-            }
-            else if (ro < 3)
-            {
-                pr = 3.0F - ro;
-                pb = 1;
-            }
-            else if (ro < 4)
-            {
-                pb = 1;
-                pg = ro - 3;
-            }
-            else if (ro < 5)
-            {
-                pb = 5 - ro;
-                pg = 1;
+                R = G = B = V;
             }
             else
             {
-                pg = 1;
-                pr = ro - 5;
+                double hf = H / 60.0;
+                int i = (int)Math.Floor(hf);
+                double f = hf - i;
+                double pv = V * (1 - S);
+                double qv = V * (1 - S * f);
+                double tv = V * (1 - S * (1 - f));
+                switch (i)
+                {
+                    // Red is the dominant color
+                    case 0:
+                        R = V;
+                        G = tv;
+                        B = pv;
+                        break;
+
+                    // Green is the dominant color
+                    case 1:
+                        R = qv;
+                        G = V;
+                        B = pv;
+                        break;
+                    case 2:
+                        R = pv;
+                        G = V;
+                        B = tv;
+                        break;
+
+                    // Blue is the dominant color
+                    case 3:
+                        R = pv;
+                        G = qv;
+                        B = V;
+                        break;
+                    case 4:
+                        R = tv;
+                        G = pv;
+                        B = V;
+                        break;
+
+                    // Red is the dominant color
+                    case 5:
+                        R = V;
+                        G = pv;
+                        B = qv;
+                        break;
+
+                    // Just in case we overshoot on our math by a little, we put these here. Since its a switch it won't slow us down at all to put these here.
+                    case 6:
+                        R = V;
+                        G = tv;
+                        B = pv;
+                        break;
+                    case -1:
+                        R = V;
+                        G = pv;
+                        B = qv;
+                        break;
+
+                    // The color is not defined, we should throw an error.
+                    default:
+                        //LFATAL("i Value error in Pixel conversion, Value is %d", i);
+                        R = G = B = V; // Just pretend its black/white
+                        break;
+                }
             }
+            byte r = (byte)Clamp((int)(R * 255.0));
+            byte g = (byte)Clamp((int)(G * 255.0));
+            byte b = (byte)Clamp((int)(B * 255.0));
+            return (uint)((r << 16) | (g << 8) | b);
+        }
 
-            //Actually, above math is backwards, oops!
-            pr *= value;
-            pg *= value;
-            pb *= value;
-
-            avg += pr;
-            avg += pg;
-            avg += pb;
-
-            pr = pr * sat + avg * (1.0F - sat);
-            pg = pg * sat + avg * (1.0F - sat);
-            pb = pb * sat + avg * (1.0F - sat);
-
-            ora = (short)(pr * 255);
-            og = (short)(pb * 255);
-            ob = (short)(pg * 255);
-
-            if (ora < 0) ora = 0;
-            if (ora > 255) ora = 255;
-            if (og < 0) og = 0;
-            if (og > 255) og = 255;
-            if (ob < 0) ob = 0;
-            if (ob > 255) ob = 255;
-
-            return (uint)((ob << 16) | (og << 8) | ora);
+        /// <summary>
+        /// Clamp a value to 0-255
+        /// </summary>
+        private static int Clamp(int i)
+        {
+            if (i < 0) return 0;
+            if (i > 255) return 255;
+            return i;
         }
 
         private static UdpClient Sender = new UdpClient();
