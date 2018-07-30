@@ -133,9 +133,9 @@ namespace ColorChord.NET
 
                 uint r = CCtoHEX(last_led_pos[i], 1.0F, sendsat);
 
-                OutLEDs[i * 3 + 0] = (byte)(r & 0xff);
+                OutLEDs[i * 3 + 0] = (byte)((r >> 16) & 0xff);
                 OutLEDs[i * 3 + 1] = (byte)((r >> 8) & 0xff);
-                OutLEDs[i * 3 + 2] = (byte)((r >> 16) & 0xff);
+                OutLEDs[i * 3 + 2] = (byte)((r) & 0xff);
             }
 
 
@@ -151,7 +151,8 @@ namespace ColorChord.NET
         private static uint CCtoHEX(float note, float sat, float value)
         {
             float hue = 0.0F;
-            note = (note % 1.0F) * 12;
+            note = ((note % 1.0F) * 12) - 3;
+            if (note < 0) { note += 12; }
             if (note < 4)
             {
                 //Needs to be YELLOW->RED
@@ -268,7 +269,7 @@ namespace ColorChord.NET
         }
 
         private static UdpClient Sender = new UdpClient();
-        private static IPEndPoint Destination = new IPEndPoint(IPAddress.Parse("192.168.0.110"), 7777);
+        private static IPEndPoint Destination = new IPEndPoint(IPAddress.Parse("192.168.0.60"), 7777);
 
         public static void Send()
         {
