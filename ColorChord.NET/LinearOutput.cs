@@ -269,12 +269,19 @@ namespace ColorChord.NET
         }
 
         private static UdpClient Sender = new UdpClient();
-        private static IPEndPoint Destination = new IPEndPoint(IPAddress.Parse("192.168.0.60"), 7777);
+        private static IPEndPoint Destination = new IPEndPoint(IPAddress.Parse("192.168.0.102"), 7777);
 
         public static void Send()
         {
+            if (!Program.OutputEnabled || Program.LastUpdate < DateTime.UtcNow.AddSeconds(-5)) { return; } // Don't output if we haven't had data in 5 sec.
             byte[] Output = new byte[151];
             for (int i = 1; i < 151; i++) { Output[i] = OutLEDs[i - 1]; }
+            Sender.Send(Output, Output.Length, Destination);
+        }
+
+        public static void SendBlack()
+        {
+            byte[] Output = new byte[151];
             Sender.Send(Output, Output.Length, Destination);
         }
 

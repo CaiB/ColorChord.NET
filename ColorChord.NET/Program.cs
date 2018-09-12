@@ -9,6 +9,7 @@ using Vannatech.CoreAudio.Enumerations;
 using System.Threading;
 using System.Linq;
 using System.IO;
+using System.Windows.Forms;
 
 namespace ColorChord.NET
 {
@@ -23,27 +24,41 @@ namespace ColorChord.NET
         private static bool KeepGoing = true;
         private static bool StreamReady = false;
 
+        public static bool OutputEnabled = true;
+        public static DateTime LastUpdate = DateTime.UtcNow;
+
+        [STAThread]
         static void Main(string[] args)
         {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
             Thread AudioThread = new Thread(new ThreadStart(AudioTask));
             AudioThread.Start();
 
-            while (!StreamReady) { Thread.Sleep(10); }
+            Thread ProcessThread = new Thread(ProcessTask);
+            ProcessThread.Start();
 
-            while (Console.KeyAvailable) { Console.ReadKey(); } // Clear any previous presses.
-            Console.WriteLine("Press any key to stop.");
-            while (!Console.KeyAvailable)
+            MainForm Main = new MainForm();
+            Application.Run(Main); // Will block until the form is closed.
+
+            KeepGoing = false;
+            SaveData();
+            AudioThread.Join();
+            ProcessThread.Join();
+        }
+
+        private static void ProcessTask()
+        {
+            while (!StreamReady) { Thread.Sleep(10); }
+            while (KeepGoing)
             {
-                //Console.WriteLine(AudioBufferHead + ":" + AudioBuffer[AudioBufferHead]);
                 NoteFinder.RunNoteFinder(AudioBuffer, AudioBufferHead, AudioBuffer.Length);
-                //Console.WriteLine(string.Join(", ", NoteFinder.NotePositions.Select(x => x.ToString()).ToArray()));
                 LinearOutput.Update();
                 LinearOutput.Send();
                 Thread.Sleep(10);
             }
-            KeepGoing = false;
             while (StreamReady) { Thread.Sleep(10); } // Wait for the audio system to shut down.
-            //SaveData();
         }
 
         private static void SaveData()
@@ -126,6 +141,7 @@ namespace ColorChord.NET
                             AudioBuffer[AudioBufferHead] = Sample / MixFormat.nChannels; // Use the average of the channels.
                             AudioBufferHead = (AudioBufferHead + 1) % AudioBuffer.Length;
                         }
+                        LastUpdate = DateTime.UtcNow;
                         //Console.WriteLine("Data! Buffer: " + BufferFrameCount + " Avail: " + NumFramesAvail + " Packet: " + PacketLength + " ChunkLen: " + AudioData.Length + " Done now at " + AudioBufferHead + " DevPos: " + DevicePosition + " CounterPos: " + CounterPosition);
                     }
 
