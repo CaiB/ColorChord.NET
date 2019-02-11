@@ -4,6 +4,8 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -13,15 +15,43 @@ namespace ColorChord.NET
     public partial class MainForm : Form
     {
         private bool IsClosing = false;
+        private UdpClient UDPListener;
 
         public MainForm()
         {
             InitializeComponent();
+            this.UDPListener = new UdpClient(new IPEndPoint(IPAddress.Any, 10486));
+            this.UDPListener.BeginReceive(HandleUDPData, this.UDPListener);
+        }
+
+        private void HandleUDPData(IAsyncResult Result)
+        {
+            UdpClient Listener;
+            IPEndPoint ReceivedEndpoint;
+            byte[] Data;
+            try
+            {
+                Listener = (UdpClient)Result.AsyncState;
+                ReceivedEndpoint = new IPEndPoint(IPAddress.Any, 0);
+                Data = Listener.EndReceive(Result, ref ReceivedEndpoint);
+                if (Data.Length == 1)
+                {
+                    Program.OutputEnabled = Data[0] == 1;
+                    Toggle();
+                }
+            }
+            catch { }
+            this.UDPListener.BeginReceive(HandleUDPData, this.UDPListener);
         }
 
         private void TrayIcon_Click(object sender, EventArgs e)
         {
             Program.OutputEnabled = !Program.OutputEnabled;
+            Toggle();
+        }
+
+        private void Toggle()
+        {
             if (Program.OutputEnabled)
             {
                 this.Text = "ColorChord.NET (On)";
