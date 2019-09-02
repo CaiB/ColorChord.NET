@@ -10,6 +10,7 @@ using System.Threading;
 using System.Linq;
 using System.IO;
 using System.Windows.Forms;
+using System.Diagnostics;
 
 namespace ColorChord.NET
 {
@@ -50,13 +51,24 @@ namespace ColorChord.NET
 
         private static void ProcessTask()
         {
+            Stopwatch Timer = new Stopwatch();
+            Timer.Start();
+            int FrameCount = 0;
+
             while (!StreamReady) { Thread.Sleep(10); }
             while (KeepGoing)
             {
                 NoteFinder.RunNoteFinder(AudioBuffer, AudioBufferHead, AudioBuffer.Length);
                 LinearOutput.Update();
                 LinearOutput.Send();
-                Thread.Sleep(10);
+                FrameCount++;
+                if (Timer.ElapsedMilliseconds >= 1000)
+                {
+                    Console.WriteLine("Running at " + (FrameCount * 1000D / Timer.ElapsedMilliseconds) + " FPS.");
+                    Timer.Restart();
+                    FrameCount = 0;
+                }
+                Thread.Sleep(6);
             }
             while (StreamReady) { Thread.Sleep(10); } // Wait for the audio system to shut down.
         }
