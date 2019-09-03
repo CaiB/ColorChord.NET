@@ -58,7 +58,7 @@ namespace ColorChord.NET
             while (!StreamReady) { Thread.Sleep(10); }
             while (KeepGoing)
             {
-                NoteFinder.RunNoteFinder(AudioBuffer, AudioBufferHead, AudioBuffer.Length);
+                //NoteFinder.RunNoteFinder(AudioBuffer, AudioBufferHead, AudioBuffer.Length);
                 LinearOutput.Update();
                 LinearOutput.Send();
                 FrameCount++;
@@ -105,7 +105,7 @@ namespace ColorChord.NET
 
             int BytesPerFrame = MixFormat.nChannels * (MixFormat.wBitsPerSample / 8);
 
-            NoteFinder.Init((int)MixFormat.nSamplesPerSec);
+            //NoteFinder.Init((int)MixFormat.nSamplesPerSec);
 
             ErrorCode = Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK, BufferLength, 0, MixFormatPtr);
             Marshal.ThrowExceptionForHR(ErrorCode);

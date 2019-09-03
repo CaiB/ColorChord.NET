@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ColorChord.NET.Outputs;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,6 +9,8 @@ namespace ColorChord.NET.Visualizers
 {
     public interface IVisualizer
     {
-
+        void Start();
+        void Stop();
+        void AttachOutput(IOutput output);
     }
 }

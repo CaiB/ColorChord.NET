@@ -118,6 +118,7 @@ namespace ColorChord.NET.Sources
                     ErrorCode = this.CaptureClient.GetNextPacketSize(out PacketLength);
                     Marshal.ThrowExceptionForHR(ErrorCode);
                 }
+                //Console.WriteLine("Got audio data, head now at position " + NoteFinder.AudioBufferHead);
             }
 
             ErrorCode = this.Client.Stop();
