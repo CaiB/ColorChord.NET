@@ -1,11 +1,6 @@
 ﻿using ColorChord.NET.Visualizers;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ColorChord.NET.Outputs
 {
@@ -30,7 +25,7 @@ namespace ColorChord.NET.Outputs
             {
                 byte[] Output = new byte[SourceLin.OutputData.Length + this.Padding];
                 for (int i = 0; i < SourceLin.OutputData.Length; i++) { Output[i + this.Padding] = SourceLin.OutputData[i]; }
-                this.Sender.Send(Output, Output.Length, Destination);
+                this.Sender.Send(Output, Output.Length, this.Destination);
             }
         }
     }

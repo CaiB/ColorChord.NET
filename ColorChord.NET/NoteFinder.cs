@@ -1,11 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace ColorChord.NET
 {
@@ -67,7 +64,7 @@ namespace ColorChord.NET
         const int Octaves = 5;
         const float DFT_Q = 20;
         const float DFT_Speedup = 1000;
-        const float DFT_IIR = 0.75F;
+        const float DFT_IIR = 0.65F;
         const float Amplify = 2;
         const float Slope = 0.1F;
         const int FilterIterations = 2;
