@@ -27,6 +27,12 @@ namespace ColorChord.NET.Outputs
                 for (int i = 0; i < SourceLin.OutputData.Length; i++) { Output[i + this.Padding] = SourceLin.OutputData[i]; }
                 this.Sender.Send(Output, Output.Length, this.Destination);
             }
+            else if (this.Source is Cells SourceCells)
+            {
+                byte[] Output = new byte[SourceCells.OutputData.Length + this.Padding];
+                for (int i = 0; i < SourceCells.OutputData.Length; i++) { Output[i + this.Padding] = SourceCells.OutputData[i]; }
+                this.Sender.Send(Output, Output.Length, this.Destination);
+            }
         }
     }
 }

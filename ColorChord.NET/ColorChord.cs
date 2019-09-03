@@ -14,10 +14,13 @@ namespace ColorChord.NET
             WASAPILoopback LoopbackSrc = new WASAPILoopback();
             LoopbackSrc.Start();
 
-            Linear Linear = new Linear(50, false);
-            Linear.Start();
+            //Linear Linear = new Linear(50, false);
+            //Linear.Start();
 
-            PacketUDP Network = new PacketUDP(Linear, "192.168.0.60", 7777, 1);
+            Cells Cells = new Cells(50);
+            Cells.Start();
+
+            PacketUDP Network = new PacketUDP(Cells, "192.168.0.60", 7777, 1);
         }
 
     }

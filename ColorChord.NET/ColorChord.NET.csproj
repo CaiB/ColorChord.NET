@@ -58,12 +58,6 @@
     <Compile Include="ColorChord.cs" />
     <Compile Include="NoteFinder.cs" />
     <Compile Include="AudioTools.cs" />
-    <Compile Include="MainForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="MainForm.Designer.cs">
-      <DependentUpon>MainForm.cs</DependentUpon>
-    </Compile>
     <Compile Include="Outputs\IOutput.cs" />
     <Compile Include="Outputs\PacketUDP.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -72,6 +66,7 @@
     <Compile Include="Visualizers\Cells.cs" />
     <Compile Include="Visualizers\IVisualizer.cs" />
     <Compile Include="Visualizers\Linear.cs" />
+    <Compile Include="Visualizers\VisualizerTools.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -81,11 +76,6 @@
     <Content Include="ColorChordLib.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="MainForm.resx">
-      <DependentUpon>MainForm.cs</DependentUpon>
-    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
