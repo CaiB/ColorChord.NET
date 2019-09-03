@@ -58,7 +58,6 @@ namespace ColorChord.NET
                 RunNoteFinder();
                 int WaitTime = (int)(ShortestPeriod - (Timer.ElapsedMilliseconds));
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
-                Console.WriteLine("Did note processing! Found " + NotePeakCount + " peaks.");
             }
         }
 

@@ -8,6 +8,6 @@ namespace ColorChord.NET.Outputs
 {
     public interface IOutput
     {
-
+        void Dispatch();
     }
 }
