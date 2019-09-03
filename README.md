@@ -1,6 +1,8 @@
 # ColorChord.NET
 My WIP port of [CNLohr's ColorChord2](https://github.com/cnlohr/colorchord) to C#.NET, allowing for more flexibility and extendability. Also uses new WASAPI Loopback methods for getting audio on Windows, which appears to work more reliably.
 
+Uses [Vannatech/dorba's netcoreaudio](https://github.com/dorba/netcoreaudio) for WASAPI support.
+
 Somewhat different from Charles' version, I divided components into 4 categories, centered around the `NoteFinder`:
 - Audio Sources: Pipes audio data from some location into the NoteFinder. (e.g. WASAPI Loopback)
 - Visualizers: Takes note info from the NoteFinder, and turns it into a format that is outputtable via some method. (e.g. Linear)
