@@ -11,8 +11,8 @@ namespace ColorChord.NET.Visualizers
 {
     public class Linear : IVisualizer
     {
-        private readonly int LEDCount;
-        private readonly bool IsCircular;
+        public readonly int LEDCount;
+        public readonly bool IsCircular;
 
         public int FramePeriod = 1000 / 90;
 
@@ -69,7 +69,7 @@ namespace ColorChord.NET.Visualizers
         private static float[] last_led_amp;
         private static bool steady_bright = false;
         private static float led_floor = 0.1F;
-        private static float led_limit = 0.2F; //Maximum brightness
+        private static float led_limit = 1F; //Maximum brightness
         private static float satamp = 1.6F;
         private static int lastadvance;
 

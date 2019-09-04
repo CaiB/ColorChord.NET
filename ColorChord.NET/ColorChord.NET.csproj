@@ -40,6 +40,9 @@
     <StartupObject>ColorChord.NET.ColorChord</StartupObject>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="OpenTK, Version=3.1.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4, processorArchitecture=MSIL">
+      <HintPath>..\packages\OpenTK.3.1.0\lib\net20\OpenTK.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
@@ -58,6 +61,7 @@
     <Compile Include="ColorChord.cs" />
     <Compile Include="NoteFinder.cs" />
     <Compile Include="AudioTools.cs" />
+    <Compile Include="Outputs\DisplayOpenGL.cs" />
     <Compile Include="Outputs\IOutput.cs" />
     <Compile Include="Outputs\PacketUDP.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -70,6 +74,14 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="OpenTK.dll.config" />
+    <None Include="packages.config" />
+    <None Include="shader.frag">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="shader.vert">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Content Include="Colochord2-Logo.ico" />

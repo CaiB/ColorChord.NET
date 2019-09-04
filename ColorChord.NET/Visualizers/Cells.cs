@@ -59,7 +59,6 @@ namespace ColorChord.NET.Visualizers
         }
 
         #region ColorChord Magic
-        private int did_init;
         private int[] led_note_attached;
         private double[] time_of_change;
 
@@ -69,8 +68,8 @@ namespace ColorChord.NET.Visualizers
         private float led_floor = 0.1F;
         private float light_siding = 1.9F;
         private float satamp = 2;
-        private float qtyamp = 20;
-        private bool steady_bright = true;
+        private float qtyamp = 8;
+        private bool steady_bright = false;
         private bool timebased = false; // Useful for pies, turn off for linear systems.
         private bool snakey = false; // Advance head for where to get LEDs around.
         private int snakeyplace = 0;
