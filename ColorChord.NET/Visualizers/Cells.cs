@@ -8,7 +8,7 @@ namespace ColorChord.NET.Visualizers
 {
     public class Cells : IVisualizer
     {
-        private readonly int LEDCount;
+        public readonly int LEDCount;
 
         public int FramePeriod = 1000 / 90;
 
@@ -68,9 +68,9 @@ namespace ColorChord.NET.Visualizers
         private float led_floor = 0.1F;
         private float light_siding = 1.9F;
         private float satamp = 2;
-        private float qtyamp = 8;
+        private float qtyamp = 20;
         private bool steady_bright = false;
-        private bool timebased = false; // Useful for pies, turn off for linear systems.
+        private bool timebased = true; // Useful for pies, turn off for linear systems.
         private bool snakey = false; // Advance head for where to get LEDs around.
         private int snakeyplace = 0;
 

@@ -16,7 +16,7 @@ namespace ColorChord.NET
             WASAPILoopback LoopbackSrc = new WASAPILoopback();
             LoopbackSrc.Start();
 
-            Linear Linear = new Linear(50, false);
+            Linear Linear = new Linear(400, false);
             if (DoLinear) { Linear.Start(); }
 
             Cells Cells = new Cells(50);
