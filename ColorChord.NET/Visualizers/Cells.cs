@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Outputs;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -28,6 +29,11 @@ namespace ColorChord.NET.Visualizers
             this.last_led_pos = new float[this.LEDCount];
             this.last_led_pos_filter = new float[this.LEDCount];
             this.last_led_amp = new float[this.LEDCount];
+        }
+
+        public void ApplyConfig(JToken configEntry)
+        {
+
         }
 
         public void Start()

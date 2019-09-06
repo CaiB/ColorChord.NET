@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Visualizers;
+using Newtonsoft.Json.Linq;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.ES30;
@@ -41,6 +42,11 @@ namespace ColorChord.NET.Outputs
             Run(60D);
             //this.Thread = new Thread(Start);
             //this.Thread.Start();
+        }
+
+        public void ApplyConfig(JToken configEntry)
+        {
+
         }
 
         private void Start()

@@ -1,4 +1,6 @@
 ﻿using ColorChord.NET.Outputs;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,23 +13,68 @@ namespace ColorChord.NET.Visualizers
 {
     public class Linear : IVisualizer
     {
-        public readonly int LEDCount;
-        public readonly bool IsCircular;
-        public string Name { get; set; }
+        /// <summary> The number of discrete elements outputted by this visualizer. </summary>
+        public int LEDCount
+        {
+            get => this.P_LEDCount;
+            set
+            {
+                this.P_LEDCount = value;
+                UpdateSize();
+            }
+        }
+        private int P_LEDCount;
+
+        /// <summary> The name of this instance. Used to refer to the instance. </summary>
+        public string Name { get; private set; }
 
         public int FramePeriod = 1000 / 90;
 
+        /// <summary> Whether the output should be treated as a line with ends, or a continuous circle. </summary>
+        public bool IsCircular { get; set; } = false;
+
+        // TODO: Determine what this does.
+        public float LightSiding { get; set; } = 1.0F;
+
+        // TODO: Determine what this does.
+        public bool SteadyBright { get; set; } = false;
+
+        /// <summary> The minimum brightness before LEDs are not outputted. </summary>
+        public float LEDFloor { get; set; } = 0.1F;
+
+        /// <summary> The maximum brightness. </summary>
+        public float LEDLimit { get; set; } = 1F;
+
+        /// <summary> How intense to make the colours. </summary>
+        public float SaturationAmplifier { get; set; } = 1.6F;
+
         private readonly List<IOutput> Outputs = new List<IOutput>();
-        public readonly byte[] OutputData;
+        public byte[] OutputData;
         private bool KeepGoing = true;
         private Thread ProcessThread;
 
-        public Linear(int numLEDs, bool circular)
-        {
-            this.LEDCount = numLEDs;
-            this.IsCircular = circular;
-            this.OutputData = new byte[this.LEDCount * 3];
+        public Linear(string name) { this.Name = name; }
 
+        public void ApplyConfig(JToken configEntry)
+        {
+            JToken Config = configEntry.DeepClone(); // We'll be removing items, don't want to affect the original.
+            if (!int.TryParse((string)Config["ledCount"], out int LEDs) || LEDs <= 0) { Console.WriteLine("[ERR] Tried to create Linear visualizer with invalid/missing ledCount."); return; }
+
+            this.LEDCount = ConfigTools.CheckInt(Config, "ledCount", 1, 100000, 50, true);
+            this.LightSiding = ConfigTools.CheckFloat(Config, "lightSiding", 0, 100, 1, true);
+            this.LEDFloor = ConfigTools.CheckFloat(Config, "ledFloor", 0, 1, 0.1F, true);
+            this.FramePeriod = 1000 / ConfigTools.CheckInt(Config, "frameRate", 0, 1000, 60, true);
+            this.IsCircular = ConfigTools.CheckBool(Config, "isCircular", false, true);
+            this.SteadyBright = ConfigTools.CheckBool(Config, "steadyBright", false, true);
+            this.LEDLimit = ConfigTools.CheckFloat(Config, "ledLimit", 0, 1, 1, true);
+            this.SaturationAmplifier = ConfigTools.CheckFloat(Config, "saturationAmplifier", 0, 100, 1.6F, true);
+            ConfigTools.WarnAboutRemainder(Config);
+        }
+
+        /// <summary> Used to update internal structures when the number of LEDs changes. </summary>
+        private void UpdateSize()
+        {
+            this.OutputData = new byte[this.LEDCount * 3];
             last_led_pos = new float[this.LEDCount];
             last_led_pos_filter = new float[this.LEDCount];
             last_led_amp = new float[this.LEDCount];
@@ -35,6 +82,7 @@ namespace ColorChord.NET.Visualizers
 
         public void Start()
         {
+            if (this.LEDCount <= 0) { Console.WriteLine("[ERR] Attempted to start Linear visualizer with invalid LED count."); return; }
             this.KeepGoing = true;
             this.ProcessThread = new Thread(DoProcessing);
             this.ProcessThread.Start();
@@ -63,16 +111,10 @@ namespace ColorChord.NET.Visualizers
         }
 
         #region ColorChord Magic
-        private static bool did_init;
-        private static float light_siding = 1.0F;
-        private static float[] last_led_pos;
-        private static float[] last_led_pos_filter;
-        private static float[] last_led_amp;
-        private static bool steady_bright = false;
-        private static float led_floor = 0.1F;
-        private static float led_limit = 1F; //Maximum brightness
-        private static float satamp = 1.6F;
-        private static int lastadvance;
+        private float[] last_led_pos;
+        private float[] last_led_pos_filter;
+        private float[] last_led_amp;
+        private int lastadvance;
 
         public void Update()
         {
@@ -87,8 +129,8 @@ namespace ColorChord.NET.Visualizers
             for (i = 0; i < totbins; i++)
             {
                 binpos[i] = NoteFinder.NotePositions[i] / NoteFinder.FreqBinCount;
-                binvals[i] = (float)Math.Pow(NoteFinder.NoteAmplitudes2[i], light_siding);
-                binvalsQ[i] = (float)Math.Pow(NoteFinder.NoteAmplitudes[i], light_siding);
+                binvals[i] = (float)Math.Pow(NoteFinder.NoteAmplitudes2[i], this.LightSiding);
+                binvalsQ[i] = (float)Math.Pow(NoteFinder.NoteAmplitudes[i], this.LightSiding);
                 totalbinval += binvals[i];
             }
 
@@ -96,7 +138,7 @@ namespace ColorChord.NET.Visualizers
 
             for (i = 0; i < totbins; i++)
             {
-                binvals[i] -= led_floor * totalbinval;
+                binvals[i] -= this.LEDFloor * totalbinval;
                 if (binvals[i] / totalbinval < 0) { binvals[i] = binvalsQ[i] = 0; }
                 newtotal += binvals[i];
             }
@@ -145,7 +187,6 @@ namespace ColorChord.NET.Visualizers
                 for (i = 0; i < this.LEDCount; i++)
                 {
                     float diff = 0;
-                    diff = 0;
                     for (j = 0; j < this.LEDCount; j++)
                     {
                         int r = (j + i) % this.LEDCount;
@@ -174,15 +215,15 @@ namespace ColorChord.NET.Visualizers
             for (i = 0; i < this.LEDCount; i++)
             {
                 int ia = (i + minadvance + this.LEDCount) % this.LEDCount;
-                float sat = rledamp[ia] * satamp;
-                float satQ = rledampQ[ia] * satamp;
+                float sat = rledamp[ia] * this.SaturationAmplifier;
+                float satQ = rledampQ[ia] * this.SaturationAmplifier;
                 if (satQ > 1) satQ = 1;
                 last_led_pos[i] = rledpos[ia];
                 last_led_amp[i] = sat;
-                float sendsat = (steady_bright ? sat : satQ);
+                float sendsat = (this.SteadyBright ? sat : satQ);
                 if (sendsat > 1) sendsat = 1;
 
-                if (sendsat > led_limit) sendsat = led_limit;
+                if (sendsat > LEDLimit) sendsat = LEDLimit;
 
                 uint r = VisualizerTools.CCtoHEX(last_led_pos[i], 1.0F, sendsat);
 

@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 
 namespace ColorChord.NET.Visualizers
 {
-    public interface IVisualizer
+    public interface IVisualizer: IConfigurable
     {
-        string Name { get; set; }
+        string Name { get; }
         void Start();
         void Stop();
         void AttachOutput(IOutput output);

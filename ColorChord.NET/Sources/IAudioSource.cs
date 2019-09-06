@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ColorChord.NET.Sources
 {
-    public interface IAudioSource
+    public interface IAudioSource : IConfigurable
     {
         void Start();
         void Stop();

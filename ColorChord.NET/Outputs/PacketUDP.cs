@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Visualizers;
+using Newtonsoft.Json.Linq;
 using System.Net;
 using System.Net.Sockets;
 
@@ -17,6 +18,11 @@ namespace ColorChord.NET.Outputs
             this.Destination = new IPEndPoint(IPAddress.Parse(ip), port);
             this.Source.AttachOutput(this);
             this.Padding = frontPadding;
+        }
+
+        public void ApplyConfig(JToken configEntry)
+        {
+
         }
 
         public void Dispatch()

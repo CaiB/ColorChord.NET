@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json.Linq;
+using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Vannatech.CoreAudio.Constants;
@@ -22,6 +23,11 @@ namespace ColorChord.NET.Sources
         private IAudioClient Client;
         private IAudioCaptureClient CaptureClient;
         private AudioTools.WAVEFORMATEX MixFormat;
+
+        public void ApplyConfig(JToken configEntry)
+        {
+
+        }
 
         public void Start() // TOOD: Make device, etc selection possible instead of using defaults.
         {
