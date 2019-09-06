@@ -9,6 +9,7 @@ namespace ColorChord.NET.Visualizers
 {
     public interface IVisualizer
     {
+        string Name { get; set; }
         void Start();
         void Stop();
         void AttachOutput(IOutput output);

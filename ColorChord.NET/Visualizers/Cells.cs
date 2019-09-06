@@ -9,6 +9,7 @@ namespace ColorChord.NET.Visualizers
     public class Cells : IVisualizer
     {
         public readonly int LEDCount;
+        public string Name { get; set; }
 
         public int FramePeriod = 1000 / 90;
 

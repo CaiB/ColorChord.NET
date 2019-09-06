@@ -13,6 +13,7 @@ namespace ColorChord.NET.Visualizers
     {
         public readonly int LEDCount;
         public readonly bool IsCircular;
+        public string Name { get; set; }
 
         public int FramePeriod = 1000 / 90;
 

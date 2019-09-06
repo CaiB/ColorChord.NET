@@ -6,6 +6,7 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 namespace ColorChord.NET.Outputs
 {
@@ -31,10 +32,19 @@ namespace ColorChord.NET.Outputs
         private int VertexBufferHandle;
         private int VertexArrayHandle;
 
+        private readonly Thread Thread;
+
         public DisplayOpenGL(IVisualizer source) : base(1280, 720, GraphicsMode.Default, "ColorChord.NET Display Output")
         {
             this.Source = source;
             this.Source.AttachOutput(this);
+            Run(60D);
+            //this.Thread = new Thread(Start);
+            //this.Thread.Start();
+        }
+
+        private void Start()
+        {
             Run(60D);
         }
 
