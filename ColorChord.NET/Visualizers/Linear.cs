@@ -28,25 +28,28 @@ namespace ColorChord.NET.Visualizers
         /// <summary> The name of this instance. Used to refer to the instance. </summary>
         public string Name { get; private set; }
 
+        /// <summary> Whether the visualizer is currently processing/outputting. </summary>
+        public bool Enabled { get; set; }
+
         public int FramePeriod = 1000 / 90;
 
         /// <summary> Whether the output should be treated as a line with ends, or a continuous circle. </summary>
-        public bool IsCircular { get; set; } = false;
+        public bool IsCircular { get; set; }
 
         // TODO: Determine what this does.
-        public float LightSiding { get; set; } = 1.0F;
+        public float LightSiding { get; set; }
 
         // TODO: Determine what this does.
-        public bool SteadyBright { get; set; } = false;
+        public bool SteadyBright { get; set; }
 
         /// <summary> The minimum brightness before LEDs are not outputted. </summary>
-        public float LEDFloor { get; set; } = 0.1F;
+        public float LEDFloor { get; set; }
 
         /// <summary> The maximum brightness. </summary>
-        public float LEDLimit { get; set; } = 1F;
+        public float LEDLimit { get; set; }
 
         /// <summary> How intense to make the colours. </summary>
-        public float SaturationAmplifier { get; set; } = 1.6F;
+        public float SaturationAmplifier { get; set; }
 
         private readonly List<IOutput> Outputs = new List<IOutput>();
         public byte[] OutputData;
@@ -55,20 +58,21 @@ namespace ColorChord.NET.Visualizers
 
         public Linear(string name) { this.Name = name; }
 
-        public void ApplyConfig(JToken configEntry)
+        public void ApplyConfig(Dictionary<string, object> options)
         {
-            JToken Config = configEntry.DeepClone(); // We'll be removing items, don't want to affect the original.
-            if (!int.TryParse((string)Config["ledCount"], out int LEDs) || LEDs <= 0) { Console.WriteLine("[ERR] Tried to create Linear visualizer with invalid/missing ledCount."); return; }
+            if (!options.ContainsKey("ledCount") || !int.TryParse((string)options["ledCount"], out int LEDs) || LEDs <= 0) { Console.WriteLine("[ERR] Tried to create Linear visualizer with invalid/missing ledCount."); return; }
 
-            this.LEDCount = ConfigTools.CheckInt(Config, "ledCount", 1, 100000, 50, true);
-            this.LightSiding = ConfigTools.CheckFloat(Config, "lightSiding", 0, 100, 1, true);
-            this.LEDFloor = ConfigTools.CheckFloat(Config, "ledFloor", 0, 1, 0.1F, true);
-            this.FramePeriod = 1000 / ConfigTools.CheckInt(Config, "frameRate", 0, 1000, 60, true);
-            this.IsCircular = ConfigTools.CheckBool(Config, "isCircular", false, true);
-            this.SteadyBright = ConfigTools.CheckBool(Config, "steadyBright", false, true);
-            this.LEDLimit = ConfigTools.CheckFloat(Config, "ledLimit", 0, 1, 1, true);
-            this.SaturationAmplifier = ConfigTools.CheckFloat(Config, "saturationAmplifier", 0, 100, 1.6F, true);
-            ConfigTools.WarnAboutRemainder(Config);
+            this.LEDCount = ConfigTools.CheckInt(options, "ledCount", 1, 100000, 50, true);
+            this.LightSiding = ConfigTools.CheckFloat(options, "lightSiding", 0, 100, 1, true);
+            this.LEDFloor = ConfigTools.CheckFloat(options, "ledFloor", 0, 1, 0.1F, true);
+            this.FramePeriod = 1000 / ConfigTools.CheckInt(options, "frameRate", 0, 1000, 60, true);
+            this.IsCircular = ConfigTools.CheckBool(options, "isCircular", false, true);
+            this.SteadyBright = ConfigTools.CheckBool(options, "steadyBright", false, true);
+            this.LEDLimit = ConfigTools.CheckFloat(options, "ledLimit", 0, 1, 1, true);
+            this.SaturationAmplifier = ConfigTools.CheckFloat(options, "saturationAmplifier", 0, 100, 1.6F, true);
+            this.Enabled = ConfigTools.CheckBool(options, "enable", true, true);
+            ConfigTools.WarnAboutRemainder(options);
+            Console.WriteLine("[INF] Finished reading config for Linear \"" + this.Name + "\".");
         }
 
         /// <summary> Used to update internal structures when the number of LEDs changes. </summary>
@@ -82,9 +86,10 @@ namespace ColorChord.NET.Visualizers
 
         public void Start()
         {
-            if (this.LEDCount <= 0) { Console.WriteLine("[ERR] Attempted to start Linear visualizer with invalid LED count."); return; }
+            if (this.LEDCount <= 0) { Console.WriteLine("[ERR] Attempted to start Linear visualizer \"" + this.Name + "\" with invalid LED count."); return; }
             this.KeepGoing = true;
             this.ProcessThread = new Thread(DoProcessing);
+            this.ProcessThread.Name = "Linear " + this.Name;
             this.ProcessThread.Start();
             NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
         }

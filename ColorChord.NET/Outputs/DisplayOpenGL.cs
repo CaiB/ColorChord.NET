@@ -1,9 +1,9 @@
 ﻿using ColorChord.NET.Visualizers;
-using Newtonsoft.Json.Linq;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.ES30;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -13,45 +13,43 @@ namespace ColorChord.NET.Outputs
 {
     public class DisplayOpenGL : GameWindow, IOutput
     {
-        private readonly IVisualizer Source;
+        public IVisualizer Source { get; private set; }
         private Shader Shader;
 
-        public float PaddingLeft = 0F;
-        public float PaddingRight = 0F;
-        public float PaddingTop = 0F;
-        public float PaddingBottom = 0F;
+        public string Name { get; private set; }
+
+        public float PaddingLeft { get; set; }
+        public float PaddingRight { get; set; }
+        public float PaddingTop { get; set; }
+        public float PaddingBottom { get; set; }
 
         // TODO: This can be optimized a ton. The linear output should not be using discrete "LED"s, but instead just drawing a rectangle for each colour, greatly reducing load, and removing the blockiness of the output.
         // Layout: X, Y, Z, R, G, B
         private float[] Vertices = new float[36];
-            /*{
-        -0.5f, -0.5f, 0.0f, 0.504F, 0.078F, 0.148F, //Bottom-left vertex
-        0.5f, -0.5f, 0.0f, 1F, 1F, 1F, //Bottom-right vertex
-         0.0f,  0.5f, 0.0f, 0F, 0F, 0F  //Top vertex
-        };*/
 
         private int VertexBufferHandle;
         private int VertexArrayHandle;
 
-        private readonly Thread Thread;
-
-        public DisplayOpenGL(IVisualizer source) : base(1280, 720, GraphicsMode.Default, "ColorChord.NET Display Output")
+        public DisplayOpenGL(string name) : base(1280, 720, GraphicsMode.Default, "ColorChord.NET Display Output \"" + name + '"')
         {
-            this.Source = source;
+            this.Name = name;
+        }
+
+        public void Start() { Run(60D); }
+        public void Stop() { } // TODO: Stop
+
+        public void ApplyConfig(Dictionary<string, object> options)
+        {
+            if (!options.ContainsKey("visualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["visualizerName"])) { Console.WriteLine("[ERR] Tried to create DisplayOpenGL with missing or invalid visualizer."); return; }
+            this.Source = ColorChord.VisualizerInsts[(string)options["visualizerName"]];
             this.Source.AttachOutput(this);
-            Run(60D);
-            //this.Thread = new Thread(Start);
-            //this.Thread.Start();
-        }
 
-        public void ApplyConfig(JToken configEntry)
-        {
-
-        }
-
-        private void Start()
-        {
-            Run(60D);
+            this.PaddingLeft = ConfigTools.CheckFloat(options, "paddingLeft", 0, 2, 0, true);
+            this.PaddingRight = ConfigTools.CheckFloat(options, "paddingRight", 0, 2, 0, true);
+            this.PaddingTop = ConfigTools.CheckFloat(options, "paddingTop", 0, 2, 0, true);
+            this.PaddingBottom = ConfigTools.CheckFloat(options, "paddingBottom", 0, 2, 0, true);
+            ConfigTools.WarnAboutRemainder(options);
+            Console.WriteLine("[INF] Finished reading config for DisplayOpenGL \"" + this.Name + "\".");
         }
 
         protected override void OnLoad(EventArgs evt)

@@ -1,5 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Vannatech.CoreAudio.Constants;
@@ -24,7 +24,9 @@ namespace ColorChord.NET.Sources
         private IAudioCaptureClient CaptureClient;
         private AudioTools.WAVEFORMATEX MixFormat;
 
-        public void ApplyConfig(JToken configEntry)
+        public WASAPILoopback(string name) { }
+
+        public void ApplyConfig(Dictionary<string, object> options)
         {
 
         }
@@ -72,6 +74,7 @@ namespace ColorChord.NET.Sources
 
             this.KeepGoing = true;
             this.ProcessThread = new Thread(ProcessAudio);
+            this.ProcessThread.Name = "WASAPILoopback";
             this.ProcessThread.Start();
         }
 

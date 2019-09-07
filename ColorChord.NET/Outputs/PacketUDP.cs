@@ -1,5 +1,5 @@
 ﻿using ColorChord.NET.Visualizers;
-using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 
@@ -12,6 +12,8 @@ namespace ColorChord.NET.Outputs
         private readonly IPEndPoint Destination;
         private readonly int Padding;
 
+        public PacketUDP(string name) { }
+
         public PacketUDP(IVisualizer source, string ip, ushort port, int frontPadding = 0)
         {
             this.Source = source;
@@ -20,7 +22,10 @@ namespace ColorChord.NET.Outputs
             this.Padding = frontPadding;
         }
 
-        public void ApplyConfig(JToken configEntry)
+        public void Start() { }
+        public void Stop() { }
+
+        public void ApplyConfig(Dictionary<string, object> options)
         {
 
         }
