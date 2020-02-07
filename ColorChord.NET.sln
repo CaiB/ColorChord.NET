@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27428.2005
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29215.179
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ColorChord.NET", "ColorChord.NET\ColorChord.NET.csproj", "{8FD047CD-693D-4D5A-8C1E-802101FCC54E}"
 EndProject
@@ -35,6 +35,7 @@ Global
 		{35FCB717-8C2D-4D27-8C08-FBBE8D6DB47F}.Debug|x86.ActiveCfg = Debug|x64
 		{35FCB717-8C2D-4D27-8C08-FBBE8D6DB47F}.Debug|x86.Build.0 = Debug|x64
 		{35FCB717-8C2D-4D27-8C08-FBBE8D6DB47F}.Release|Any CPU.ActiveCfg = Release|Win32
+		{35FCB717-8C2D-4D27-8C08-FBBE8D6DB47F}.Release|Any CPU.Build.0 = Release|Win32
 		{35FCB717-8C2D-4D27-8C08-FBBE8D6DB47F}.Release|x64.ActiveCfg = Release|x64
 		{35FCB717-8C2D-4D27-8C08-FBBE8D6DB47F}.Release|x64.Build.0 = Release|x64
 		{35FCB717-8C2D-4D27-8C08-FBBE8D6DB47F}.Release|x86.ActiveCfg = Release|Win32

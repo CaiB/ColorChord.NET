@@ -8,19 +8,45 @@ namespace ColorChord.NET.Visualizers
 {
     public class Cells : IVisualizer
     {
-        public readonly int LEDCount;
+        public int LEDCount { get; set; }
         public string Name { get; set; }
+        public bool Enabled { get; set; }
 
         public int FramePeriod = 1000 / 90;
 
         private readonly List<IOutput> Outputs = new List<IOutput>();
-        public readonly byte[] OutputData;
+        public byte[] OutputData;
         private bool KeepGoing = true;
         private Thread ProcessThread;
 
-        public Cells(int numLEDs)
+        public float LEDFloor { get; set; }
+        public float LightSiding { get; set; }
+        public float SaturationAmplifier { get; set; }
+        public float QtyAmp { get; set; }
+        public bool SteadyBright { get; set; }
+        public bool TimeBased { get; set; } // Useful for pies, turn off for linear systems.
+        public bool Snakey { get; set; } // Advance head for where to get LEDs around.
+
+        public Cells(string name) { this.Name = name; }
+
+        public void ApplyConfig(Dictionary<string, object> options)
         {
-            this.LEDCount = numLEDs;
+            if (!options.ContainsKey("ledCount") || !int.TryParse((string)options["ledCount"], out int LEDs) || LEDs <= 0) { Console.WriteLine("[ERR] Tried to create Linear visualizer with invalid/missing ledCount."); return; }
+
+            this.LEDCount = ConfigTools.CheckInt(options, "ledCount", 1, 100000, 50, true);
+            this.FramePeriod = 1000 / ConfigTools.CheckInt(options, "frameRate", 0, 1000, 60, true);
+
+            this.LEDFloor = ConfigTools.CheckFloat(options, "ledFloor", 0, 1, 0.1F, true);
+            this.LightSiding = ConfigTools.CheckFloat(options, "lightSiding", 0, 100, 1.9F, true);
+            this.SaturationAmplifier = ConfigTools.CheckFloat(options, "saturationAmplifier", 0, 100, 2F, true);
+            this.QtyAmp = ConfigTools.CheckFloat(options, "qtyAmp", 0, 100, 20, true);
+            this.SteadyBright = ConfigTools.CheckBool(options, "steadyBright", false, true);
+            this.TimeBased = ConfigTools.CheckBool(options, "timeBased", false, true);
+            this.Snakey = ConfigTools.CheckBool(options, "snakey", false, true);
+            this.Enabled = ConfigTools.CheckBool(options, "enable", true, true);
+            ConfigTools.WarnAboutRemainder(options);
+            Console.WriteLine("[INF] Finished reading config for Cells \"" + this.Name + "\".");
+
             this.OutputData = new byte[this.LEDCount * 3];
 
             this.led_note_attached = new int[this.LEDCount];
@@ -28,11 +54,6 @@ namespace ColorChord.NET.Visualizers
             this.last_led_pos = new float[this.LEDCount];
             this.last_led_pos_filter = new float[this.LEDCount];
             this.last_led_amp = new float[this.LEDCount];
-        }
-
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-
         }
 
         public void Start()
@@ -71,13 +92,6 @@ namespace ColorChord.NET.Visualizers
         private float[] last_led_pos;
         private float[] last_led_pos_filter;
         private float[] last_led_amp;
-        private float led_floor = 0.1F;
-        private float light_siding = 1.9F;
-        private float satamp = 2;
-        private float qtyamp = 20;
-        private bool steady_bright = false;
-        private bool timebased = true; // Useful for pies, turn off for linear systems.
-        private bool snakey = false; // Advance head for where to get LEDs around.
         private int snakeyplace = 0;
 
         private void Update()
@@ -104,11 +118,11 @@ namespace ColorChord.NET.Visualizers
             for (i = 0; i < totbins; i++)
             {
                 binpos[i] = NoteFinder.NotePositions[i] / NoteFinder.FreqBinCount;
-                binvals[i] = (float)Math.Pow(NoteFinder.NoteAmplitudes2[i], this.light_siding); //Slow
-                binvalsQ[i] = (float)Math.Pow(NoteFinder.NoteAmplitudes[i], this.light_siding); //Fast
+                binvals[i] = (float)Math.Pow(NoteFinder.NoteAmplitudes2[i], this.LightSiding); //Slow
+                binvalsQ[i] = (float)Math.Pow(NoteFinder.NoteAmplitudes[i], this.LightSiding); //Fast
                 totalbinval += binvals[i];
 
-                float want = binvals[i] * this.qtyamp;
+                float want = binvals[i] * this.QtyAmp;
                 totQtyWant += want;
                 qtyWant[i] = want;
             }
@@ -137,7 +151,7 @@ namespace ColorChord.NET.Visualizers
                     for (j = 0; j < this.LEDCount; j++)
                     {
                         if (this.led_note_attached[j] != i) continue;
-                        if (!this.timebased) { maxindex = j; break; }
+                        if (!this.TimeBased) { maxindex = j; break; }
                         if (this.time_of_change[j] > maxtime)
                         {
                             maxtime = this.time_of_change[j];
@@ -166,9 +180,9 @@ namespace ColorChord.NET.Visualizers
                     for (j = 0; j < this.LEDCount; j++)
                     {
                         if (this.led_note_attached[j] != -1) continue;
-                        if (!this.timebased) { selindex = j; break; }
+                        if (!this.TimeBased) { selindex = j; break; }
 
-                        if (this.snakey)
+                        if (this.Snakey)
                         {
                             float bias = 0;
                             float timeimp = 1;
@@ -215,10 +229,10 @@ namespace ColorChord.NET.Visualizers
                     this.OutputData[i * 3 + 2] = 0;
                     continue;
                 }
-                float sat = binvals[ia] * this.satamp;
-                float satQ = binvalsQ[ia] * this.satamp;
+                float sat = binvals[ia] * this.SaturationAmplifier;
+                float satQ = binvalsQ[ia] * this.SaturationAmplifier;
                 if (satQ > 1) satQ = 1;
-                float sendsat = (this.steady_bright ? sat : satQ);
+                float sendsat = (this.SteadyBright ? sat : satQ);
                 if (sendsat > 1) sendsat = 1;
                 uint r = VisualizerTools.CCtoHEX(binpos[ia], 1.0F, sendsat);
 

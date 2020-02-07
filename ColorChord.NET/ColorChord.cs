@@ -22,9 +22,9 @@ namespace ColorChord.NET
             //if (DoLinear) { Linear.Start(); }
             //Linear.Start();
 
-            Cells Cells = new Cells(50);
+            //Cells Cells = new Cells(50);
             //if (!DoLinear) { Cells.Start(); }
-            Cells.Start();
+            //Cells.Start();
 
             //PacketUDP NetworkLin = new PacketUDP(Linear, "192.168.0.60", 7777, 1);
             //PacketUDP NetworkCel = new PacketUDP(Cells, "192.168.0.60", 7777, 1);

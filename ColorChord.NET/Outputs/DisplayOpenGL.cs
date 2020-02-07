@@ -54,6 +54,7 @@ namespace ColorChord.NET.Outputs
 
         protected override void OnLoad(EventArgs evt)
         {
+            this.VSync = VSyncMode.On;
             if (this.Source is Linear Linear)
             {
                 if (!Linear.IsCircular) { this.Size = new System.Drawing.Size(this.Size.Width, 90); }
@@ -107,6 +108,12 @@ namespace ColorChord.NET.Outputs
             GL.DeleteBuffer(this.VertexBufferHandle);
             this.Shader.Dispose();
             base.OnUnload(evt);
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            Environment.Exit(0);
+            base.OnClosed(e);
         }
 
         protected void DebugCallback(DebugSource source, DebugType type, int id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam)
