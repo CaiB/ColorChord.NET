@@ -15,6 +15,7 @@ namespace ColorChord.NET.Sources
         private const ulong BufferLength = 50 * 10000; // 50 ms, in ticks
         private ulong ActualBufferDuration;
         private int BytesPerFrame;
+        private bool UseInput = false;
 
         private bool KeepGoing = true;
         private bool StreamReady = false;
@@ -28,7 +29,9 @@ namespace ColorChord.NET.Sources
 
         public void ApplyConfig(Dictionary<string, object> options)
         {
-
+            this.UseInput = ConfigTools.CheckBool(options, "useInput", false, true);
+            ConfigTools.WarnAboutRemainder(options);
+            Console.WriteLine("[INF] Finished reading config for WASAPILoopback.");
         }
 
         public void Start() // TOOD: Make device, etc selection possible instead of using defaults.
@@ -37,7 +40,7 @@ namespace ColorChord.NET.Sources
             Type DeviceEnumeratorType = Type.GetTypeFromCLSID(new Guid(ComCLSIDs.MMDeviceEnumeratorCLSID));
             IMMDeviceEnumerator DeviceEnumerator = (IMMDeviceEnumerator)Activator.CreateInstance(DeviceEnumeratorType);
 
-            ErrorCode = DeviceEnumerator.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eConsole, out IMMDevice Device);
+            ErrorCode = DeviceEnumerator.GetDefaultAudioEndpoint(this.UseInput ? EDataFlow.eCapture : EDataFlow.eRender, this.UseInput ? ERole.eMultimedia : ERole.eConsole, out IMMDevice Device);
             Marshal.ThrowExceptionForHR(ErrorCode);
 
             ErrorCode = Device.Activate(new Guid(ComIIDs.IAudioClientIID), (uint)CLSCTX_ALL, IntPtr.Zero, out object ClientObj);
@@ -56,7 +59,7 @@ namespace ColorChord.NET.Sources
 
             NoteFinder.SetSampleRate((int)this.MixFormat.nSamplesPerSec);
 
-            ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK, BufferLength, 0, MixFormatPtr);
+            ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, this.UseInput ? AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST : AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK, BufferLength, 0, MixFormatPtr);
             Marshal.ThrowExceptionForHR(ErrorCode);
 
             ErrorCode = this.Client.GetBufferSize(out uint BufferFrameCount);
