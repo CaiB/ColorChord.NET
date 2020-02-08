@@ -1,15 +1,70 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
 
 namespace ColorChord.NET
 {
     public static class NoteFinder
     {
+        public static float[] AudioBuffer = new float[8192]; // TODO: Make buffer size adjustable or auto-set based on sample rate (might be too short for super-high rates)
+        public static int AudioBufferHead = 0; // Where in the buffer we are reading, as it is filled circularly.
+        public static DateTime LastDataAdd;
+
+        public static uint ShortestPeriod { get; private set; } = 100; // The speed at which the note finder needs to run, set by the fastest visualizer.
+
+        private static bool KeepGoing = true;
+        private static Thread ProcessThread;
+
+        /// <summary> Updates the sample rate if the audio source has changed. </summary>
+        public static void SetSampleRate(int sampleRate)
+        {
+            for (int i = 0; i < Freqs; i++)
+            {
+                Frequencies[i] = (float)((sampleRate / BaseHz) / Math.Pow(2, (float)i / FreqBinCount));
+            }
+        }
+
+        /// <summary> Adjusts the note finder run interval if the newly added visualizer/output needs it to run faster, otherwise does nothing. </summary>
+        /// <param name="period"> The period, in milliseconds, that you need the note finder to run at or faster than. </param>
+        public static void AdjustOutputSpeed(uint period)
+        {
+            if (period < ShortestPeriod) { ShortestPeriod = period; }
+        }
+
+        public static void Start()
+        {
+            KeepGoing = true;
+            ProcessThread = new Thread(DoProcessing);
+            ProcessThread.Start();
+        }
+
+        public static void Stop()
+        {
+            KeepGoing = false;
+            ProcessThread.Join();
+        }
+
+        private static void DoProcessing()
+        {
+            Stopwatch Timer = new Stopwatch();
+            while (KeepGoing)
+            {
+                Timer.Restart();
+                RunNoteFinder();
+                int WaitTime = (int)(ShortestPeriod - (Timer.ElapsedMilliseconds));
+                if (WaitTime > 0) { Thread.Sleep(WaitTime); }
+            }
+        }
+
+        #region ColorChord Magic
+
         public const int FreqBinCount = 24;
         const int Octaves = 5;
         const float DFT_Q = 20;
         const float DFT_Speedup = 1000;
-        const float DFT_IIR = 0.6F;
+        const float DFT_IIR = 0.65F;
         const float Amplify = 2;
         const float Slope = 0.1F;
         const int FilterIterations = 2;
@@ -43,19 +98,11 @@ namespace ColorChord.NET
         static float[] FoldedBins = new float[FreqBinCount];
         static NoteDists[] Dists = new NoteDists[MaxDists];
 
-        public static void Init(int AudioSampleRate)
-        {
-            for (int i = 0; i < Freqs; i++)
-            {
-                Frequencies[i] = (float)((AudioSampleRate / BaseHz) / Math.Pow(2, (float)i / FreqBinCount));
-            }
-        }
-
-        public static float[] RunNoteFinder(float[] Stream, int Head, int Size)
+        public static float[] RunNoteFinder()
         {
             float[] DFTBins = new float[Freqs];
-            
-            DoDFTProgressive32(DFTBins, Frequencies, Freqs, Stream, Head, Size, DFT_Q, DFT_Speedup);
+
+            DoDFTProgressive32(DFTBins, Frequencies, Freqs, AudioBuffer, AudioBufferHead, AudioBuffer.Length, DFT_Q, DFT_Speedup);
 
             for (int i = 0; i < Freqs; i++)
             {
@@ -221,7 +268,7 @@ namespace ColorChord.NET
                     NoteAmplitudes2[i] = 0;
                 }
             }
-            
+
             for (int i = 0; i < NotePeakCount; i++)
             {
                 NoteAmplitudesOut[i] = NoteAmplitudes[i] - NoteOutChop;
@@ -337,11 +384,12 @@ namespace ColorChord.NET
             public int CompareTo(NoteDists other)
             {
                 float v = this.amp - other.amp;
-	            return ((v > 0) ? -1 : ((v < 0) ? 1 : 0));
+                return ((v > 0) ? -1 : ((v < 0) ? 1 : 0));
             }
         };
 
         [DllImport("ColorChordLib.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern void DoDFTProgressive32([In, Out] float[] OutBins, [In, Out] float[] Frequencies, int Bins, float[] DataBuffer, int DataBufferLoc, int DataBufferSize, float Q, float Speedup);
+        #endregion
     }
 }
