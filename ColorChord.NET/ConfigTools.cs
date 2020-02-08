@@ -59,6 +59,20 @@ namespace ColorChord.NET
             return def;
         }
 
+        public static string CheckString(Dictionary<string, object> category, string name, string def, bool remove)
+        {
+            if (category != null && category.ContainsKey(name))
+            {
+                if (!string.IsNullOrEmpty(category[name].ToString()))
+                {
+                    if (remove) { category.Remove(name); }
+                    return category[name].ToString();
+                }
+                Console.WriteLine("[WARN] Value of \"" + name + "\" was invalid, defaulting to " + def + " (expected string type)");
+            }
+            return def;
+        }
+
         public static void WarnAboutRemainder(Dictionary<string, object> category)
         {
             foreach (string Item in category.Keys)
