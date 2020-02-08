@@ -40,6 +40,12 @@ namespace ColorChord.NET.Sources
             Type DeviceEnumeratorType = Type.GetTypeFromCLSID(new Guid(ComCLSIDs.MMDeviceEnumeratorCLSID));
             IMMDeviceEnumerator DeviceEnumerator = (IMMDeviceEnumerator)Activator.CreateInstance(DeviceEnumeratorType);
 
+            Console.WriteLine("Audio output device list:");
+            ListDevices(DeviceEnumerator, EDataFlow.eRender);
+
+            Console.WriteLine("Audio input device list:");
+            ListDevices(DeviceEnumerator, EDataFlow.eCapture);
+
             ErrorCode = DeviceEnumerator.GetDefaultAudioEndpoint(this.UseInput ? EDataFlow.eCapture : EDataFlow.eRender, this.UseInput ? ERole.eMultimedia : ERole.eConsole, out IMMDevice Device);
             Marshal.ThrowExceptionForHR(ErrorCode);
 
@@ -79,6 +85,39 @@ namespace ColorChord.NET.Sources
             this.ProcessThread = new Thread(ProcessAudio);
             this.ProcessThread.Name = "WASAPILoopback";
             this.ProcessThread.Start();
+        }
+
+        private void ListDevices(IMMDeviceEnumerator enumerator, EDataFlow dataFlow)
+        {
+            int ErrorCode;
+            ErrorCode = enumerator.EnumAudioEndpoints(dataFlow, DEVICE_STATE_XXX.DEVICE_STATE_ACTIVE, out IMMDeviceCollection Devices);
+            Marshal.ThrowExceptionForHR(ErrorCode);
+
+            ErrorCode = Devices.GetCount(out uint DeviceCount);
+            Marshal.ThrowExceptionForHR(ErrorCode);
+
+            for(uint DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex++) // TODO: Consider checking error codes.
+            {
+                ErrorCode = Devices.Item(DeviceIndex, out IMMDevice Device);
+                ErrorCode = Device.GetId(out string DeviceID);
+                ErrorCode = Device.OpenPropertyStore(STGM.STGM_READ, out IPropertyStore Properties);
+
+                string DeviceFriendlyName = "[Name Retrieval Failed]";
+                ErrorCode = Properties.GetCount(out uint PropertyCount);
+                for (uint PropIndex = 0; PropIndex < PropertyCount; PropIndex++)
+                {
+                    ErrorCode = Properties.GetAt(PropIndex, out PROPERTYKEY Property);
+                    if (Property.fmtid == PropertyKeys.PKEY_DeviceInterface_FriendlyName)
+                    {
+                        ErrorCode = Properties.GetValue(ref Property, out PROPVARIANT Variant);
+                        DeviceFriendlyName = Marshal.PtrToStringUni(Variant.Data.AsStringPtr);
+                        break;
+                    }
+                }
+
+                if (Marshal.GetExceptionForHR(ErrorCode) == null) { Console.WriteLine("Device #" + DeviceIndex + " is \"" + DeviceFriendlyName + "\"."); }
+                else { Console.WriteLine("Could not get info for device #" + DeviceIndex + ", got HRESULT " + ErrorCode); }
+            }
         }
 
         public void Stop()
