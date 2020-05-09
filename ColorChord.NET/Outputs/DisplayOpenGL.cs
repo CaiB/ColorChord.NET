@@ -40,7 +40,7 @@ namespace ColorChord.NET.Outputs
 
         public void ApplyConfig(Dictionary<string, object> options)
         {
-            if (!options.ContainsKey("visualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["visualizerName"])) { Console.WriteLine("[ERR] Tried to create DisplayOpenGL with missing or invalid visualizer."); return; }
+            if (!options.ContainsKey("visualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["visualizerName"])) { Log.Error("Tried to create DisplayOpenGL with missing or invalid visualizer."); return; }
             this.Source = ColorChord.VisualizerInsts[(string)options["visualizerName"]];
             this.Source.AttachOutput(this);
 
@@ -48,8 +48,8 @@ namespace ColorChord.NET.Outputs
             this.PaddingRight = ConfigTools.CheckFloat(options, "paddingRight", 0, 2, 0, true);
             this.PaddingTop = ConfigTools.CheckFloat(options, "paddingTop", 0, 2, 0, true);
             this.PaddingBottom = ConfigTools.CheckFloat(options, "paddingBottom", 0, 2, 0, true);
-            ConfigTools.WarnAboutRemainder(options);
-            Console.WriteLine("[INF] Finished reading config for DisplayOpenGL \"" + this.Name + "\".");
+            ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
+            Log.Info("Finished reading config for DisplayOpenGL \"" + this.Name + "\".");
         }
 
         protected override void OnLoad(EventArgs evt)
@@ -118,7 +118,7 @@ namespace ColorChord.NET.Outputs
 
         protected void DebugCallback(DebugSource source, DebugType type, int id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam)
         {
-            Console.WriteLine("OpenGL Output: Type \"" + type + "\", Severity \"" + severity + "\", Message \"" + Marshal.PtrToStringAnsi(message) + "\".");
+            Log.Warn("OpenGL Output: Type \"" + type + "\", Severity \"" + severity + "\", Message \"" + Marshal.PtrToStringAnsi(message) + "\".");
         }
 
         public void Dispatch()
@@ -191,11 +191,11 @@ namespace ColorChord.NET.Outputs
 
             GL.CompileShader(VertexShaderHandle);
             string LogVertex = GL.GetShaderInfoLog(VertexShaderHandle);
-            if (!string.IsNullOrEmpty(LogVertex)) { Console.WriteLine("Vertex Shader Problems Found! Log:\n" + LogVertex); }
+            if (!string.IsNullOrEmpty(LogVertex)) { Log.Error("Vertex Shader Problems Found! Log:\n" + LogVertex); }
 
             GL.CompileShader(FragmentShaderHandle);
             string LogFragment = GL.GetShaderInfoLog(FragmentShaderHandle);
-            if (!string.IsNullOrEmpty(LogFragment)) { Console.WriteLine("Fragment Shader Problems Found! Log:\n" + LogFragment); }
+            if (!string.IsNullOrEmpty(LogFragment)) { Log.Error("Fragment Shader Problems Found! Log:\n" + LogFragment); }
 
             this.ShaderHandle = GL.CreateProgram();
             GL.AttachShader(this.ShaderHandle, VertexShaderHandle);

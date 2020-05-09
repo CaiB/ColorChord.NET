@@ -13,6 +13,7 @@ namespace ColorChord.NET
     public class ColorChord
     {
         private const string CONFIG_FILE = "config.json";
+        public static bool Debug = false;
 
         public static void Main(string[] args)
         {
@@ -20,7 +21,7 @@ namespace ColorChord.NET
 
             if (!File.Exists(CONFIG_FILE)) // No config file
             {
-                Console.WriteLine("[WARN] Could not find config file. Creating and using default.");
+                Log.Warn("Could not find config file. Creating and using default.");
                 try
                 {
                     Assembly Asm = Assembly.GetExecutingAssembly();
@@ -35,7 +36,7 @@ namespace ColorChord.NET
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("[ERR] Failed to create default config file.");
+                    Log.Error("Failed to create default config file.");
                     throw ex; // The program cannot execute without configuration.
                 }
             }
@@ -55,24 +56,24 @@ namespace ColorChord.NET
             // Controllers = new Dictionary<string IController>();
             JObject JSON;
             using (StreamReader Reader = File.OpenText(CONFIG_FILE)) { JSON = JObject.Parse(Reader.ReadToEnd()); }
-            Console.WriteLine("Reading and applying configuration file...");
+            Log.Info("Reading and applying configuration file...");
 
             // Audio Source
-            if (!JSON.ContainsKey("source") || !JSON["source"].HasValues) { Console.WriteLine("[WARN] Could not find valid \"source\" definition. No audio source will be configured."); }
+            if (!JSON.ContainsKey("source") || !JSON["source"].HasValues) { Log.Warn("Could not find valid \"source\" definition. No audio source will be configured."); }
             else
             {
                 IAudioSource Source = CreateObject<IAudioSource>("ColorChord.NET.Sources." + (string)JSON["source"]["type"], JSON["source"]);
                 if (Source != null)
                 {
                     ColorChord.Source = Source;
-                    Console.WriteLine("[INF] Created audio source of type \"" + Source.GetType().FullName + "\".");
+                    Log.Info("Created audio source of type \"" + Source.GetType().FullName + "\".");
                     ColorChord.Source.Start();
                 }
-                else { Console.WriteLine("[ERR] Failed to create audio source. Check to make sure the type is spelled correctly."); }
+                else { Log.Error("Failed to create audio source. Check to make sure the type is spelled correctly."); }
             }
 
             // Visualizers
-            if (!JSON.ContainsKey("visualizers") || !JSON["visualizers"].HasValues || ((JArray)JSON["visualizers"]).Count <= 0) { Console.WriteLine("[WARN] Could not find valid \"visualizers\" definition. No visualizers will be configured."); }
+            if (!JSON.ContainsKey("visualizers") || !JSON["visualizers"].HasValues || ((JArray)JSON["visualizers"]).Count <= 0) { Log.Warn("Could not find valid \"visualizers\" definition. No visualizers will be configured."); }
             else
             {
                 foreach (JToken Entry in (JArray)JSON["visualizers"])
@@ -84,7 +85,7 @@ namespace ColorChord.NET
             }
 
             // Outputs
-            if (!JSON.ContainsKey("outputs") || !JSON["outputs"].HasValues || ((JArray)JSON["visualizers"]).Count <= 0) { Console.WriteLine("[WARN] Could not find valid \"outputs\" definition. No outputs will be configured."); }
+            if (!JSON.ContainsKey("outputs") || !JSON["outputs"].HasValues || ((JArray)JSON["visualizers"]).Count <= 0) { Log.Warn("Could not find valid \"outputs\" definition. No outputs will be configured."); }
             else
             {
                 foreach (JToken Entry in (JArray)JSON["outputs"])
@@ -94,7 +95,7 @@ namespace ColorChord.NET
                     OutputInsts.Add((string)Entry["name"], Out);
                 }
             }
-            Console.WriteLine("[INF] Finished processing config file.");
+            Log.Info("Finished processing config file.");
         }
 
         /// <summary> Creates a new instance of the specified type, and checks to make sure it implements the given interface. </summary>

@@ -24,15 +24,18 @@ namespace ColorChord.NET.Outputs
 
         public void ApplyConfig(Dictionary<string, object> options)
         {
-            if (!options.ContainsKey("visualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["visualizerName"])) { Console.WriteLine("[ERR] Tried to create PacketUDP with missing or invalid visualizer."); return; }
+            Log.Info("Reading config for PacketUDP \"" + this.Name + "\".");
+
+            if (!options.ContainsKey("visualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["visualizerName"])) { Log.Error("Tried to create PacketUDP with missing or invalid visualizer."); return; }
             this.Source = ColorChord.VisualizerInsts[(string)options["visualizerName"]];
             this.Source.AttachOutput(this);
 
             int Port = ConfigTools.CheckInt(options, "port", 0, 65535, 7777, true);
-            this.Destination = new IPEndPoint(IPAddress.Parse(ConfigTools.CheckString(options, "saturationAmplifier", "127.0.0.1", true)), Port);
+            this.Destination = new IPEndPoint(IPAddress.Parse(ConfigTools.CheckString(options, "ip", "127.0.0.1", true)), Port);
             this.Padding = ConfigTools.CheckInt(options, "frontPadding", 0, 1000, 0, true);
-            ConfigTools.WarnAboutRemainder(options);
-            Console.WriteLine("[INF] Finished reading config for PacketUDP \"" + this.Name + "\".");
+
+            ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
+            Log.Info("Finished reading config for PacketUDP \"" + this.Name + "\".");
         }
 
         public void Dispatch() // TODO: Make modular.

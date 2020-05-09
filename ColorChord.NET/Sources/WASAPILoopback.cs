@@ -30,8 +30,8 @@ namespace ColorChord.NET.Sources
         public void ApplyConfig(Dictionary<string, object> options)
         {
             this.UseInput = ConfigTools.CheckBool(options, "useInput", false, true);
-            ConfigTools.WarnAboutRemainder(options);
-            Console.WriteLine("[INF] Finished reading config for WASAPILoopback.");
+            ConfigTools.WarnAboutRemainder(options, typeof(IAudioSource));
+            Log.Info("Finished reading config for WASAPILoopback.");
         }
 
         public void Start() // TOOD: Make device, etc selection possible instead of using defaults.

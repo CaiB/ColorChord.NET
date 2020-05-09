@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using ColorChord.NET.Outputs;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 
@@ -16,12 +17,12 @@ namespace ColorChord.NET
                     if (remove) { category.Remove(name); }
                     if (Value > max || Value < min)
                     {
-                        Console.WriteLine("[WARN] Value of \"" + name + "\" was out of range, defaulting to " + def + " (expected " + min + " to " + max + ")");
+                        Log.Warn("Value of \"" + name + "\" was out of range, defaulting to " + def + " (expected " + min + " to " + max + ")");
                         return def;
                     }
                     return Value;
                 }
-                Console.WriteLine("[WARN] Value of \"" + name + "\" was invalid, defaulting to " + def + " (expected float type)");
+                Log.Warn("Value of \"" + name + "\" was invalid, defaulting to " + def + " (expected float type)");
             }
             return def;
         }
@@ -35,12 +36,12 @@ namespace ColorChord.NET
                     if (remove) { category.Remove(name); }
                     if (Value > max || Value < min)
                     {
-                        Console.WriteLine("[WARN] Value of \"" + name + "\" was out of range, defaulting to " + def + " (expected " + min + " to " + max + ")");
+                        Log.Warn("Value of \"" + name + "\" was out of range, defaulting to " + def + " (expected " + min + " to " + max + ")");
                         return def;
                     }
                     return Value;
                 }
-                Console.WriteLine("[WARN] Value of \"" + name + "\" was invalid, defaulting to " + def + " (expected int type)");
+                Log.Warn("Value of \"" + name + "\" was invalid, defaulting to " + def + " (expected int type)");
             }
             return def;
         }
@@ -54,7 +55,7 @@ namespace ColorChord.NET
                     if (remove) { category.Remove(name); }
                     return Value;
                 }
-                Console.WriteLine("[WARN] Value of \"" + name + "\" was invalid, defaulting to " + def + " (expected bool type)");
+                Log.Warn("Value of \"" + name + "\" was invalid, defaulting to " + def + " (expected bool type)");
             }
             return def;
         }
@@ -65,20 +66,22 @@ namespace ColorChord.NET
             {
                 if (!string.IsNullOrEmpty(category[name].ToString()))
                 {
+                    string Value = category[name].ToString();
                     if (remove) { category.Remove(name); }
-                    return category[name].ToString();
+                    return Value;
                 }
-                Console.WriteLine("[WARN] Value of \"" + name + "\" was invalid, defaulting to " + def + " (expected string type)");
+                Log.Warn("Value of \"" + name + "\" was invalid, defaulting to " + def + " (expected string type)");
             }
             return def;
         }
 
-        public static void WarnAboutRemainder(Dictionary<string, object> category)
+        public static void WarnAboutRemainder(Dictionary<string, object> category, Type interfaceType)
         {
             foreach (string Item in category.Keys)
             {
                 if (Item == "type" || Item == "name") { continue; }
-                Console.WriteLine("[WARN] Unknown config entry found: \"" + Item + "\". Ignoring.");
+                if (interfaceType == typeof(IOutput) && Item == "visualizerName") { continue; }
+                Log.Warn("Unknown config entry found: \"" + Item + "\". Ignoring.");
             }
         }
 
