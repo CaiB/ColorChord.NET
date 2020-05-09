@@ -12,14 +12,18 @@ namespace ColorChord.NET
 {
     public class ColorChord
     {
-        private const string CONFIG_FILE = "config.json";
+        private static string ConfigFile = "config.json";
         public static bool Debug = false;
 
         public static void Main(string[] args)
         {
+            if (args != null && args.Length > 0)
+            {
+                if (args[0].Equals("config", StringComparison.InvariantCultureIgnoreCase) && args.Length >= 2) { ConfigFile = args[1]; }
+            }
             NoteFinder.Start();
 
-            if (!File.Exists(CONFIG_FILE)) // No config file
+            if (!File.Exists(ConfigFile)) // No config file
             {
                 Log.Warn("Could not find config file. Creating and using default.");
                 try
@@ -27,7 +31,7 @@ namespace ColorChord.NET
                     Assembly Asm = Assembly.GetExecutingAssembly();
                     using (Stream InStream = Asm.GetManifestResourceStream("ColorChord.NET.sample-config.json"))
                     {
-                        using (FileStream OutStream = File.Create(CONFIG_FILE))
+                        using (FileStream OutStream = File.Create(ConfigFile))
                         {
                             InStream.Seek(0, SeekOrigin.Begin);
                             InStream.CopyTo(OutStream);
@@ -55,8 +59,8 @@ namespace ColorChord.NET
             OutputInsts = new Dictionary<string, IOutput>();
             // Controllers = new Dictionary<string IController>();
             JObject JSON;
-            using (StreamReader Reader = File.OpenText(CONFIG_FILE)) { JSON = JObject.Parse(Reader.ReadToEnd()); }
-            Log.Info("Reading and applying configuration file...");
+            using (StreamReader Reader = File.OpenText(ConfigFile)) { JSON = JObject.Parse(Reader.ReadToEnd()); }
+            Log.Info("Reading and applying configuration file \"" + ConfigFile + "\"...");
 
             // Audio Source
             if (!JSON.ContainsKey("source") || !JSON["source"].HasValues) { Log.Warn("Could not find valid \"source\" definition. No audio source will be configured."); }
