@@ -12,6 +12,9 @@ namespace ColorChord.NET.Sources
     public class WASAPILoopback : IAudioSource
     {
         private const CLSCTX CLSCTX_ALL = CLSCTX.CLSCTX_INPROC_SERVER | CLSCTX.CLSCTX_INPROC_HANDLER | CLSCTX.CLSCTX_LOCAL_SERVER | CLSCTX.CLSCTX_REMOTE_SERVER;
+        private static readonly Guid FriendlyNamePKEY = new Guid(0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0);
+        private const int FriendlyNamePKEY_PID = 14;
+
         private const ulong BufferLength = 50 * 10000; // 50 ms, in ticks
         private ulong ActualBufferDuration;
         private int BytesPerFrame;
@@ -99,15 +102,20 @@ namespace ColorChord.NET.Sources
             for(uint DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex++) // TODO: Consider checking error codes.
             {
                 ErrorCode = Devices.Item(DeviceIndex, out IMMDevice Device);
+                if (IsErrorAndOut(ErrorCode, "Failed to get audio device " + DeviceIndex)) { continue; }
+
                 ErrorCode = Device.GetId(out string DeviceID);
+                if (IsErrorAndOut(ErrorCode, "Failed to get device ID at " + DeviceIndex)) { continue; }
+
                 ErrorCode = Device.OpenPropertyStore(STGM.STGM_READ, out IPropertyStore Properties);
+                if (IsErrorAndOut(ErrorCode, "Failed to get device properties at " + DeviceIndex)) { continue; }
 
                 string DeviceFriendlyName = "[Name Retrieval Failed]";
                 ErrorCode = Properties.GetCount(out uint PropertyCount);
                 for (uint PropIndex = 0; PropIndex < PropertyCount; PropIndex++)
                 {
                     ErrorCode = Properties.GetAt(PropIndex, out PROPERTYKEY Property);
-                    if (Property.fmtid == PropertyKeys.PKEY_DeviceInterface_FriendlyName)
+                    if (Property.fmtid == FriendlyNamePKEY && Property.pid == FriendlyNamePKEY_PID)
                     {
                         ErrorCode = Properties.GetValue(ref Property, out PROPVARIANT Variant);
                         DeviceFriendlyName = Marshal.PtrToStringUni(Variant.Data.AsStringPtr);
@@ -115,7 +123,7 @@ namespace ColorChord.NET.Sources
                     }
                 }
 
-                if (Marshal.GetExceptionForHR(ErrorCode) == null) { Console.WriteLine("Device #" + DeviceIndex + " is \"" + DeviceFriendlyName + "\"."); }
+                if (Marshal.GetExceptionForHR(ErrorCode) == null) { Console.WriteLine("Device #" + DeviceIndex + " is \"" + DeviceFriendlyName + "\". It has ID \"" + DeviceID + "\"."); }
                 else { Console.WriteLine("Could not get info for device #" + DeviceIndex + ", got HRESULT " + ErrorCode); }
             }
         }
@@ -175,6 +183,15 @@ namespace ColorChord.NET.Sources
             ErrorCode = this.Client.Stop();
             Marshal.ThrowExceptionForHR(ErrorCode);
             this.StreamReady = false;
+        }
+
+        private static bool IsError(int hresult) => hresult < 0;
+
+        private static bool IsErrorAndOut(int hresult, string output)
+        {
+            bool Error = IsError(hresult);
+            if (Error) { Log.Error(output); }
+            return Error;
         }
 
     }
