@@ -6,33 +6,41 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 
 namespace ColorChord.NET
 {
     public class ColorChord
     {
+        private const string CONFIG_FILE = "config.json";
 
         public static void Main(string[] args)
         {
             NoteFinder.Start();
 
+            if (!File.Exists(CONFIG_FILE)) // No config file
+            {
+                Console.WriteLine("[WARN] Could not find config file. Creating and using default.");
+                try
+                {
+                    Assembly Asm = Assembly.GetExecutingAssembly();
+                    using (Stream InStream = Asm.GetManifestResourceStream("ColorChord.NET.sample-config.json"))
+                    {
+                        using (FileStream OutStream = File.Create(CONFIG_FILE))
+                        {
+                            InStream.Seek(0, SeekOrigin.Begin);
+                            InStream.CopyTo(OutStream);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("[ERR] Failed to create default config file.");
+                    throw ex; // The program cannot execute without configuration.
+                }
+            }
+
             ReadConfig();
-
-            //Linear Linear = new Linear("test2");
-            //if (DoLinear) { Linear.Start(); }
-            //Linear.Start();
-
-            //Cells Cells = new Cells(50);
-            //if (!DoLinear) { Cells.Start(); }
-            //Cells.Start();
-
-            //PacketUDP NetworkLin = new PacketUDP(Linear, "192.168.0.60", 7777, 1);
-            //PacketUDP NetworkCel = new PacketUDP(Cells, "192.168.0.60", 7777, 1);
-            //DisplayOpenGL TestDisp = new DisplayOpenGL(Linear);
-
-            //DisplayOpenGL TestDispCells = new DisplayOpenGL(Cells);
-
-            
         }
 
         public static Dictionary<string, IVisualizer> VisualizerInsts;
@@ -44,9 +52,9 @@ namespace ColorChord.NET
         {
             VisualizerInsts = new Dictionary<string, IVisualizer>();
             OutputInsts = new Dictionary<string, IOutput>();
-            // Controllers = new DIctionary<string IController>();
+            // Controllers = new Dictionary<string IController>();
             JObject JSON;
-            using (StreamReader Reader = File.OpenText("config.json")) { JSON = JObject.Parse(Reader.ReadToEnd()); }
+            using (StreamReader Reader = File.OpenText(CONFIG_FILE)) { JSON = JObject.Parse(Reader.ReadToEnd()); }
             Console.WriteLine("Reading and applying configuration file...");
 
             // Audio Source
