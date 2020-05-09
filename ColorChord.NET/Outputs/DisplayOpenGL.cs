@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Visualizers;
+using ColorChord.NET.Visualizers.Formats;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.ES30;
@@ -141,9 +142,10 @@ namespace ColorChord.NET.Outputs
         {
             if (this.Vertices != null)
             {
-                if (this.Source is Linear || this.Source is Cells)
+                if (this.Source is IDiscrete1D Source1D)
                 {
-                    int Count = (this.Source is Linear) ? ((Linear)this.Source).LEDCount : ((Cells)this.Source).LEDCount;
+                    int Count = Source1D.GetCount();
+                    byte[] SourceData = Source1D.GetData();
                     if (this.Vertices.Length != Count * 6 * 6) { this.Vertices = new float[Count * 6 * 6]; } // 6 vertices per "LED", with 6 floats each.
                     float SizeX = (2F - (this.PaddingLeft + this.PaddingRight)) / Count;
                     float SizeY = (2F - (this.PaddingTop + this.PaddingBottom)) / Count; // TODO: Consider moving this out of the loop.
@@ -174,9 +176,9 @@ namespace ColorChord.NET.Outputs
                                     this.Vertices[(i * 6 * 6) + (v * 6) + 1] = -1F + this.PaddingBottom; break;
                             }
                             this.Vertices[(i * 6 * 6) + (v * 6) + 2] = 0F; // Z
-                            this.Vertices[(i * 6 * 6) + (v * 6) + 3] = ((this.Source is Linear) ? ((Linear)this.Source).OutputData[(i * 3) + 0] : ((Cells)this.Source).OutputData[(i * 3) + 0]) / 256F; // R
-                            this.Vertices[(i * 6 * 6) + (v * 6) + 4] = ((this.Source is Linear) ? ((Linear)this.Source).OutputData[(i * 3) + 1] : ((Cells)this.Source).OutputData[(i * 3) + 1]) / 256F; // G
-                            this.Vertices[(i * 6 * 6) + (v * 6) + 5] = ((this.Source is Linear) ? ((Linear)this.Source).OutputData[(i * 3) + 2] : ((Cells)this.Source).OutputData[(i * 3) + 2]) / 256F; // B
+                            this.Vertices[(i * 6 * 6) + (v * 6) + 3] = SourceData[(i * 3) + 0] / 256F; // R
+                            this.Vertices[(i * 6 * 6) + (v * 6) + 4] = SourceData[(i * 3) + 1] / 256F; // G
+                            this.Vertices[(i * 6 * 6) + (v * 6) + 5] = SourceData[(i * 3) + 2] / 256F; // B
                         }
                     }
                 }

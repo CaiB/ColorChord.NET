@@ -1,17 +1,14 @@
 ﻿using ColorChord.NET.Outputs;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace ColorChord.NET.Visualizers
 {
-    public class Linear : IVisualizer
+    public class Linear : IVisualizer, IDiscrete1D
     {
         /// <summary> The number of discrete elements outputted by this visualizer. </summary>
         public int LEDCount
@@ -114,6 +111,9 @@ namespace ColorChord.NET.Visualizers
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
             }
         }
+
+        public int GetCount() => this.LEDCount;
+        public byte[] GetData() => this.OutputData;
 
         #region ColorChord Magic
         private float[] last_led_pos;

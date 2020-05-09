@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Visualizers;
+using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -50,18 +51,14 @@ namespace ColorChord.NET.Outputs
             ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
         }
 
-        public void Dispatch() // TODO: Make modular.
+        public void Dispatch()
         {
             byte[] Output;
-            if (this.Source is Linear SourceLin)
+            if (this.Source is IDiscrete1D Source1D)
             {
-                Output = new byte[SourceLin.OutputData.Length + this.FrontPadding + this.BackPadding];
-                for (int i = 0; i < SourceLin.OutputData.Length; i++) { Output[i + this.FrontPadding] = SourceLin.OutputData[i]; }
-            }
-            else if (this.Source is Cells SourceCells)
-            {
-                Output = new byte[SourceCells.OutputData.Length + this.FrontPadding + this.BackPadding];
-                for (int i = 0; i < SourceCells.OutputData.Length; i++) { Output[i + this.FrontPadding] = SourceCells.OutputData[i]; }
+                Output = new byte[Source1D.GetCount() * 3 + this.FrontPadding + this.BackPadding];
+                byte[] SourceData = Source1D.GetData();
+                for (int i = 0; i < SourceData.Length; i++) { Output[i + this.FrontPadding] = SourceData[i]; }
             }
             else { return; }
             this.Sender.Send(Output, Output.Length, this.Destination);

@@ -75,6 +75,7 @@
     <Compile Include="Visualizers\Cells.cs" />
     <Compile Include="Visualizers\IVisualizer.cs" />
     <Compile Include="Visualizers\Linear.cs" />
+    <Compile Include="Visualizers\VisualizerFormats.cs" />
     <Compile Include="Visualizers\VisualizerTools.cs" />
   </ItemGroup>
   <ItemGroup>

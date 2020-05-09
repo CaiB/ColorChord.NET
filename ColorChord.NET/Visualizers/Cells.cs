@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Outputs;
+using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -6,7 +7,7 @@ using System.Threading;
 
 namespace ColorChord.NET.Visualizers
 {
-    public class Cells : IVisualizer
+    public class Cells : IVisualizer, IDiscrete1D
     {
         public int LEDCount { get; set; }
         public string Name { get; set; }
@@ -84,6 +85,9 @@ namespace ColorChord.NET.Visualizers
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
             }
         }
+
+        public int GetCount() => this.LEDCount;
+        public byte[] GetData() => this.OutputData;
 
         #region ColorChord Magic
         private int[] led_note_attached;
