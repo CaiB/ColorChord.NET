@@ -4,10 +4,10 @@ using OpenTK.Graphics;
 using OpenTK.Graphics.ES30;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading;
 
 namespace ColorChord.NET.Outputs
 {
@@ -16,12 +16,33 @@ namespace ColorChord.NET.Outputs
         public IVisualizer Source { get; private set; }
         private Shader Shader;
 
-        public string Name { get; private set; }
+        public readonly string Name;
 
+        /// <summary> Empty space in the window on the left side. </summary>
         public float PaddingLeft { get; set; }
+
+        /// <summary> Empty space in the window on the right side. </summary>
         public float PaddingRight { get; set; }
+
+        /// <summary> Empty space in the window on the top. </summary>
         public float PaddingTop { get; set; }
+
+        /// <summary> Empty space in the window on the bottom. </summary>
         public float PaddingBottom { get; set; }
+
+        /// <summary> The width of the window, in pixels. </summary>
+        public int WindowWidth
+        {
+            get => this.Size.Width;
+            set => this.Size = new Size(value, this.Size.Height);
+        }
+
+        /// <summary> The height of the window, in pixels. </summary>
+        public int WindowHeight
+        {
+            get => this.Size.Height;
+            set => this.Size = new Size(this.Size.Width, value);
+        }
 
         // TODO: This can be optimized a ton. The linear output should not be using discrete "LED"s, but instead just drawing a rectangle for each colour, greatly reducing load, and removing the blockiness of the output.
         // Layout: X, Y, Z, R, G, B
@@ -30,7 +51,7 @@ namespace ColorChord.NET.Outputs
         private int VertexBufferHandle;
         private int VertexArrayHandle;
 
-        public DisplayOpenGL(string name) : base(1280, 720, GraphicsMode.Default, "ColorChord.NET Display Output \"" + name + '"')
+        public DisplayOpenGL(string name) : base(1280, 150, GraphicsMode.Default, "ColorChord.NET Display Output \"" + name + '"')
         {
             this.Name = name;
         }
@@ -40,6 +61,7 @@ namespace ColorChord.NET.Outputs
 
         public void ApplyConfig(Dictionary<string, object> options)
         {
+            Log.Info("Reading config for DisplayOpenGL \"" + this.Name + "\".");
             if (!options.ContainsKey("visualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["visualizerName"])) { Log.Error("Tried to create DisplayOpenGL with missing or invalid visualizer."); return; }
             this.Source = ColorChord.VisualizerInsts[(string)options["visualizerName"]];
             this.Source.AttachOutput(this);
@@ -48,21 +70,15 @@ namespace ColorChord.NET.Outputs
             this.PaddingRight = ConfigTools.CheckFloat(options, "paddingRight", 0, 2, 0, true);
             this.PaddingTop = ConfigTools.CheckFloat(options, "paddingTop", 0, 2, 0, true);
             this.PaddingBottom = ConfigTools.CheckFloat(options, "paddingBottom", 0, 2, 0, true);
+
+            this.WindowWidth = ConfigTools.CheckInt(options, "windowWidth", 10, 4000, 1280, true);
+            this.WindowHeight = ConfigTools.CheckInt(options, "windowHeight", 10, 4000, 100, true);
             ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
-            Log.Info("Finished reading config for DisplayOpenGL \"" + this.Name + "\".");
         }
 
         protected override void OnLoad(EventArgs evt)
         {
             this.VSync = VSyncMode.On;
-            if (this.Source is Linear Linear)
-            {
-                if (!Linear.IsCircular) { this.Size = new System.Drawing.Size(this.Size.Width, 90); }
-            }
-            else if (this.Source is Cells Cells)
-            {
-                this.Size = new System.Drawing.Size(this.Size.Width, 90);
-            }
             //...
 
             GL.DebugMessageCallback(DebugCallback, IntPtr.Zero);

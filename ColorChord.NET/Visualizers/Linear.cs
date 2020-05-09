@@ -60,6 +60,7 @@ namespace ColorChord.NET.Visualizers
 
         public void ApplyConfig(Dictionary<string, object> options)
         {
+            Log.Info("Reading config for Linear \"" + this.Name + "\".");
             if (!options.ContainsKey("ledCount") || !int.TryParse((string)options["ledCount"], out int LEDs) || LEDs <= 0) { Log.Error("Tried to create Linear visualizer with invalid/missing ledCount."); return; }
 
             this.LEDCount = ConfigTools.CheckInt(options, "ledCount", 1, 100000, 50, true);
@@ -72,7 +73,6 @@ namespace ColorChord.NET.Visualizers
             this.SaturationAmplifier = ConfigTools.CheckFloat(options, "saturationAmplifier", 0, 100, 1.6F, true);
             this.Enabled = ConfigTools.CheckBool(options, "enable", true, true);
             ConfigTools.WarnAboutRemainder(options, typeof(IVisualizer));
-            Log.Info("Finished reading config for Linear \"" + this.Name + "\".");
         }
 
         /// <summary> Used to update internal structures when the number of LEDs changes. </summary>

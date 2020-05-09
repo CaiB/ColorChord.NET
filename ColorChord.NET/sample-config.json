@@ -42,7 +42,7 @@
             "ip": "192.168.0.60",
             "port": 7777,
             "paddingFront": 1,
-            "paddingRear": 0,
+            "paddingBack": 0,
             "enable": true
         },
         {

@@ -78,6 +78,8 @@ Currently supports 1D inputs only. Acts like a strip of LEDs, displaying a horiz
 | `paddingRight` | `float` | 0 | 0~2 | Amount of blank space to leave on the right side of the window. 1 corresponds to half of the window. |
 | `paddingTop` | `float` | 0 | 0~2 | Amount of blank space to leave on the top of the window. 1 corresponds to half of the window. |
 | `paddingBottom` | `float` | 0 | 0~2 | Amount of blank space to leave on the bottom of the window. 1 corresponds to half of the window. |
+| `windowHeight` | `int` | 100 | 10~4000 | The height of the window, in pixels. |
+| `windowWidth` | `int` | 1280 | 10~4000 | The width of the window, in pixels. |
 
 ### [PacketUDP](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/PacketUDP.cs)
 Currently supports 1D inputs only. Packs the data for each LED in sequence into a UDP packet, then sends it to a given IP.
@@ -86,7 +88,9 @@ Currently supports 1D inputs only. Packs the data for each LED in sequence into 
 |---|---|---|---|---|
 | `ip` | `string` | 127.0.0.1 | Valid IPs | The IP to send the packets to. |
 | `port` | `int` | 7777 | 0~65535 | The port to send the packets to. |
-| `frontPadding` | `int` | 0 | 0~1000 | Blank bytes to append to the front of the packet. (Charles' output seemed to always append a single blank byte, so this is just to maintain compatibility) |
+| `paddingFront` | `int` | 0 | 0~1000 | Blank bytes to append to the front of the packet. (Charles' output seemed to always append a single blank byte, so this is just to maintain compatibility) |
+| `paddingBack` | `int` | 0 | 0~1000 | Blank bytes to append to the back of the packet. |
+| `enable` | `bool` | true | | Whether to use this output.
 
 ## Controllers
 Not yet implemented.
