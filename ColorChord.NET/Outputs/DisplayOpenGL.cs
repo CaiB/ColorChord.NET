@@ -6,7 +6,9 @@ using OpenTK.Graphics.ES30;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Text;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -84,7 +86,7 @@ namespace ColorChord.NET.Outputs
 
             GL.DebugMessageCallback(DebugCallback, IntPtr.Zero);
 
-            this.Shader = new Shader("shader.vert", "shader.frag");
+            this.Shader = new Shader("1d-discrete.vert", "1d-discrete.frag");
 
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
@@ -189,6 +191,8 @@ namespace ColorChord.NET.Outputs
 
     class Shader : IDisposable
     {
+        private const string PATH_PREFIX = "ColorChord.NET.";
+
         private readonly int ShaderHandle;
         private bool IsDisposed = false;
 
@@ -198,8 +202,15 @@ namespace ColorChord.NET.Outputs
 
             string VertexShaderSource, FragmentShaderSource;
 
-            using (StreamReader reader = new StreamReader(vertexPath, Encoding.UTF8)) { VertexShaderSource = reader.ReadToEnd(); }
-            using (StreamReader reader = new StreamReader(fragmentPath, Encoding.UTF8)) { FragmentShaderSource = reader.ReadToEnd(); }
+            Assembly Asm = Assembly.GetExecutingAssembly();
+            using (Stream VertexStream = Asm.GetManifestResourceStream(PATH_PREFIX + vertexPath))
+            {
+                using (StreamReader VertexReader = new StreamReader(VertexStream, Encoding.UTF8)) { VertexShaderSource = VertexReader.ReadToEnd(); }
+            }
+            using (Stream FragmentStream = Asm.GetManifestResourceStream(PATH_PREFIX + fragmentPath))
+            {
+                using (StreamReader FragmentReader = new StreamReader(FragmentStream, Encoding.UTF8)) { FragmentShaderSource = FragmentReader.ReadToEnd(); }
+            }
 
             VertexShaderHandle = GL.CreateShader(ShaderType.VertexShader);
             GL.ShaderSource(VertexShaderHandle, VertexShaderSource);
