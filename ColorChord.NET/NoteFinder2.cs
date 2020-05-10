@@ -134,7 +134,7 @@ namespace ColorChord.NET
         {
             for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
             {
-                RawBinFrequencies[RawBinIndex] = (float)((sampleRate / MinimumFrequency) / Math.Pow(2, (float)RawBinIndex / DFTRawBinCount));
+                RawBinFrequencies[RawBinIndex] = (float)((sampleRate / MinimumFrequency) / Math.Pow(2, (float)RawBinIndex / OctaveBinCount));
             }
         }
 
@@ -234,7 +234,7 @@ namespace ColorChord.NET
             // NOTE: This is decompose.c/DecomposeHistogram in TURBO_DECOMPOSE mode (single iteration).
             //       Non-TURBO_DECOMPOSE mode is currently not implemented here, as it doesn't seem to be used upstream.
 
-            int DistributionsFound = 0; //peak
+            int DistributionsFound = 0;
 
             for (int BinIndex = 0; BinIndex < OctaveBinCount; BinIndex++)
             {
