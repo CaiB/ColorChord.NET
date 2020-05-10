@@ -32,7 +32,7 @@ Gets data out of the Windows Audio Session API. Supports input and output device
 |---|---|---|---|---|
 | `device` | `string` | `"default"` | `"default"`, `"defaultTracking"`, Device IDs | If `"default"`, then the default device at the time of startup will be used. If `"defaultTracking"`, the default device will be used, and will keep up with changes to the default, switching as the system does (not yet implemented). If a device ID is sepcified, that device is used, but if it is not found, then behaviour reverts to `"default"`. |
 | `useInput` | `bool` | `false` | | Determines whether to choose the default capture device (e.g. microphone), or default render device (e.g. speakers) when choosing a device. Only useful if the default device is selected in `device` (above).
-| `printDeviceInfo` | `bool` | `false` | | If `true`, outputs currently connected devices and their IDs at startup, to help you find a device. |
+| `printDeviceInfo` | `bool` | `true` | | If `true`, outputs currently connected devices and their IDs at startup, to help you find a device. |
 
 **Regarding Device IDs:**  
 Device IDs are unique for each device on the system, vary between different computers, and only change if drivers are updated/changed. Removal and re-attachment of a USB device will not change the ID. They are not readily visible to the user, but other software using WASAPI will have access to the same IDs. Use `printDeviceInfo` (above) to find the ID for your preferred device. Output format is:
