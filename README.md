@@ -20,6 +20,8 @@ The system performs very well, requiring negligible CPU and RAM, especially if o
 # Configuration
 Configuration is done through the `config.json` file. There is a sample config provided at the root of the repo, but you'll want to customize it to suit your needs. Below is a list of supported options:
 
+- You can choose a different configuration file by running the program with the command line option `config <YourFile.json>`.
+
 _* indicates an uncertain description. I don't fully understand the methodology of some of the visualizers that Charles included in ColorChord, so some of these are guesses. Play with the vaules until you get something nice :)_
 
 ## Sources
@@ -28,7 +30,13 @@ _* indicates an uncertain description. I don't fully understand the methodology 
 Gets data out of the Windows Audio Session API. Supports input and output devices (e.g. microphones or the system speaker output, etc)
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
-| `useInput` | `bool` | `false` | | If `false`, the default speakers are used to source audio data. If `true`, the default microphone is used. |
+| `device` | `string` | `"default"` | `"default"`, `"defaultTracking"`, Device IDs | If `"default"`, then the default device at the time of startup will be used. If `"defaultTracking"`, the default device will be used, and will keep up with changes to the default, switching as the system does (not yet implemented). If a device ID is sepcified, that device is used, but if it is not found, then behaviour reverts to `"default"`. |
+| `useInput` | `bool` | `false` | | Determines whether to choose the default capture device (e.g. microphone), or default render device (e.g. speakers) when choosing a device. Only useful if the default device is selected in `device` (above).
+| `printDeviceInfo` | `bool` | `false` | | If `true`, outputs currently connected devices and their IDs at startup, to help you find a device. |
+
+**Regarding Device IDs:**  
+Device IDs are unique for each device on the system, vary between different computers, and only change if drivers are updated/changed. Removal and re-attachment of a USB device will not change the ID. They are not readily visible to the user, but other software using WASAPI will have access to the same IDs. Use `printDeviceInfo` (above) to find the ID for your preferred device. Output format is:
+> [`Index`] "`Device Name`" = "`Device ID`"
 
 ## Visualizers
 
@@ -91,6 +99,8 @@ Currently supports 1D inputs only. Packs the data for each LED in sequence into 
 | `paddingFront` | `int` | 0 | 0~1000 | Blank bytes to append to the front of the packet. (Charles' output seemed to always append a single blank byte, so this is just to maintain compatibility) |
 | `paddingBack` | `int` | 0 | 0~1000 | Blank bytes to append to the back of the packet. |
 | `enable` | `bool` | true | | Whether to use this output.
+
+- Can only output up to 21,835 RGB LEDs due to 65,535 byte packet size limit.
 
 ## Controllers
 Not yet implemented.

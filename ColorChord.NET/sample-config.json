@@ -2,27 +2,16 @@
     "source":
     {
         "type": "WASAPILoopback",
-        "bufferLength": 50
+        "useInput": false,
+        "device": "default",
+        "printDeviceInfo": true
     },
     "visualizers":
     [
         {
             "type": "Linear",
-            "name": "PhysicalLinear",
-            "ledCount": 50,
-            "isCircular": false,
-            "frameRate": 90,
-            "lightSiding": 1.0,
-            "steadyBright": false,
-            "ledFloor": 0.1,
-            "ledLimit": 1.0,
-            "saturationAmplifier": 1.6,
-            "enable": true
-        },
-        {
-            "type": "Linear",
-            "name": "ScreenLinear",
-            "ledCount": 400,
+            "name": "SampleLinear",
+            "ledCount": 150,
             "isCircular": false,
             "frameRate": 60,
             "lightSiding": 1.0,
@@ -37,25 +26,24 @@
     [
         {
             "type": "PacketUDP",
-            "name": "PhysicalOutput",
-            "visualizerName": "PhysicalLinear",
-            "ip": "192.168.0.60",
+            "name": "SampleUDP",
+            "visualizerName": "SampleLinear",
+            "ip": "127.0.0.1",
             "port": 7777,
-            "paddingFront": 1,
+            "paddingFront": 0,
             "paddingBack": 0,
             "enable": true
         },
         {
             "type": "DisplayOpenGL",
-            "name": "ScreenOutput",
-            "visualizerName": "ScreenLinear",
+            "name": "SampleDisplay",
+            "visualizerName": "SampleLinear",
             "paddingLeft": 0.0,
             "paddingRight": 0.0,
             "paddingTop": 0.0,
             "paddingBottom": 0.0,
             "windowWidth": 1280,
             "windowHeight": 100,
-            "backgroundColour": "#333333",
             "enable": true
         }
     ],

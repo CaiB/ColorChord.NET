@@ -15,15 +15,19 @@ namespace ColorChord.NET.Sources
         private static readonly Guid FriendlyNamePKEY = new Guid(0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0);
         private const int FriendlyNamePKEY_PID = 14;
 
+        private string DesiredDevice;
+        private bool UseInput = false;
+        private bool PrintDeviceInfo = false;
+
         private const ulong BufferLength = 50 * 10000; // 50 ms, in ticks
         private ulong ActualBufferDuration;
         private int BytesPerFrame;
-        private bool UseInput = false;
-
+        
         private bool KeepGoing = true;
         private bool StreamReady = false;
         private Thread ProcessThread;
 
+        private IMMDeviceEnumerator DeviceEnumerator;
         private IAudioClient Client;
         private IAudioCaptureClient CaptureClient;
         private AudioTools.WAVEFORMATEX MixFormat;
@@ -34,75 +38,127 @@ namespace ColorChord.NET.Sources
         {
             Log.Info("Reading config for WASAPILoopback.");
             this.UseInput = ConfigTools.CheckBool(options, "useInput", false, true);
+            this.DesiredDevice = ConfigTools.CheckString(options, "device", "default", true);
+            this.PrintDeviceInfo = ConfigTools.CheckBool(options, "printDeviceInfo", true, true);
             ConfigTools.WarnAboutRemainder(options, typeof(IAudioSource));
         }
 
-        public void Start() // TOOD: Make device, etc selection possible instead of using defaults.
+        public void Start()
         {
-            int ErrorCode; // Used to track error codes for each operation.
+            int ErrorCode;
             Type DeviceEnumeratorType = Type.GetTypeFromCLSID(new Guid(ComCLSIDs.MMDeviceEnumeratorCLSID));
-            IMMDeviceEnumerator DeviceEnumerator = (IMMDeviceEnumerator)Activator.CreateInstance(DeviceEnumeratorType);
+            this.DeviceEnumerator = (IMMDeviceEnumerator)Activator.CreateInstance(DeviceEnumeratorType);
 
-            Console.WriteLine("Audio output device list:");
-            ListDevices(DeviceEnumerator, EDataFlow.eRender);
+            if (this.PrintDeviceInfo) { PrintDeviceList(); }
 
-            Console.WriteLine("Audio input device list:");
-            ListDevices(DeviceEnumerator, EDataFlow.eCapture);
+            IMMDevice Device;
+            bool? DeviceIsCapture = null; // null if we don't know because the device was specified by ID.
 
-            ErrorCode = DeviceEnumerator.GetDefaultAudioEndpoint(this.UseInput ? EDataFlow.eCapture : EDataFlow.eRender, this.UseInput ? ERole.eMultimedia : ERole.eConsole, out IMMDevice Device);
-            Marshal.ThrowExceptionForHR(ErrorCode);
+            if (this.DesiredDevice == "default")
+            {
+                Log.Info("Using default " + (this.UseInput ? "capture" : "render") + " device.");
+                Device = GetDefaultDevice(this.UseInput);
+                DeviceIsCapture = this.UseInput;
+            }
+            // TODO: Implement "defaultTracking"
+            else
+            {
+                ErrorCode = this.DeviceEnumerator.GetDevice(this.DesiredDevice, out Device);
+                if (IsError(ErrorCode) || Device == null)
+                {
+                    Log.Warn("Given audio device does not exist on this system. Using default " + (this.UseInput ? "capture" : "render") + " device instead.");
+                    Device = GetDefaultDevice(this.UseInput);
+                    DeviceIsCapture = this.UseInput;
+                }
+                else
+                {
+                    Log.Info("Using device specified in configuration.");
+                    ErrorCode = Device.GetState(out uint DeviceState);
+                    IsErrorAndOut(ErrorCode, "Failed to get status of device.");
+                    if (DeviceState == DEVICE_STATE_XXX.DEVICE_STATE_DISABLED) { Log.Error("The specified device is disabled."); return; } // TODO: Make it configurable what happens in these 3 cases.
+                    if (DeviceState == DEVICE_STATE_XXX.DEVICE_STATE_NOTPRESENT) { Log.Error("The specified device is known, but not currently present."); return; }
+                    if (DeviceState == DEVICE_STATE_XXX.DEVICE_STATE_UNPLUGGED) { Log.Error("The specified device is unplugged."); return; }
+                }
+            }
+
+            if (Device == null) { Log.Error("Audio device is not valid!"); return; }
+
+            if (DeviceIsCapture == null) // We don't know what type of device it is, find out.
+            {
+                IMMEndpoint Endpoint = (IMMEndpoint)Device; // equivalent to QueryInterface()
+                if (Endpoint == null) { Log.Error("Couldn't get device endpoint.");  return; }
+                
+                ErrorCode = Endpoint.GetDataFlow(out EDataFlow DataFlow);
+                if (IsErrorAndOut(ErrorCode, "Could not determine endpoint type.")) { return; }
+
+                DeviceIsCapture = (DataFlow == EDataFlow.eCapture);
+            }
 
             ErrorCode = Device.Activate(new Guid(ComIIDs.IAudioClientIID), (uint)CLSCTX_ALL, IntPtr.Zero, out object ClientObj);
-            Marshal.ThrowExceptionForHR(ErrorCode);
+            if (IsErrorAndOut(ErrorCode, "Could not get audio client.")) { return; }
             this.Client = (IAudioClient)ClientObj;
 
             ErrorCode = this.Client.GetMixFormat(out IntPtr MixFormatPtr);
+            if (IsErrorAndOut(ErrorCode, "Could not get mix format.")) { return; }
             this.MixFormat = AudioTools.FormatFromPointer(MixFormatPtr);
-            Marshal.ThrowExceptionForHR(ErrorCode);
 
-            Console.WriteLine("Audio format detected: ");
-            Console.WriteLine("  Channels: " + this.MixFormat.nChannels);
-            Console.WriteLine("  Sample rate: " + this.MixFormat.nSamplesPerSec);
-            Console.WriteLine("  Bits per sample: " + this.MixFormat.wBitsPerSample);
+            Log.Info(string.Format("Audio format is {0} channel, {1}Hz sample rate, {2}b per sample.", this.MixFormat.nChannels, this.MixFormat.nSamplesPerSec, this.MixFormat.wBitsPerSample));
             this.BytesPerFrame = this.MixFormat.nChannels * (this.MixFormat.wBitsPerSample / 8);
 
             NoteFinder.SetSampleRate((int)this.MixFormat.nSamplesPerSec);
 
-            ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, this.UseInput ? AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST : AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK, BufferLength, 0, MixFormatPtr);
-            Marshal.ThrowExceptionForHR(ErrorCode);
+            uint StreamFlags;
+            if (DeviceIsCapture == true) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST; }
+            else if (DeviceIsCapture == false) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK; }
+            else { Log.Error("Device type was not determined!"); return; }
+
+            ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, BufferLength, 0, MixFormatPtr);
+            if (IsErrorAndOut(ErrorCode, "Could not init audio client.")) { return; }
 
             ErrorCode = this.Client.GetBufferSize(out uint BufferFrameCount);
-            Marshal.ThrowExceptionForHR(ErrorCode);
+            if (IsErrorAndOut(ErrorCode, "Could not get audio client buffer size.")) { return; }
 
             ErrorCode = this.Client.GetService(new Guid(ComIIDs.IAudioCaptureClientIID), out object CaptureClientObj);
-            Marshal.ThrowExceptionForHR(ErrorCode);
+            if (IsErrorAndOut(ErrorCode, "Could not get audio capture client.")) { return; }
             this.CaptureClient = (IAudioCaptureClient)CaptureClientObj;
 
             this.ActualBufferDuration = (ulong)((double)BufferLength * BufferFrameCount / this.MixFormat.nSamplesPerSec);
 
             ErrorCode = this.Client.Start();
-            Marshal.ThrowExceptionForHR(ErrorCode);
+            if (IsErrorAndOut(ErrorCode, "Could not start audio client.")) { return; }
             this.StreamReady = true;
 
             this.KeepGoing = true;
-            this.ProcessThread = new Thread(ProcessAudio);
-            this.ProcessThread.Name = "WASAPILoopback";
+            this.ProcessThread = new Thread(ProcessAudio) { Name = "WASAPILoopback" };
             this.ProcessThread.Start();
         }
 
-        private void ListDevices(IMMDeviceEnumerator enumerator, EDataFlow dataFlow)
+        private IMMDevice GetDefaultDevice(bool isCapture)
         {
-            int ErrorCode;
-            ErrorCode = enumerator.EnumAudioEndpoints(dataFlow, DEVICE_STATE_XXX.DEVICE_STATE_ACTIVE, out IMMDeviceCollection Devices);
-            Marshal.ThrowExceptionForHR(ErrorCode);
+            int ErrorCode = this.DeviceEnumerator.GetDefaultAudioEndpoint(isCapture ? EDataFlow.eCapture : EDataFlow.eRender, ERole.eMultimedia, out IMMDevice Device);
+            if (IsErrorAndOut(ErrorCode, "Failed to get default device.")) { return null; }
+            return Device;
+        }
+
+        private void PrintDeviceList()
+        {
+            PrintDeviceList(EDataFlow.eRender);
+            PrintDeviceList(EDataFlow.eCapture);
+        }
+
+        private void PrintDeviceList(EDataFlow dataFlow)
+        {
+            Log.Info((dataFlow == EDataFlow.eCapture ? "Capture" : "Render") + " Devices:");
+            int ErrorCode = this.DeviceEnumerator.EnumAudioEndpoints(dataFlow, DEVICE_STATE_XXX.DEVICE_STATE_ACTIVE, out IMMDeviceCollection Devices);
+            if (IsErrorAndOut(ErrorCode, "Failed to get audio endpoints.")) { return; }
 
             ErrorCode = Devices.GetCount(out uint DeviceCount);
-            Marshal.ThrowExceptionForHR(ErrorCode);
+            if (IsErrorAndOut(ErrorCode, "Failed to get audio endpoint count.")) { return; }
 
-            for(uint DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex++) // TODO: Consider checking error codes.
+            for(uint DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex++)
             {
                 ErrorCode = Devices.Item(DeviceIndex, out IMMDevice Device);
-                if (IsErrorAndOut(ErrorCode, "Failed to get audio device " + DeviceIndex)) { continue; }
+                if (IsErrorAndOut(ErrorCode, "Failed to get audio device at " + DeviceIndex)) { continue; }
 
                 ErrorCode = Device.GetId(out string DeviceID);
                 if (IsErrorAndOut(ErrorCode, "Failed to get device ID at " + DeviceIndex)) { continue; }
@@ -112,19 +168,24 @@ namespace ColorChord.NET.Sources
 
                 string DeviceFriendlyName = "[Name Retrieval Failed]";
                 ErrorCode = Properties.GetCount(out uint PropertyCount);
+                if (IsErrorAndOut(ErrorCode, "Failed to get device property count at " + DeviceIndex)) { continue; }
+
                 for (uint PropIndex = 0; PropIndex < PropertyCount; PropIndex++)
                 {
                     ErrorCode = Properties.GetAt(PropIndex, out PROPERTYKEY Property);
+                    if (IsErrorAndOut(ErrorCode, "Failed to get device property at " + PropIndex)) { continue; }
+
                     if (Property.fmtid == FriendlyNamePKEY && Property.pid == FriendlyNamePKEY_PID)
                     {
                         ErrorCode = Properties.GetValue(ref Property, out PROPVARIANT Variant);
+                        if (IsErrorAndOut(ErrorCode, "Failed to get device friendly name value.")) { continue; }
+
                         DeviceFriendlyName = Marshal.PtrToStringUni(Variant.Data.AsStringPtr);
                         break;
                     }
                 }
 
-                if (Marshal.GetExceptionForHR(ErrorCode) == null) { Console.WriteLine("Device #" + DeviceIndex + " is \"" + DeviceFriendlyName + "\". It has ID \"" + DeviceID + "\"."); }
-                else { Console.WriteLine("Could not get info for device #" + DeviceIndex + ", got HRESULT " + ErrorCode); }
+                Log.Info(string.Format("[{0}]: \"{1}\" = \"{2}\"", DeviceIndex, DeviceFriendlyName, DeviceID));
             }
         }
 
@@ -143,12 +204,12 @@ namespace ColorChord.NET.Sources
                 Thread.Sleep((int)(this.ActualBufferDuration / (BufferLength / 1000) / 2));
 
                 ErrorCode = this.CaptureClient.GetNextPacketSize(out uint PacketLength);
-                Marshal.ThrowExceptionForHR(ErrorCode);
+                if (IsErrorAndOut(ErrorCode, "Failed to get audio packet size.")) { continue; } // TODO: Recover from this.
 
                 while (PacketLength != 0)
                 {
                     ErrorCode = this.CaptureClient.GetBuffer(out IntPtr DataArray, out uint NumFramesAvail, out AUDCLNT_BUFFERFLAGS BufferStatus, out ulong DevicePosition, out ulong CounterPosition);
-                    Marshal.ThrowExceptionForHR(ErrorCode);
+                    if (IsErrorAndOut(ErrorCode, "Failed to get audio buffer.")) { continue; } // TODO: Recover from this.
 
                     if (BufferStatus.HasFlag(AUDCLNT_BUFFERFLAGS.AUDCLNT_BUFFERFLAGS_SILENT))
                     {
@@ -181,7 +242,8 @@ namespace ColorChord.NET.Sources
             }
 
             ErrorCode = this.Client.Stop();
-            Marshal.ThrowExceptionForHR(ErrorCode);
+            IsErrorAndOut(ErrorCode, "Failed to stop audio client.");
+
             this.StreamReady = false;
         }
 
@@ -190,7 +252,7 @@ namespace ColorChord.NET.Sources
         private static bool IsErrorAndOut(int hresult, string output)
         {
             bool Error = IsError(hresult);
-            if (Error) { Log.Error(output); }
+            if (Error) { Log.Error(output + " HRESULT: 0x" + hresult.ToString("X8")); }
             return Error;
         }
 
