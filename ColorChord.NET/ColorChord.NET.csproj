@@ -97,6 +97,6 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PreBuildEvent>xcopy $(SolutionDir)ColorChordLib\Release\ColorChordLib.dll $(TargetDir)</PreBuildEvent>
+    <PreBuildEvent>xcopy /f /y $(SolutionDir)ColorChordLib\Release\ColorChordLib.dll $(TargetDir)</PreBuildEvent>
   </PropertyGroup>
 </Project>
