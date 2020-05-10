@@ -6,7 +6,7 @@ using System.Threading;
 
 namespace ColorChord.NET
 {
-    public static class NoteFinder
+    public static class NoteFinderOld
     {
         public static float[] AudioBuffer = new float[8192]; // TODO: Make buffer size adjustable or auto-set based on sample rate (might be too short for super-high rates)
         public static int AudioBufferHead = 0; // Where in the buffer we are reading, as it is filled circularly.

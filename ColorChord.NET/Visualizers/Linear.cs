@@ -124,7 +124,7 @@ namespace ColorChord.NET.Visualizers
         public void Update()
         {
             //Step 1: Calculate the quantity of all the LEDs we'll want.
-            int totbins = NoteFinder.NotePeakCount;//nf->dists;
+            int totbins = NoteFinder.NotePeakMaxCount;//nf->dists;
             int i, j;
             float[] binvals = new float[totbins];
             float[] binvalsQ = new float[totbins];
@@ -133,9 +133,9 @@ namespace ColorChord.NET.Visualizers
 
             for (i = 0; i < totbins; i++)
             {
-                binpos[i] = NoteFinder.NotePositions[i] / NoteFinder.FreqBinCount;
-                binvals[i] = (float)Math.Pow(NoteFinder.NoteAmplitudes2[i], this.LightSiding);
-                binvalsQ[i] = (float)Math.Pow(NoteFinder.NoteAmplitudes[i], this.LightSiding);
+                binpos[i] = NoteFinder.Notes[i].Position / NoteFinder.OctaveBinCount;
+                binvals[i] = (float)Math.Pow(NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
+                binvalsQ[i] = (float)Math.Pow(NoteFinder.Notes[i].Amplitude, this.LightSiding);
                 totalbinval += binvals[i];
             }
 
