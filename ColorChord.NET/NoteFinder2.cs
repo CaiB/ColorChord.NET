@@ -41,6 +41,12 @@ namespace ColorChord.NET
         /// <summary> How many bins the DFT will class sound frequency data into. </summary>
         public const int DFTRawBinCount = OctaveBinCount * OctaveCount;
 
+        // TODO: Rename/describe.
+        private const int DFT_Q = 20;
+
+        // TODO: Rename/describe.
+        private const int DFT_Speedup = 1000;
+
         /// <summary> Determines how much the previous frame's DFT data is used in the next frame. Smooths out rapid changes from frame-to-frame, but can cause delay if too strong. </summary>
         /// <remarks> Lower values will mean less inter-frame smoothing. Range: 0.0~1.0 </remarks>
         private static float DFTIIRMultiplier = 0.65F;
@@ -171,6 +177,8 @@ namespace ColorChord.NET
         {
             // DFT outputs only a small number of bins, we'll need to process this data a lot to get smooth note positions.
             float[] DFTBinData = new float[DFTRawBinCount];
+
+            DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup); // TODO: Use read and write heads
 
             // Pre-process input DFT data.
             for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
