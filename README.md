@@ -1,6 +1,8 @@
 # ColorChord.NET
 My WIP port of [CNLohr's ColorChord2](https://github.com/cnlohr/colorchord) to C#.NET, allowing for more flexibility and extendability. Also uses new WASAPI Loopback methods for getting audio on Windows, which appears to work more reliably.
 
+**[You can find binary downloads here.](https://github.com/CaiB/ColorChord.NET/releases)**
+
 Uses [Vannatech/dorba's netcoreaudio](https://github.com/dorba/netcoreaudio) for WASAPI support.
 
 Somewhat different from Charles' version, I divided components into 4 categories, centered around the `NoteFinder`:
