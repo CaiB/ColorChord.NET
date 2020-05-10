@@ -52,7 +52,7 @@ namespace ColorChord.NET
         private static float DFTIIRMultiplier = 0.65F;
 
         /// <summary> The non-folded frequency bins, used inter-frame to do smoothing, then folded to form the spectrum. </summary>
-        /// <remarks> Re-used between cycles to do smoothing. </remarks>
+        /// <remarks> Data contained from previous cycles is re-used during next cycle to do smoothing. </remarks>
         private static readonly float[] FrequencyBinValues = new float[DFTRawBinCount];
 
         /// <summary> Determines how much the raw DFT data is amplified before being used. </summary>
@@ -64,7 +64,7 @@ namespace ColorChord.NET
         private static float DFTSensitivitySlope = 0.1F;
 
         /// <summary> The frequency spectrum, folded to overlap into a single octave length. </summary>
-        /// <remarks> Not re-used between cycles. </remarks>
+        /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
         private static readonly float[] OctaveBinValues = new float[OctaveBinCount];
 
         /// <summary> How often to run the octave data filter. This smoothes out each bin with adjacent ones. </summary>
@@ -74,11 +74,11 @@ namespace ColorChord.NET
         /// <remarks> Higher values mean less glitchy, but also less clear note peaks. Range: 0.0~1.0 </remarks>
         private static float OctaveFilterStrength = 0.5F;
 
-        /// <summary> Up to how many note peaks can be extracted from the frequency data. </summary>
+        /// <summary> How many note peaks are attempted to be extracted from the frequency data. </summary>
         public const int NotePeakMaxCount = OctaveBinCount / 2;
 
         /// <summary> The individual note distributions (peaks) detected this cycle. </summary>
-        /// <remarks> Not re-used between cycles. </remarks>
+        /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
         private static NoteDistribution[] NoteDistributions = new NoteDistribution[NotePeakMaxCount];
 
         /// <summary> The sigma value to use for <see cref="NoteDistribution"/> by default. </summary>
@@ -93,20 +93,24 @@ namespace ColorChord.NET
         /// <summary> How close a note needs to be to a distribution peak in order to be merged. </summary>
         private static float MinNoteInfluenceDistance = 1.8F;
 
-        // TODO: RENAME ME
+        /// <summary> Whether the given note peak has been associated and influenced by a distribution this cycle. </summary>
+        /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
         private static bool[] NotesAssociated = new bool[NotePeakMaxCount];
 
-        // TODO: RENAME ME
-        private static int[] EnduringNoteID = new int[NotePeakMaxCount];
+        /// <summary> Used to keep track of locations of notes that stay between frames in <see cref="Notes"/>, as that array's order may change. </summary>
+        private static int[] PersistentNoteID = new int[NotePeakMaxCount];
 
+        /// <summary> The notes found during this cycle. </summary>
         public static Note[] Notes = new Note[NotePeakMaxCount];
 
         /// <summary> How strongly the note merging filter affects the note frequency. Stronger filter means notes take longer to shift positions to move together. </summary>
         private const float NoteAttachFrequencyIIRMultiplier = 0.3F;
 
-        /// <summary> How strongly the note merging filter affects the note amplitude. stronger filter means notes take longer to merge fully in amplitude. </summary>
+        /// <summary> How strongly the note merging filter affects the note amplitude. Stronger filter means notes take longer to merge fully in amplitude. </summary>
         private const float NoteAttachAmplitudeIIRMultiplier = 0.35F;
 
+        /// <summary> This filter is applied to notes between cycles in order to smooth their amplitudes over time. </summary>
+        /// <remarks> Higher values cause smoother but more delayed note amplitude transitions. Range: 0.0~1.0 </remarks>
         private const float NoteAttachAmplitudeIIRMultiplier2 = 0.25F;
 
         /// <summary> How close two existing notes need to be in order to get combined into a single note. </summary>
@@ -305,7 +309,7 @@ namespace ColorChord.NET
                         // note_peaks_to_dists_mapping can be implemented here if needed.
                         // TODO: I'm honestly a little bit lost as to what happens in here...
                         NoteDistributions[DistrIndex].HasNote = true; // Don't let this distribution affect other notes.
-                        if (EnduringNoteID[PeakIndex] == 0) { EnduringNoteID[PeakIndex] = CurrentNoteID++; }
+                        if (PersistentNoteID[PeakIndex] == 0) { PersistentNoteID[PeakIndex] = CurrentNoteID++; }
                         NotesAssociated[DistrIndex] = true; // This note has been influenced by a distribution, so is still active.
                         Notes[PeakIndex].Position = LoopAverageWeighted(Notes[PeakIndex].Position, (1F - NoteAttachFrequencyIIRMultiplier), NoteDistributions[DistrIndex].Mean, NoteAttachFrequencyIIRMultiplier, OctaveBinCount);
 
@@ -341,7 +345,7 @@ namespace ColorChord.NET
                         // Delete secondary note
                         Notes[IndexSecondary].Amplitude = 0;
                         Notes[IndexSecondary].Position = -100;
-                        EnduringNoteID[IndexSecondary] = 0;
+                        PersistentNoteID[IndexSecondary] = 0;
                     }
                 }
             }
@@ -351,7 +355,7 @@ namespace ColorChord.NET
             {
                 if (Notes[NoteIndex].Amplitude < MinNoteAmplitude)
                 {
-                    EnduringNoteID[NoteIndex] = 0;
+                    PersistentNoteID[NoteIndex] = 0;
 
                     // Find a new peak for this note.
                     for (int DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++)
@@ -360,7 +364,7 @@ namespace ColorChord.NET
                             NoteDistributions[DistrIndex].Amplitude > MinDistributionValueNewNote) // The distribution is large enough to be worth turning into a new note.
                         {
                             // Create a new note with information from this distribution.
-                            EnduringNoteID[NoteIndex] = CurrentNoteID++;
+                            PersistentNoteID[NoteIndex] = CurrentNoteID++;
                             NoteDistributions[DistrIndex].HasNote = true; // Don't let this create/affect other notes this cycle.
                             Notes[NoteIndex].Amplitude = NoteDistributions[DistrIndex].Amplitude;
                             Notes[NoteIndex].Position = NoteDistributions[DistrIndex].Mean;
