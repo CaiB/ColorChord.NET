@@ -1,30 +1,156 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 
 namespace ColorChord.NET
 {
     public static class NoteFinder
     {
+        /// <summary> The buffer for audio data gathered from a system device. Circular buffer, with the current write position stored in <see cref="AudioBufferHeadWrite"/>. </summary>
         public static float[] AudioBuffer = new float[8192]; // TODO: Make buffer size adjustable or auto-set based on sample rate (might be too short for super-high rates)
-        public static int AudioBufferHead = 0; // Where in the buffer we are reading, as it is filled circularly.
+
+        /// <summary> Where in the <see cref="AudioBuffer"/> we are currently adding new audio data. </summary>
+        public static int AudioBufferHeadWrite = 0;
+
+        /// <summary> When data was last added to the buffer. Used to detect idle state. </summary>
         public static DateTime LastDataAdd;
 
-        public static uint ShortestPeriod { get; private set; } = 100; // The speed at which the note finder needs to run, set by the fastest visualizer.
+        /// <summary> The speed (in ms between runs) at which the note finder needs to run, set by the fastest visualizer. </summary>
+        public static uint ShortestPeriod { get; private set; } = 100;
 
+        /// <summary> Whether to keep processing, or shut down operations.  </summary>
         private static bool KeepGoing = true;
+
+        /// <summary> The thread doing the actual note data processing. </summary>
         private static Thread ProcessThread;
+
+        // Things that are always the same.
+        #region Constants
+        /// <summary> How many bins compose one octave in the raw DFT data. </summary>
+        public const int OctaveBinCount = 24;
+
+        /// <summary> Over how many octaves the raw DFT data will be processed. </summary>
+        public const int OctaveCount = 5;
+
+        /// <summary> How many bins the DFT will class sound frequency data into. </summary>
+        public const int DFTRawBinCount = OctaveBinCount * OctaveCount;
+
+        /// <summary> How many note peaks are attempted to be extracted from the frequency data. </summary>
+        public const int NoteCount = OctaveBinCount / 2;
+
+        /// <summary> This is a required parameter for the DFT, but the desktop version doesn't use it. </summary>
+        private const int DFT_Q = 20;
+
+        /// <summary> This is a required parameter for the DFT, but the desktop version doesn't use it. </summary>
+        private const int DFT_Speedup = 1000;
+
+        /// <summary> The sigma value to use for <see cref="NoteDistribution"/> by default. </summary>
+        private const float DefaultDistributionSigma = 1.4F;
+
+        /// <summary> Used in normalizing all peak amplitudes. </summary>
+        private const float PeakCompressCoefficient = 1F;
+
+        /// <summary> Used in normalizing all peak amplitudes. </summary>
+        private const float PeakCompressExponent = 0.5F;
+
+        /// <summary> How large a note needs to be to not be considered dead (and therefore re-assigned). </summary>
+        private const float MinNoteAmplitude = 0.001F;
+
+        /// <summary> How large a distribution needs to be in order to be turned into a brand new note. </summary>
+        private const float MinDistributionValueNewNote = 0.02F;
+        #endregion
+
+        // Things that are set by config at startup, then constant.
+        // The values specified here are defaults if an override is not present in the config file.
+        #region Configurable Constants
+        /// <summary> The frequency at which the DFT output starts. </summary>
+        /// <remarks> If this is changed, <see cref="SetSampleRate(int)"/> needs to be called in order to actaully apply the changes to the frequency list. </remarks>
+        private static int MinimumFrequency = 55;
+
+        /// <summary> Determines how much the previous frame's DFT data is used in the next frame. Smooths out rapid changes from frame-to-frame, but can cause delay if too strong. </summary>
+        /// <remarks> Lower values will mean less inter-frame smoothing. Range: 0.0~1.0 </remarks>
+        private static float DFTIIRMultiplier = 0.65F;
+
+        /// <summary> Determines how much the raw DFT data is amplified before being used. </summary>
+        /// <remarks> Range 0.0+ </remarks>
+        private static float DFTDataAmplifier = 2F;
+
+        /// <summary> The slope of the extra frequency-dependent amplification done to raw DFT data. Positive values increase sensitivity at higher frequencies. </summary>
+        /// <remarks> Amplification is 1.0 at the minimum frequency, and 1.0 + (<see cref="DFTSensitivitySlope"/> * <see cref="DFTRawBinCount"/>) at the highest, increasing by <see cref="DFTSensitivitySlope"/> at each bin. </remarks>
+        private static float DFTSensitivitySlope = 0.1F;
+
+        /// <summary> How often to run the octave data filter. This smoothes out each bin with adjacent ones. </summary>
+        private static int OctaveFilterIterations = 2;
+
+        /// <summary> How strong the octave data filter is. Higher values mean each bin is more aggresively averaged with adjacent bins. </summary>
+        /// <remarks> Higher values mean less glitchy, but also less clear note peaks. Range: 0.0~1.0 </remarks>
+        private static float OctaveFilterStrength = 0.5F;
+
+        /// <summary> How close a note needs to be to a distribution peak in order to be merged. </summary>
+        private static float MinNoteInfluenceDistance = 1.8F;
+
+        /// <summary> How strongly the note merging filter affects the note frequency. Stronger filter means notes take longer to shift positions to move together. </summary>
+        /// <remarks> Range: 0.0~1.0 </remarks>
+        private static float NoteAttachFrequencyIIRMultiplier = 0.3F;
+
+        /// <summary> How strongly the note merging filter affects the note amplitude. Stronger filter means notes take longer to merge fully in amplitude. </summary>
+        /// <remarks> Range: 0.0~1.0 </remarks>
+        private static float NoteAttachAmplitudeIIRMultiplier = 0.35F;
+
+        /// <summary> This filter is applied to notes between cycles in order to smooth their amplitudes over time. </summary>
+        /// <remarks> Higher values cause smoother but more delayed note amplitude transitions. Range: 0.0~1.0 </remarks>
+        private static float NoteAttachAmplitudeIIRMultiplier2 = 0.25F;
+
+        /// <summary> How close two existing notes need to be in order to get combined into a single note. </summary>
+        /// <remarks> A distance of 2 means that a perfect A can combine with a perfect Bb etc. </remarks>
+        private static float MinNoteCombineDistance = 0.5F;
+
+        /// <summary> Notes below this value get zeroed in <see cref="Note.AmplitudeFinal"/>. </summary>
+        /// <remarks> Increase if low-amplitude notes are causing noise in output. </remarks>
+        private static float NoteOutputChop = 0.05F;
+        #endregion
+
+        // Data that is used in Cycle(), and not used elsewhere.
+        // These would make more sense to just be created and assigned inside, but keeping them out here reduces the number of memory allocations done.
+        #region CycleData
+        /// <summary> The frequency in Hz, that each of the raw bins from the DFT corresponds to. </summary>
+        /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
+        private static readonly float[] RawBinFrequencies = new float[DFTRawBinCount];
+
+        /// <summary> The frequency spectrum, folded to overlap into a single octave length. </summary>
+        /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
+        private static readonly float[] OctaveBinValues = new float[OctaveBinCount];
+
+        /// <summary> The individual note distributions (peaks) detected this cycle. </summary>
+        /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
+        private static readonly NoteDistribution[] NoteDistributions = new NoteDistribution[NoteCount];
+        #endregion
+
+        /// <summary> The non-folded frequency bins, used inter-frame to do smoothing, then folded to form the spectrum. </summary>
+        /// <remarks> Data contained from previous cycles is re-used during next cycle to do smoothing. </remarks>
+        private static readonly float[] FrequencyBinValues = new float[DFTRawBinCount];
+
+        // Our output data:
+
+        /// <summary> Used to keep track of locations of notes that stay between frames in <see cref="Notes"/>, as that array's order may change. </summary>
+        public static readonly int[] PersistentNoteIDs = new int[NoteCount];
+
+        /// <summary> The notes found during this cycle. This is our output to the visulizers. </summary>
+        public static readonly Note[] Notes = new Note[NoteCount];
 
         /// <summary> Updates the sample rate if the audio source has changed. </summary>
         public static void SetSampleRate(int sampleRate)
         {
-            for (int i = 0; i < Freqs; i++)
+            SampleRate = sampleRate;
+            for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
             {
-                Frequencies[i] = (float)((sampleRate / BaseHz) / Math.Pow(2, (float)i / FreqBinCount));
+                RawBinFrequencies[RawBinIndex] = (float)((sampleRate / MinimumFrequency) / Math.Pow(2, (float)RawBinIndex / OctaveBinCount));
             }
         }
+
+        private static int SampleRate = 44100;
 
         /// <summary> Adjusts the note finder run interval if the newly added visualizer/output needs it to run faster, otherwise does nothing. </summary>
         /// <param name="period"> The period, in milliseconds, that you need the note finder to run at or faster than. </param>
@@ -33,6 +159,28 @@ namespace ColorChord.NET
             if (period < ShortestPeriod) { ShortestPeriod = period; }
         }
 
+        public static void ApplyConfig(Dictionary<string, object> options)
+        {
+            Log.Info("Reading config for NoteFinder.");
+            MinimumFrequency = ConfigTools.CheckInt(options, "minFreq", 0, 20000, MinimumFrequency, true); // See below
+            DFTIIRMultiplier = ConfigTools.CheckFloat(options, "DFTIIR", 0F, 1F, DFTIIRMultiplier, true);
+            DFTDataAmplifier = ConfigTools.CheckFloat(options, "DFTAmp", 0F, 10000F, DFTDataAmplifier, true);
+            DFTSensitivitySlope = ConfigTools.CheckFloat(options, "DFTSlope", -100F, 100F, DFTSensitivitySlope, true);
+            OctaveFilterIterations = ConfigTools.CheckInt(options, "octaveFilterIterations", 0, 10000, OctaveFilterIterations, true);
+            OctaveFilterStrength = ConfigTools.CheckFloat(options, "octaveFilterStrength", 0F, 1F, OctaveFilterStrength, true);
+            MinNoteInfluenceDistance = ConfigTools.CheckFloat(options, "noteInfluenceDist", 0F, 100F, MinNoteInfluenceDistance, true);
+            NoteAttachFrequencyIIRMultiplier = ConfigTools.CheckFloat(options, "noteAttachFreqIIR", 0F, 1F, NoteAttachFrequencyIIRMultiplier, true);
+            NoteAttachAmplitudeIIRMultiplier = ConfigTools.CheckFloat(options, "noteAttachAmpIIR", 0F, 1F, NoteAttachAmplitudeIIRMultiplier, true);
+            NoteAttachAmplitudeIIRMultiplier2 = ConfigTools.CheckFloat(options, "noteAttachAmpIIR2", 0F, 1F, NoteAttachAmplitudeIIRMultiplier2, true);
+            MinNoteCombineDistance = ConfigTools.CheckFloat(options, "noteCombineDistance", 0F, 100F, MinNoteCombineDistance, true);
+            NoteOutputChop = ConfigTools.CheckFloat(options, "noteOutputChop", 0F, 100F, NoteOutputChop, true);
+            ConfigTools.WarnAboutRemainder(options, typeof(NoteFinder));
+
+            // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
+            SetSampleRate(SampleRate);
+        }
+
+        /// <summary> Starts the processing thread. </summary>
         public static void Start()
         {
             KeepGoing = true;
@@ -40,356 +188,331 @@ namespace ColorChord.NET
             ProcessThread.Start();
         }
 
+        /// <summary> Stops the processing thread. </summary>
         public static void Stop()
         {
             KeepGoing = false;
             ProcessThread.Join();
         }
 
+        /// <summary> Runs until <see cref="KeepGoing"/> becomes false, processing incoming audio data. </summary>
         private static void DoProcessing()
         {
             Stopwatch Timer = new Stopwatch();
             while (KeepGoing)
             {
                 Timer.Restart();
-                RunNoteFinder();
+                Cycle();
                 int WaitTime = (int)(ShortestPeriod - (Timer.ElapsedMilliseconds));
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
             }
         }
 
-        #region ColorChord Magic
-
-        public const int FreqBinCount = 24;
-        const int Octaves = 5;
-        const float DFT_Q = 20;
-        const float DFT_Speedup = 1000;
-        const float DFT_IIR = 0.65F;
-        const float Amplify = 2;
-        const float Slope = 0.1F;
-        const int FilterIterations = 2;
-        const float FilterStrength = 0.5F;
-        const float DefaultSigma = 1.4F;
-        const int DecomposeIterations = 1000;
-        const float CompressCoefficient = 1;
-        const float CompressExponent = 0.5F;
-        const float NoteJumpability = 1.8F;
-        const float NoteAttachFreqIIR = 0.3F;
-        const float NoteAttachAmpIIR = 0.35F;
-        const float NoteAttachAmpIIR2 = 0.25F;
-        const float NoteCombineDistance = 0.5F;
-        const float NoteMinAmplitude = 0.001F;
-        const float NoteNewMinDistributionValue = 0.02F;
-        const float NoteOutChop = 0.05F;
-        const int BaseHz = 55;
-
-        static int Freqs = FreqBinCount * Octaves;
-        public static int NotePeakCount = FreqBinCount / 2;
-        static int MaxDists = FreqBinCount / 2;
-        public static float[] NotePositions = new float[NotePeakCount];
-        public static float[] NoteAmplitudes = new float[NotePeakCount];
-        static float[] NoteAmplitudesOut = new float[NotePeakCount];
-        public static float[] NoteAmplitudes2 = new float[NotePeakCount];
-        static byte[] PeakToDistMap = new byte[NotePeakCount];
-        static int[] EnduringNoteID = new int[NotePeakCount];
-        static byte[] NoteFounds = new byte[NotePeakCount];
-        static float[] Frequencies = new float[Freqs];
-        static float[] OutBins = new float[Freqs];
-        static float[] FoldedBins = new float[FreqBinCount];
-        static NoteDists[] Dists = new NoteDists[MaxDists];
-
-        public static float[] RunNoteFinder()
+        private static void Cycle()
         {
-            float[] DFTBins = new float[Freqs];
+            // DFT outputs only a small number of bins, we'll need to process this data a lot to get smooth note positions.
+            float[] DFTBinData = new float[DFTRawBinCount];
 
-            DoDFTProgressive32(DFTBins, Frequencies, Freqs, AudioBuffer, AudioBufferHead, AudioBuffer.Length, DFT_Q, DFT_Speedup);
+            // This will read all buffer data from where it was called last up to [AudioBufferHeadWrite] in order to catch up.
+            DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
 
-            for (int i = 0; i < Freqs; i++)
+            // Pre-process input DFT data.
+            for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
             {
-                OutBins[i] = (OutBins[i] * DFT_IIR + (DFTBins[i] * (1.0F - DFT_IIR) * Amplify * (1.0F + Slope * i)));
+                float NewData = DFTBinData[RawBinIndex]; // The raw DFT data for this bin
+                NewData *= DFTDataAmplifier; // Amplify incoming data by a constant
+                NewData *= (1 + DFTSensitivitySlope * RawBinIndex); // Apply a frequency-dependent amplifier to increase sensitivity at higher frequencies.
+
+                FrequencyBinValues[RawBinIndex] = (FrequencyBinValues[RawBinIndex] * DFTIIRMultiplier) + // Keep data from last frame, but reduce by a factor.
+                                               (NewData * (1 - DFTIIRMultiplier)); // Add new data
             }
 
-            //Taper the first and last octaves.
-            for (int i = 0; i < FreqBinCount; i++)
+            // Taper off the first and last octave.
+            for (int OctaveBinIndex = 0; OctaveBinIndex < OctaveBinCount; OctaveBinIndex++)
             {
-                OutBins[i] *= (i + 1.0F) / FreqBinCount;
+                FrequencyBinValues[OctaveBinIndex] *= (OctaveBinIndex + 1F) / OctaveBinCount; // Taper the first octave
+                FrequencyBinValues[DFTRawBinCount - OctaveBinIndex - 1] *= (OctaveBinIndex + 1F) / OctaveBinCount; // Taper the last octave
             }
 
-            for (int i = 0; i < FreqBinCount; i++)
+            // Fold the bins to make one single octave-length array, where all like notes (e.g. C2, C3, C4) are combined, regardless of their original octave.
+            for (int BinIndex = 0; BinIndex < OctaveBinCount; BinIndex++)
             {
-                OutBins[Freqs - i - 1] *= (i + 1.0F) / FreqBinCount;
+                float Amplitude = 0;
+                for (int Octave = 0; Octave < OctaveCount; Octave++) { Amplitude += FrequencyBinValues[(Octave * OctaveBinCount) + BinIndex]; }
+                OctaveBinValues[BinIndex] = Amplitude;
             }
 
-            //Combine the bins into folded bins.
-            for (int i = 0; i < FreqBinCount; i++)
+            // Do some filtering on the now-folded bins to remove meaningless peaks.
+            // Averages out each bin a little bit with adjacent bins.
+            // Runs [OctaveFilterIterations] times, averaging with strength [OctaveFilterStrength].
+            float[] OctaveBinValuesPre = new float[OctaveBinCount];
+            for (int Iteration = 0; Iteration < OctaveFilterIterations; Iteration++)
             {
-                float amp = 0;
-                for (int j = 0; j < Octaves; j++)
+                Array.Copy(OctaveBinValues, OctaveBinValuesPre, OctaveBinCount); // COpy the octave data into our temporary array.
+                for (int BinIndex = 0; BinIndex < OctaveBinCount; BinIndex++)
                 {
-                    amp += OutBins[i + j * FreqBinCount];
+                    int IndexRight = (BinIndex + OctaveBinCount + 1) % OctaveBinCount; // The next bin to the right (wrapping around if needed).
+                    int IndexLeft = (BinIndex + OctaveBinCount - 1) % OctaveBinCount; // The next bin to the left (wrapping around if needed).
+                    float ValueRight = OctaveBinValuesPre[IndexRight];
+                    float ValueLeft = OctaveBinValuesPre[IndexLeft];
+
+                    float NewValue = OctaveBinValues[BinIndex] * (1F - OctaveFilterStrength); // Some of the current value in the bin
+                    NewValue += ((ValueLeft + ValueRight) / 2) * OctaveFilterStrength; // Add the average of the adjacent bins, scaled by the filter strength
+
+                    OctaveBinValues[BinIndex] = NewValue;
                 }
-                FoldedBins[i] = amp;
             }
 
-            //This is here to reduce the number of false-positive hits.  It helps remove peaks that are meaningless.
-            FilterFoldedBinsBlob(FoldedBins, FreqBinCount, FilterStrength, FilterIterations);
+            // Reset all note distributions to off state.
+            for (int NoteIndex = 0; NoteIndex < NoteCount; NoteIndex++) { NoteDistributions[NoteIndex].HasNote = false; }
 
-            for (int i = 0; i < MaxDists; i++)
+            // Find note distributions.
+            // NOTE: This is decompose.c/DecomposeHistogram in TURBO_DECOMPOSE mode (single iteration).
+            //       Non-TURBO_DECOMPOSE mode is currently not implemented here, as it doesn't seem to be used upstream.
+
+            int DistributionsFound = 0;
+
+            for (int BinIndex = 0; BinIndex < OctaveBinCount; BinIndex++)
             {
-                Dists[i].taken = 0;
+                int IndexLeft = (BinIndex - 1 + OctaveBinCount) % OctaveBinCount;
+                int IndexRight = (BinIndex + 1) % OctaveBinCount;
+                float ValueLeft = OctaveBinValues[IndexLeft];
+                float ValueHere = OctaveBinValues[BinIndex];
+                float ValueRight = OctaveBinValues[IndexRight];
+
+                if (ValueLeft > ValueHere || ValueRight > ValueHere) { continue; } // Adjacent bins are higher, this is not a peak.
+                if (ValueLeft == ValueHere && ValueRight == ValueHere) { continue; } // Adjacent bins are both equal, this is a plateau (e.g. all 0).
+
+                // TODO: This isn't 100% certain.
+                // This bin is a peak, adjacent values are lower.
+                // Now we try to locate where the peak should be within this one bin.
+                float TotalAdjacentDifference = ((ValueHere - ValueLeft) + (ValueHere - ValueRight));
+                float ProportionalDifferenceLeft = (ValueHere - ValueLeft) / TotalAdjacentDifference;
+                float ProportionalDifferenceRight = (ValueHere - ValueRight) / TotalAdjacentDifference;
+
+                float InternalOffset; // Where in this bin the peak is.
+                if (ProportionalDifferenceLeft < ProportionalDifferenceRight) { InternalOffset = -(0.5F - ProportionalDifferenceLeft); } // In the left half of this bin.
+                else { InternalOffset = (0.5F - ProportionalDifferenceRight); } // In the right half of this bin.
+
+                // Output the distribution information.
+                NoteDistributions[DistributionsFound].Mean = BinIndex + InternalOffset;
+                NoteDistributions[DistributionsFound].Amplitude = ValueHere * 4;
+                NoteDistributions[DistributionsFound].Sigma = DefaultDistributionSigma;
+
+                DistributionsFound++;
             }
-            int DistsCount = DecomposeHistogram(FoldedBins, FreqBinCount, ref Dists, MaxDists, DefaultSigma, DecomposeIterations);
 
-            //Compress/normalize dist_amps
-            float total_dist = 0;
-
-            for (int i = 0; i < DistsCount; i++)
+            // Clear out the distributions that are not currently active.
+            for (int DistrIndex = DistributionsFound; DistrIndex < NoteCount; DistrIndex++)
             {
-                total_dist += Dists[i].amp;
-            }
-            float muxer = (float)(CompressCoefficient / Math.Pow(total_dist * CompressCoefficient, CompressExponent));
-            total_dist = muxer;
-            for (int i = 0; i < DistsCount; i++)
-            {
-                Dists[i].amp *= total_dist;
+                NoteDistributions[DistrIndex].Mean = -1F;
+                NoteDistributions[DistrIndex].Amplitude = 0F;
+                NoteDistributions[DistrIndex].Sigma = DefaultDistributionSigma;
             }
 
-            Array.Sort(Dists);
+            // Normalize distribution amplitudes.
+            // Start by summing all peak amplitudes.
+            float AmplitudeSum = 0;
+            for (int DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++) { AmplitudeSum += NoteDistributions[DistrIndex].Amplitude; }
 
-            //We now have the positions and amplitudes of the normal distributions that comprise our spectrum.  IN SORTED ORDER!
-            //dists_count = # of distributions
-            //dists[].amp = amplitudes of the normal distributions
-            //dists[].mean = positions of the normal distributions
+            // Find coefficient to multiply all by.
+            float AmplitudeCoefficient = (float)(PeakCompressCoefficient / Math.Pow(AmplitudeSum * PeakCompressCoefficient, PeakCompressExponent));
 
-            //We need to use this in a filtered manner to obtain the "note" peaks
-            //note_peaks = total number of peaks.
-            //note_positions[] = position of the note on the scale.
-            //note_amplitudes[] = amplitudes of these note peaks.
+            // Scale peaks.
+            for (int DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++) { NoteDistributions[DistrIndex].Amplitude *= AmplitudeCoefficient; }
 
-            //First try to find any close peaks.
-            NoteFounds = new byte[NotePeakCount];
+            // Sort peaks so they are in high-to-low amplitude order.
+            Array.Sort(NoteDistributions);
+
+            // Stores whether the given note peak has been associated and influenced by a distribution this cycle.
+            bool[] NotesAssociated = new bool[NoteCount];
+
+            // Try to find peaks that are close together (in respect to frequency).
+            // This modifies [Notes] by using new data from [NoteDistributions].
             int CurrentNoteID = 1;
-            for (int i = 0; i < NotePeakCount; i++)
+            for (int PeakIndex = 0; PeakIndex < NoteCount; PeakIndex++)
             {
-                for (byte j = 0; j < DistsCount; j++)
+                // For each note peak, check if a distribution is close by. If so, adjust the peak location and amplitude to use this new information.
+                for (byte DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++)
                 {
-                    if (Dists[j].taken == 0 && NoteFounds[i] == 0 && fabsloop(NotePositions[i], Dists[j].mean, FreqBinCount) < NoteJumpability && Dists[j].amp > 0.00001) //0.00001 for stability.
+                    if (!NoteDistributions[DistrIndex].HasNote && // If this distribution is not already influencing another note.
+                        !NotesAssociated[PeakIndex] && // If this note is not already being influenced by another distribution
+                        LoopDistance(Notes[PeakIndex].Position, NoteDistributions[DistrIndex].Mean, OctaveBinCount) < MinNoteInfluenceDistance && // The locations are close enough to merge
+                        NoteDistributions[DistrIndex].Amplitude > 0.00001F) // The new data is significant
                     {
-                        //Attach ourselves to this bin.
-                        PeakToDistMap[i] = j;
-                        Dists[j].taken = 1;
-                        if (EnduringNoteID[i] == 0)
-                            EnduringNoteID[i] = CurrentNoteID++;
-                        NoteFounds[i] = 1;
+                        // note_peaks_to_dists_mapping can be implemented here if needed.
+                        // TODO: I'm honestly a little bit lost as to what happens in here...
+                        NoteDistributions[DistrIndex].HasNote = true; // Don't let this distribution affect other notes.
+                        if (PersistentNoteIDs[PeakIndex] == 0) { PersistentNoteIDs[PeakIndex] = CurrentNoteID++; }
+                        NotesAssociated[DistrIndex] = true; // This note has been influenced by a distribution, so is still active.
+                        Notes[PeakIndex].Position = LoopAverageWeighted(Notes[PeakIndex].Position, (1F - NoteAttachFrequencyIIRMultiplier), NoteDistributions[DistrIndex].Mean, NoteAttachFrequencyIIRMultiplier, OctaveBinCount);
 
-                        NotePositions[i] = avgloop(NotePositions[i], (1.0F - NoteAttachFreqIIR), Dists[j].mean, NoteAttachFreqIIR, FreqBinCount);
-
-                        //I guess you can't IIR this like normal.
-                        ////note_positions[i] * (1.-note_attach_freq_iir) + dists[j].mean * note_attach_freq_iir;
-
-                        NoteAmplitudes[i] = NoteAmplitudes[i] * (1.0F - NoteAttachAmpIIR) + Dists[j].amp * NoteAttachAmpIIR;
-                        //XXX TODO: Consider: Always boost power, never reduce?
-                        //					if( dists[i].amp > note_amplitudes[i] )
-                        //						note_amplitudes[i] = dists[i].amp;
+                        float NewAmplitude = Notes[PeakIndex].Amplitude;
+                        NewAmplitude *= (1F - NoteAttachAmplitudeIIRMultiplier);
+                        NewAmplitude += (NoteDistributions[DistrIndex].Amplitude * NoteAttachAmplitudeIIRMultiplier);
+                        Notes[PeakIndex].Amplitude = NewAmplitude;
                     }
                 }
             }
 
-            //Combine like-notes.
-            for (int i = 0; i < NotePeakCount; i++)
+            // Combine notes if they are close enough.
+            for (int NoteIndex1 = 0; NoteIndex1 < NoteCount; NoteIndex1++)
             {
-                //		printf( "%f %f %d\n", nf->note_amplitudes[i], nf->note_positions[i], nf->enduring_note_id[i] );
-                for (int j = 0; j < NotePeakCount; j++)
+                for (int NoteIndex2 = 0; NoteIndex2 < NoteCount; NoteIndex2++)
                 {
-                    if (i == j) continue;
-                    if (fabsloop(NotePositions[i], NotePositions[j], FreqBinCount) < NoteCombineDistance &&
-                        NoteAmplitudes[i] > 0.0 &&
-                        NoteAmplitudes[j] > 0.0)
-                    {
-                        int a;
-                        int b;
-                        if (NoteAmplitudes[i] > NoteAmplitudes[j])
-                        {
-                            a = i;
-                            b = j;
-                        }
-                        else
-                        {
-                            b = i;
-                            a = j;
-                        }
-                        float newp = avgloop(NotePositions[a], NoteAmplitudes[a], NotePositions[b], NoteAmplitudes[b], FreqBinCount);
+                    if (NoteIndex1 == NoteIndex2) { continue; } // Don't try to compare a note with itself.
 
-                        //Combine B into A.
-                        NoteAmplitudes[a] += NoteAmplitudes[b];
-                        NotePositions[a] = newp;
-                        NoteAmplitudes[b] = 0;
-                        NotePositions[b] = -100;
-                        EnduringNoteID[b] = 0;
+                    if (LoopDistance(Notes[NoteIndex1].Position, Notes[NoteIndex2].Position, OctaveBinCount) < MinNoteCombineDistance && // The two notes are close enough
+                        Notes[NoteIndex1].Amplitude > 0 && // v
+                        Notes[NoteIndex2].Amplitude > 0) // Both notes need to be significant to be combined.
+                    {
+                        bool Is1Bigger = Notes[NoteIndex1].Amplitude > Notes[NoteIndex2].Amplitude;
+                        int IndexPrimary = Is1Bigger ? NoteIndex1 : NoteIndex2; // The index of the larger note.
+                        int IndexSecondary = Is1Bigger ? NoteIndex2 : NoteIndex1; // The index of the smaller note.
+
+                        float NewPosition = LoopAverageWeighted(Notes[IndexPrimary].Position, Notes[IndexPrimary].Amplitude, Notes[IndexSecondary].Position, Notes[IndexSecondary].Amplitude, OctaveBinCount);
+
+                        // Merge secondary into primary at new position
+                        Notes[IndexPrimary].Amplitude += Notes[IndexSecondary].Amplitude;
+                        Notes[IndexPrimary].Position = NewPosition;
+
+                        // Delete secondary note
+                        Notes[IndexSecondary].Amplitude = 0;
+                        Notes[IndexSecondary].Position = -100;
+                        PersistentNoteIDs[IndexSecondary] = 0;
                     }
                 }
             }
 
-            //Assign dead or decayed notes to new  peaks.
-            for (int i = 0; i < NotePeakCount; i++)
+            // Note slots that are empty should be assigned to not yet used distributions, if there are any.
+            for (int NoteIndex = 0; NoteIndex < NoteCount; NoteIndex++)
             {
-                if (NoteAmplitudes[i] < NoteMinAmplitude)
+                if (Notes[NoteIndex].Amplitude < MinNoteAmplitude)
                 {
-                    EnduringNoteID[i] = 0;
+                    PersistentNoteIDs[NoteIndex] = 0;
 
-                    //Find a new peak for this note.
-                    for (int j = 0; j < DistsCount; j++)
+                    // Find a new peak for this note.
+                    for (int DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++)
                     {
-                        if (Dists[j].taken == 0 && Dists[j].amp > NoteNewMinDistributionValue)
+                        if (!NoteDistributions[DistrIndex].HasNote && // Hasn't already been turned into a note.
+                            NoteDistributions[DistrIndex].Amplitude > MinDistributionValueNewNote) // The distribution is large enough to be worth turning into a new note.
                         {
-                            EnduringNoteID[i] = CurrentNoteID++;
-                            Dists[j].taken = 1;
-                            NoteAmplitudes[i] = Dists[j].amp;//min_note_amplitude + dists[j].amp * note_attach_amp_iir; //TODO: Should this jump?
-                            NotePositions[i] = Dists[j].mean;
-                            NoteFounds[i] = 1;
+                            // Create a new note with information from this distribution.
+                            PersistentNoteIDs[NoteIndex] = CurrentNoteID++;
+                            NoteDistributions[DistrIndex].HasNote = true; // Don't let this create/affect other notes this cycle.
+                            Notes[NoteIndex].Amplitude = NoteDistributions[DistrIndex].Amplitude;
+                            Notes[NoteIndex].Position = NoteDistributions[DistrIndex].Mean;
+                            NotesAssociated[NoteIndex] = true; // This note was just created, so it is active this cycle.
                         }
                     }
                 }
             }
 
-            //Any remaining notes that could not find a peak good enough must be decayed to oblivion.
-            for (int i = 0; i < NotePeakCount; i++)
+            // Decay inactive notes.
+            for (int NoteIndex = 0; NoteIndex < NoteCount; NoteIndex++)
             {
-                if (NoteFounds[i] == 0)
-                {
-                    NoteAmplitudes[i] = NoteAmplitudes[i] * (1.0F - NoteAttachAmpIIR);
-                }
+                // Any notes that do not have a corresponding distribution this cycle should be decayed.
+                if (!NotesAssociated[NoteIndex]) { Notes[NoteIndex].Amplitude *= (1F - NoteAttachAmplitudeIIRMultiplier); }
 
-                NoteAmplitudes2[i] = NoteAmplitudes2[i] * (1.0F - NoteAttachAmpIIR2) + NoteAmplitudes[i] * NoteAttachAmpIIR2;
+                float NewFiltered = Notes[NoteIndex].AmplitudeFiltered;
+                NewFiltered *= (1F - NoteAttachAmplitudeIIRMultiplier2);
+                NewFiltered += Notes[NoteIndex].Amplitude * NoteAttachAmplitudeIIRMultiplier2;
+                Notes[NoteIndex].AmplitudeFiltered = NewFiltered; // A combination of the previous filtered value, pushed towards the current value.
 
-                if (NoteAmplitudes2[i] < NoteMinAmplitude)
+                if (Notes[NoteIndex].AmplitudeFiltered < MinNoteAmplitude) // The amplitude is very small, just cut it to avoid noise.
                 {
-                    NoteAmplitudes[i] = 0;
-                    NoteAmplitudes2[i] = 0;
+                    Notes[NoteIndex].Amplitude = 0;
+                    Notes[NoteIndex].AmplitudeFiltered = 0;
                 }
             }
 
-            for (int i = 0; i < NotePeakCount; i++)
+            // Nudge down amplitude of all notes, zeroing out ones that don't make the cut.
+            for (int NoteIndex = 0; NoteIndex < NoteCount; NoteIndex++)
             {
-                NoteAmplitudesOut[i] = NoteAmplitudes[i] - NoteOutChop;
-                if (NoteAmplitudesOut[i] < 0)
-                {
-                    NoteAmplitudesOut[i] = 0;
-                }
-            }
-
-            return NoteAmplitudesOut;
-        }
-
-        private static void FilterFoldedBinsBlob(float[] folded, int bins, float strength, int iter)
-        {
-            float[] tmp = new float[bins];
-            int i, j;
-            for (j = 0; j < iter; j++)
-            {
-                Array.Copy(folded, tmp, tmp.Length);
-                for (i = 0; i < bins; i++)
-                {
-                    float right = tmp[(i + bins + 1) % bins];
-                    float left = tmp[(i + bins - 1) % bins];
-                    folded[i] = folded[i] * (1.0F - strength) + (left + right) * strength * 0.5F;
-                }
+                Notes[NoteIndex].AmplitudeFinal = Notes[NoteIndex].Amplitude - NoteOutputChop; // Reduce all notes by a small amount.
+                if (Notes[NoteIndex].AmplitudeFinal < 0) { Notes[NoteIndex].AmplitudeFinal = 0; } // If this note is too small, zero it.
             }
         }
 
-        private static int DecomposeHistogram(float[] histogram, int bins, ref NoteDists[] out_dists, int max_dists, float default_sigma, int iterations)
+        /// <summary> Gets the distance between two elements that are on a circle that wraps between 0 and loopLength. </summary>
+        /// <param name="a"> The location of point A. </param>
+        /// <param name="b"> The location of point B. </param>
+        /// <param name="loopLength"> The circumference of the circle. </param>
+        /// <returns> The distance between the two points, always positive and max (loopLength / 2).</returns>
+        private static float LoopDistance(float a, float b, float loopLength)
         {
-            //Step 1: Find the actual peaks.
-
-            int i;
-            int peak = 0;
-            for (i = 0; i < bins; i++)
-            {
-                float offset = 0;
-                float prev = histogram[(i - 1 + bins) % bins];
-                float now = histogram[i];
-
-                float next = histogram[(i + 1) % bins];
-
-                if (prev > now || next > now) continue;
-                if (prev == now && next == now) continue;
-
-                //i is at a peak... 
-                float totaldiff = ((now - prev) + (now - next));
-                float porpdiffP = (now - prev) / totaldiff; //close to 0 = closer to this side... 0.5 = in the middle ... 1.0 away.
-                float porpdiffN = (now - next) / totaldiff;
-
-                if (porpdiffP < porpdiffN)
-                {
-                    //Closer to prev.
-                    offset = -(0.5F - porpdiffP);
-                }
-                else
-                {
-                    offset = (0.5F - porpdiffN);
-                }
-
-                out_dists[peak].mean = i + offset;
-
-                //XXX XXX TODO Examine difference or relationship of "this" and "totaldiff"
-                out_dists[peak].amp = now * 4;
-                //powf( totaldiff, .8) * 10;//powf( totaldiff, .5 )*4; //
-                out_dists[peak].sigma = default_sigma;
-
-                peak++;
-
-            }
-
-            for (i = peak; i < max_dists; i++)
-            {
-                out_dists[i].mean = -1;
-                out_dists[i].amp = 0;
-                out_dists[i].sigma = default_sigma;
-            }
-
-            return peak;
+            float Distance = Math.Abs(a - b); // The distance to go directly.
+            Distance %= loopLength;
+            if (Distance > loopLength / 2F) { Distance = loopLength - Distance; } // Distance around is shorter, so wrap around.
+            return Distance; // Distance direct is shorter, just go directly.
         }
 
-        //Take the absolute distance between two points on a torus.
-        private static float fabsloop(float a, float b, float modl)
+        /// <summary> Find the center point between two points, all on a circle, but with weights for each of the inputs. </summary>
+        /// <param name="positionA"> The location of point A. </param>
+        /// <param name="weightA"> The size/weight of point A. </param>
+        /// <param name="positionB"> The location of point B. </param>
+        /// <param name="weightB"> The size/weight of point B. </param>
+        /// <param name="loopLength"> The circumference of the circle. </param>
+        /// <returns> The location of the weighted center point. </returns>
+        private static float LoopAverageWeighted(float positionA, float weightA, float positionB, float weightB, float loopLength)
         {
-            float fa = Math.Abs(a - b);
-            fa = fa % modl;
-            if (fa > modl / 2.0) { fa = modl - fa; }
-            return fa;
-        }
+            float WeightSum = weightA + weightB;
 
-        //Get the weighted - average of two points on a torus.
-        private static float avgloop(float pta, float ampa, float ptb, float ampb, float modl)
-        {
-            float amptot = ampa + ampb;
-
-            //Determine if it should go linearly, or around the edge.
-            if (Math.Abs(pta - ptb) > modl / 2.0)
-            { //Loop around the outside.
-                if (pta < ptb) { pta += modl; }
-                else { ptb += modl; }
-            }
-            float modmid = (pta * ampa + ptb * ampb) / amptot;
-            return modmid % modl;
-        }
-
-        private struct NoteDists : IComparable<NoteDists>
-        {
-            public float amp;   //Amplitude of normal distribution
-            public float mean;  //Mean of normal distribution
-            public float sigma; //Sigma of normal distribution
-            public byte taken; //Is distribution associated with any notes?
-
-            public int CompareTo(NoteDists other)
+            if (Math.Abs(positionA - positionB) > loopLength / 2F) // Looping around outside is shorter
             {
-                float v = this.amp - other.amp;
-                return ((v > 0) ? -1 : ((v < 0) ? 1 : 0));
+                if (positionA < positionB) { positionA += loopLength; } // Move A so that the direct distance B->A is positive and the shorter version.
+                else { positionB += loopLength; } // Move B so that the direct distance A->B is positive and the shorter version.
             }
-        };
+            // Because the distance has been corrected by moving a point if needed, this is now a standard weighted average.
+            float Midpoint = ((positionA * weightA) + (positionB * weightB)) / WeightSum;
+            return Midpoint % loopLength; // Move the point back onto the circle if it is outside.
+        }
+
+        /// <summary> A note distribution, represented as a location, amplitude, and sigma, defining a normal (Gaussian) distribution. </summary>
+        /// <remarks> These are created directly from DFT output, and later associate and interact with <see cref="Note"/> objects to update the current set of active notes. </remarks>
+        private struct NoteDistribution : IComparable<NoteDistribution>
+        {
+            /// <summary> The amplitude (relative strength) of the note. </summary>
+            public float Amplitude;
+
+            /// <summary> The mean (location) of the note in the frequency spectrum. </summary>
+            /// <remarks> Range: 0.0 to <see cref="OctaveBinCount"/>. Fractional part shows where in the bin the peak is. </remarks>
+            public float Mean;
+
+            /// <summary> The sigma (spread) of the note. </summary>
+            public float Sigma;
+
+            /// <summary> Whether this distribution is affecting a note already. </summary>
+            public bool HasNote;
+
+            /// <summary> Compares the note amplitudes. </summary>
+            /// <param name="other"> The note distribution to compare to. </param>
+            /// <returns> </returns>
+            public int CompareTo(NoteDistribution other)
+            {
+                if (this.Amplitude > other.Amplitude) { return -1; }
+                else if (this.Amplitude < other.Amplitude) { return 1; }
+                else { return 0; }
+            }
+        }
+
+        /// <summary> A note after filtering, stabilization and denoising of the raw DFT output. </summary>
+        public struct Note
+        {
+            /// <summary> Where on the scale this note is. Range: 0~<see cref="OctaveBinCount"/>. </summary>
+            public float Position;
+
+            /// <summary> The note amplitude as of the previous cycle, with minimal filtering. </summary>
+            public float Amplitude;
+
+            /// <summary> The note amplitude, with some inter-frame smoothing applied. </summary>
+            public float AmplitudeFiltered;
+
+            /// <summary> The note amplitude, zeroed if very low amplitude. Based on <see cref="Amplitude"/>, so minimal inter-frame smoothing is applied. </summary>
+            public float AmplitudeFinal;
+        }
 
         [DllImport("ColorChordLib.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern void DoDFTProgressive32([In, Out] float[] OutBins, [In, Out] float[] Frequencies, int Bins, float[] DataBuffer, int DataBufferLoc, int DataBufferSize, float Q, float Speedup);
-        #endregion
     }
 }
