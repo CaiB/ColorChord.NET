@@ -33,11 +33,15 @@ _* indicates an uncertain description. I don't fully understand the methodology 
 **Only one source can be defined at once currently.**
 ### [WASAPILoopback](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Sources/WASAPILoopback.cs)
 Gets data out of the Windows Audio Session API. Supports input and output devices (e.g. microphones or the system speaker output, etc)
+<details>
+<summary>View Configuration Table</summary>
+
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
 | `device` | `string` | `"default"` | `"default"`, `"defaultTracking"`, Device IDs | If `"default"`, then the default device at the time of startup will be used. If `"defaultTracking"`, the default device will be used, and will keep up with changes to the default, switching as the system does (not yet implemented). If a device ID is sepcified, that device is used, but if it is not found, then behaviour reverts to `"default"`. |
 | `useInput` | `bool` | `false` | | Determines whether to choose the default capture device (e.g. microphone), or default render device (e.g. speakers) when choosing a device. Only useful if the default device is selected in `device` (above).
 | `printDeviceInfo` | `bool` | `true` | | If `true`, outputs currently connected devices and their IDs at startup, to help you find a device. |
+</details>
 
 **Regarding Device IDs:**  
 Device IDs are unique for each device on the system, vary between different computers, and only change if drivers are updated/changed. Removal and re-attachment of a USB device will not change the ID. They are not readily visible to the user, but other software using WASAPI will have access to the same IDs. Use `printDeviceInfo` (above) to find the ID for your preferred device. Output format is:
@@ -75,6 +79,9 @@ You may add as many visualizers as you desire, even multiple of the same type. A
 * `name`: A unique identifier used to attach outputs and controllers.
 ### [Cells](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Cells.cs)
 A 1D output with cells appearing and decaying in a scattered pattern.
+<details>
+<summary>View Configuration Table</summary>
+
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
 | `ledCount` | `int` | 50 | 1~100000 | The number of discrete data points to output. |
@@ -87,9 +94,13 @@ A 1D output with cells appearing and decaying in a scattered pattern.
 | `timeBased` | `bool` | false | | *Whether lights get added from the left side creating a time-dependent decay pattern, or are added randomly. |
 | `snakey` | `bool` | false | | *Not sure. |
 | `enable` | `bool` | true | | Whether to use this visualizer. |
+</details>
 
 ### [Linear](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Linear.cs)
 A 1D output with contiguous blocks of colour, size corresponding to relative note volume, and inter-frame continuity.
+<details>
+<summary>View Configuration Table</summary>
+
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
 | `ledCount` | `int` | 50 | 1~100000 | The number of discrete data points to output. |
@@ -101,6 +112,7 @@ A 1D output with contiguous blocks of colour, size corresponding to relative not
 | `ledLimit` | `float` | 1.0 | 0.0~1.0 | *The maximum LED brightness. |
 | `saturationAmplifier` | `float` | 1.6 | 0.0~100.0 | *Multiplier for colour saturation before conversion to RGB and output. |
 | `enable` | `bool` | true | | Whether to use this visualizer. |
+</details>
 
 ## Outputs
 You may add as many outputs as you desire, even multiple of the same type, and any combination of compatible outputs can be added to a single visualizer. All output instances must have at least these 3 string properties:
@@ -110,6 +122,9 @@ You may add as many outputs as you desire, even multiple of the same type, and a
 
 ### [DisplayOpenGL](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/DisplayOpenGL.cs)
 Currently supports 1D inputs only. Acts like a strip of LEDs, displaying a horizontal line of rectangles.
+<details>
+<summary>View Configuration Table</summary>
+
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
 | `paddingLeft` | `float` | 0.0 | 0.0~2.0 | Amount of blank space to leave on the left side of the window. 1 corresponds to half of the window. |
@@ -118,9 +133,12 @@ Currently supports 1D inputs only. Acts like a strip of LEDs, displaying a horiz
 | `paddingBottom` | `float` | 0.0 | 0.0~2.0 | Amount of blank space to leave on the bottom of the window. 1 corresponds to half of the window. |
 | `windowHeight` | `int` | 100 | 10~4000 | The height of the window, in pixels. |
 | `windowWidth` | `int` | 1280 | 10~4000 | The width of the window, in pixels. |
+</details>
 
 ### [PacketUDP](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/PacketUDP.cs)
 Currently supports 1D inputs only. Packs the data for each LED in sequence into a UDP packet, then sends it to a given IP.
+<details>
+<summary>View Configuration Table</summary>
 
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
@@ -128,7 +146,8 @@ Currently supports 1D inputs only. Packs the data for each LED in sequence into 
 | `port` | `int` | 7777 | 0~65535 | The port to send the packets to. |
 | `paddingFront` | `int` | 0 | 0~1000 | Blank bytes to append to the front of the packet. (Charles' output seemed to always append a single blank byte, so this is just to maintain compatibility) |
 | `paddingBack` | `int` | 0 | 0~1000 | Blank bytes to append to the back of the packet. |
-| `enable` | `bool` | true | | Whether to use this output.
+| `enable` | `bool` | true | | Whether to use this output. |
+</details>
 
 - Can only output up to 21,835 RGB LEDs due to 65,535 byte packet size limit.
 
