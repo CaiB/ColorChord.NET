@@ -20,9 +20,12 @@ The core math is done in a C library, `ColorChordLib` due to complexity.
 The system performs very well, requiring negligible CPU and RAM, especially if only network output is needed.
 
 # Configuration
-Configuration is done through the `config.json` file. There is a sample config provided at the root of the repo, but you'll want to customize it to suit your needs. Below is a list of supported options:
+Configuration is done through the `config.json` file. There is a sample config provided at the root of the repo, but you'll want to customize it to suit your needs. Find the supported options for each module below.
 
+- If an option is not specified in the configuration file, the default value is used.
+- If an unrecognized option or invalid value is specified, a warning is output to the console. Always check for these after modifying the config in case you made a mistake.
 - You can choose a different configuration file by running the program with the command line option `config <YourFile.json>`.
+- Range specifies the set of input values that _can_ be used. Extreme values may not make any sense in practice though, so make small changes from the defaults to start. Range is just specified to prevent completely invalid input.
 
 _* indicates an uncertain description. I don't fully understand the methodology of some of the visualizers that Charles included in ColorChord, so some of these are guesses. Play with the vaules until you get something nice :)_
 
@@ -40,6 +43,31 @@ Gets data out of the Windows Audio Session API. Supports input and output device
 Device IDs are unique for each device on the system, vary between different computers, and only change if drivers are updated/changed. Removal and re-attachment of a USB device will not change the ID. They are not readily visible to the user, but other software using WASAPI will have access to the same IDs. Use `printDeviceInfo` (above) to find the ID for your preferred device. Output format is:
 > [`Index`] "`Device Name`" = "`Device ID`"
 
+## [NoteFinder](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/NoteFinder.cs)
+There is always a single instance of the NoteFinder running. All sources and visualizers connect to the NoteFinder.
+
+The NoteFinder uses a complex, length algorithm to turn sound data into note information. The options below are mostly listed in the order used.
+> All values are the same as the corresponding values in cnlohr's ColorChord2, but some options have a different name to be more clear. If you are transitioning an existing config file built for cnlohr's implementation, the values can be kept the same, but the items' names need to be updated.
+
+<details>
+<summary>View Configuration Table</summary>
+
+| Name | cnlohr Name | Type | Default | Range | Description |
+|---|---|---|---|---|---|
+| `minFreq` | `base_hz` | `int` | 55 | 0-20000 | The minimum frequency analyzed. (in Hz) |
+| `DFTIIR` | `dft_iir` | `float` | 0.65 | 0.0~1.0 | Determines how much the previous frame's DFT data is used in the next frame. Smooths out rapid changes from frame-to-frame, but can cause delay if too strong. | 
+| `DFTAmp` | `amplify` | `float` | 2.0 | 0.0~10000.0 | Determines how much the raw DFT data is amplified before being used. |
+| `DFTSlope` | `slope` | `float` | 0.1 | 0.0~10000.0 | The slope of the extra frequency-dependent amplification done to raw DFT data. Positive values increase sensitivity at higher frequencies. |
+| `octaveFilterIterations` | `filter_iter` | `int` | 2 | 0~10000 | How often to run the octave data filter. This smoothes out each bin with adjacent ones. | 
+| `octaveFilterStrength` | `filter_strength` | `float` | 0.5 | 0.0~1.0 | How strong the octave data filter is. Higher values mean each bin is more aggresively averaged with adjacent bins. Higher values mean less glitchy, but also less clear note peaks. |
+| `noteInfluenceDist` | `note_jumpability` | `float` | 1.8 | 0.0~100.0 | How close a note needs to be to a distribution peak in order to be merged. |
+| `noteAttachFreqIIR` | `note_attach_freq_iir` | `float` | 0.3 | 0.0~1.0 | How strongly the note merging filter affects the note frequency. Stronger filter means notes take longer to shift positions to move together. |
+| `noteAttachAmpIIR` | `note_attach_amp_iir` | `float` | 0.35 | 0.0~1.0 | How strongly the note merging filter affects the note amplitude. Stronger filter means notes take longer to merge fully in amplitude. |
+| `noteAttachAmpIIR2` | `note_attach_amp_iir2` | `float` | 0.25 | 0.0~1.0 | This filter is applied to notes between cycles in order to smooth their amplitudes over time. |
+| `noteCombineDistance` | `note_combine_distance` | `float` | 0.5 | 0.0~100.0 | How close two existing notes need to be in order to get combined into a single note. |
+| `noteOutputChop` | `note_out_chop` | `float` | 0.05 | 0.0~100.0 | Notes below this value get zeroed. Increase if low-amplitude notes are causing noise in output. |
+</details>
+
 ## Visualizers
 
 You may add as many visualizers as you desire, even multiple of the same type. All visualizer instances must have at least these 2 string properties:
@@ -51,10 +79,10 @@ A 1D output with cells appearing and decaying in a scattered pattern.
 |---|---|---|---|---|
 | `ledCount` | `int` | 50 | 1~100000 | The number of discrete data points to output. |
 | `frameRate` | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is outputted. |
-| `ledFloor` | `float` | 0.1 | 0~1 | *The minimum intensity of an LED, before it is output as black instead. |
-| `lightSiding` | `float` | 1.9 | 0~100 | *Not sure. |
-| `saturationAmplifier` | `float` | 2 | 0~100 | *Multiplier for colour saturation before conversion to RGB and output. |
-| `qtyAmp` | `float` | 20 | 0~100 | *Not sure. |
+| `ledFloor` | `float` | 0.1 | 0.0~1.0 | *The minimum intensity of an LED, before it is output as black instead. |
+| `lightSiding` | `float` | 1.9 | 0.0~100.0 | *Not sure. |
+| `saturationAmplifier` | `float` | 2.0 | 0.0~100.0 | *Multiplier for colour saturation before conversion to RGB and output. |
+| `qtyAmp` | `float` | 20 | 0.0~100.0 | *Not sure. |
 | `steadyBright` | `bool` | false | | *Not sure. |
 | `timeBased` | `bool` | false | | *Whether lights get added from the left side creating a time-dependent decay pattern, or are added randomly. |
 | `snakey` | `bool` | false | | *Not sure. |
@@ -65,13 +93,13 @@ A 1D output with contiguous blocks of colour, size corresponding to relative not
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
 | `ledCount` | `int` | 50 | 1~100000 | The number of discrete data points to output. |
-| `lightSiding` | `float` | 1.0 | 0~100 | *Not sure. |
-| `ledFloor` | `float` | 0.1 | 0~1 | *The minimum intensity of an LED, before it is output as black instead. |
+| `lightSiding` | `float` | 1.0 | 0.0~100.0 | *Not sure. |
+| `ledFloor` | `float` | 0.1 | 0.0~1.0 | *The minimum intensity of an LED, before it is output as black instead. |
 | `frameRate` | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is outputted. |
 | `isCircular` | `bool` | false | | Whether to treat the output as a circle, allowing wrap-around, or as a line with hard ends. |
 | `steadyBright` | `bool` | false | | *Not sure. |
-| `ledLimit` | `float` | 1.0 | 0~1 | *The maximum LED brightness. |
-| `saturationAmplifier` | `float` | 1.6 | 0~100 | *Multiplier for colour saturation before conversion to RGB and output. |
+| `ledLimit` | `float` | 1.0 | 0.0~1.0 | *The maximum LED brightness. |
+| `saturationAmplifier` | `float` | 1.6 | 0.0~100.0 | *Multiplier for colour saturation before conversion to RGB and output. |
 | `enable` | `bool` | true | | Whether to use this visualizer. |
 
 ## Outputs
@@ -84,10 +112,10 @@ You may add as many outputs as you desire, even multiple of the same type, and a
 Currently supports 1D inputs only. Acts like a strip of LEDs, displaying a horizontal line of rectangles.
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
-| `paddingLeft` | `float` | 0 | 0~2 | Amount of blank space to leave on the left side of the window. 1 corresponds to half of the window. |
-| `paddingRight` | `float` | 0 | 0~2 | Amount of blank space to leave on the right side of the window. 1 corresponds to half of the window. |
-| `paddingTop` | `float` | 0 | 0~2 | Amount of blank space to leave on the top of the window. 1 corresponds to half of the window. |
-| `paddingBottom` | `float` | 0 | 0~2 | Amount of blank space to leave on the bottom of the window. 1 corresponds to half of the window. |
+| `paddingLeft` | `float` | 0.0 | 0.0~2.0 | Amount of blank space to leave on the left side of the window. 1 corresponds to half of the window. |
+| `paddingRight` | `float` | 0.0 | 0.0~2.0 | Amount of blank space to leave on the right side of the window. 1 corresponds to half of the window. |
+| `paddingTop` | `float` | 0.0 | 0.0~2.0 | Amount of blank space to leave on the top of the window. 1 corresponds to half of the window. |
+| `paddingBottom` | `float` | 0.0 | 0.0~2.0 | Amount of blank space to leave on the bottom of the window. 1 corresponds to half of the window. |
 | `windowHeight` | `int` | 100 | 10~4000 | The height of the window, in pixels. |
 | `windowWidth` | `int` | 1280 | 10~4000 | The width of the window, in pixels. |
 
