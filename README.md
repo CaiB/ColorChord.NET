@@ -50,7 +50,7 @@ Device IDs are unique for each device on the system, vary between different comp
 ## [NoteFinder](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/NoteFinder.cs)
 There is always a single instance of the NoteFinder running. All sources and visualizers connect to the NoteFinder.
 
-The NoteFinder uses a complex, length algorithm to turn sound data into note information. The options below are mostly listed in the order used.
+The NoteFinder uses a complex, lengthy algorithm to turn sound data into note information. The options below are mostly listed in the order used.
 > All values are the same as the corresponding values in cnlohr's ColorChord2, but some options have a different name to be more clear. If you are transitioning an existing config file built for cnlohr's implementation, the values can be kept the same, but the items' names need to be updated.
 
 <details>
