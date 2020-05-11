@@ -6,6 +6,10 @@
         "device": "default",
         "printDeviceInfo": true
     },
+    "noteFinder":
+    {
+        
+    },
     "visualizers":
     [
         {
