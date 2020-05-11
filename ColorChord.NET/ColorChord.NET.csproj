@@ -64,7 +64,7 @@
     <Compile Include="ColorChord.cs" />
     <Compile Include="ConfigTools.cs" />
     <Compile Include="AudioTools.cs" />
-    <Compile Include="NoteFinder2.cs" />
+    <Compile Include="NoteFinder.cs" />
     <Compile Include="Outputs\DisplayOpenGL.cs" />
     <Compile Include="Outputs\IOutput.cs" />
     <Compile Include="Outputs\PacketUDP.cs" />
