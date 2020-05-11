@@ -4,6 +4,10 @@
         "type": "WASAPILoopback",
         "bufferLength": 50
     },
+    "noteFinder":
+    {
+        
+    },
     "visualizers":
     [
         {

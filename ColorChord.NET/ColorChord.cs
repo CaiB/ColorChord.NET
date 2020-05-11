@@ -76,6 +76,13 @@ namespace ColorChord.NET
                 else { Log.Error("Failed to create audio source. Check to make sure the type is spelled correctly."); }
             }
 
+            // Note Finder
+            if (!JSON.ContainsKey("noteFinder")) { Log.Warn("Could not find valid \"noteFinder\" definition. All defaults will be used."); }
+            else
+            {
+                NoteFinder.ApplyConfig(ToDict(JSON["noteFinder"]));
+            }
+
             // Visualizers
             if (!JSON.ContainsKey("visualizers") || !JSON["visualizers"].HasValues || ((JArray)JSON["visualizers"]).Count <= 0) { Log.Warn("Could not find valid \"visualizers\" definition. No visualizers will be configured."); }
             else

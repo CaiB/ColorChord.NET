@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -62,8 +63,10 @@ namespace ColorChord.NET
         #endregion
 
         // Things that are set by config at startup, then constant.
+        // The values specified here are defaults if an override is not present in the config file.
         #region Configurable Constants
         /// <summary> The frequency at which the DFT output starts. </summary>
+        /// <remarks> If this is changed, <see cref="SetSampleRate(int)"/> needs to be called in order to actaully apply the changes to the frequency list. </remarks>
         private static int MinimumFrequency = 55;
 
         /// <summary> Determines how much the previous frame's DFT data is used in the next frame. Smooths out rapid changes from frame-to-frame, but can cause delay if too strong. </summary>
@@ -89,9 +92,11 @@ namespace ColorChord.NET
         private static float MinNoteInfluenceDistance = 1.8F;
 
         /// <summary> How strongly the note merging filter affects the note frequency. Stronger filter means notes take longer to shift positions to move together. </summary>
+        /// <remarks> Range: 0.0~1.0 </remarks>
         private static float NoteAttachFrequencyIIRMultiplier = 0.3F;
 
         /// <summary> How strongly the note merging filter affects the note amplitude. Stronger filter means notes take longer to merge fully in amplitude. </summary>
+        /// <remarks> Range: 0.0~1.0 </remarks>
         private static float NoteAttachAmplitudeIIRMultiplier = 0.35F;
 
         /// <summary> This filter is applied to notes between cycles in order to smooth their amplitudes over time. </summary>
@@ -135,21 +140,44 @@ namespace ColorChord.NET
         /// <summary> The notes found during this cycle. This is our output to the visulizers. </summary>
         public static readonly Note[] Notes = new Note[NoteCount];
 
-
         /// <summary> Updates the sample rate if the audio source has changed. </summary>
         public static void SetSampleRate(int sampleRate)
         {
+            SampleRate = sampleRate;
             for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
             {
                 RawBinFrequencies[RawBinIndex] = (float)((sampleRate / MinimumFrequency) / Math.Pow(2, (float)RawBinIndex / OctaveBinCount));
             }
         }
 
+        private static int SampleRate = 44100;
+
         /// <summary> Adjusts the note finder run interval if the newly added visualizer/output needs it to run faster, otherwise does nothing. </summary>
         /// <param name="period"> The period, in milliseconds, that you need the note finder to run at or faster than. </param>
         public static void AdjustOutputSpeed(uint period)
         {
             if (period < ShortestPeriod) { ShortestPeriod = period; }
+        }
+
+        public static void ApplyConfig(Dictionary<string, object> options)
+        {
+            Log.Info("Reading config for NoteFinder.");
+            MinimumFrequency = ConfigTools.CheckInt(options, "minFreq", 0, 20000, MinimumFrequency, true); // See below
+            DFTIIRMultiplier = ConfigTools.CheckFloat(options, "DFTIIR", 0F, 1F, DFTIIRMultiplier, true);
+            DFTDataAmplifier = ConfigTools.CheckFloat(options, "DFTAmp", 0F, 10000F, DFTDataAmplifier, true);
+            DFTSensitivitySlope = ConfigTools.CheckFloat(options, "DFTSlope", -100F, 100F, DFTSensitivitySlope, true);
+            OctaveFilterIterations = ConfigTools.CheckInt(options, "octaveFilterIterations", 0, 10000, OctaveFilterIterations, true);
+            OctaveFilterStrength = ConfigTools.CheckFloat(options, "octaveFilterStrength", 0F, 1F, OctaveFilterStrength, true);
+            MinNoteInfluenceDistance = ConfigTools.CheckFloat(options, "noteInfluenceDist", 0F, 100F, MinNoteInfluenceDistance, true);
+            NoteAttachFrequencyIIRMultiplier = ConfigTools.CheckFloat(options, "noteAttachFreqIIR", 0F, 1F, NoteAttachFrequencyIIRMultiplier, true);
+            NoteAttachAmplitudeIIRMultiplier = ConfigTools.CheckFloat(options, "noteAttachAmpIIR", 0F, 1F, NoteAttachAmplitudeIIRMultiplier, true);
+            NoteAttachAmplitudeIIRMultiplier2 = ConfigTools.CheckFloat(options, "noteAttachAmpIIR2", 0F, 1F, NoteAttachAmplitudeIIRMultiplier2, true);
+            MinNoteCombineDistance = ConfigTools.CheckFloat(options, "noteCombineDistance", 0F, 100F, MinNoteCombineDistance, true);
+            NoteOutputChop = ConfigTools.CheckFloat(options, "noteOutputChop", 0F, 100F, NoteOutputChop, true);
+            ConfigTools.WarnAboutRemainder(options, typeof(NoteFinder));
+
+            // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
+            SetSampleRate(SampleRate);
         }
 
         /// <summary> Starts the processing thread. </summary>
