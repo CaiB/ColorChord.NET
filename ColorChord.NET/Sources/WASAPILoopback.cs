@@ -20,6 +20,7 @@ namespace ColorChord.NET.Sources
         private bool PrintDeviceInfo = false;
 
         private const ulong BufferLength = 50 * 10000; // 50 ms, in ticks
+        private ulong SystemBufferLength;
         private ulong ActualBufferDuration;
         private int BytesPerFrame;
         
@@ -31,6 +32,8 @@ namespace ColorChord.NET.Sources
         private IAudioClient Client;
         private IAudioCaptureClient CaptureClient;
         private AudioTools.WAVEFORMATEX MixFormat;
+        AutoResetEvent AudioEvent = new AutoResetEvent(false);
+        GCHandle AudioEventHandle;
 
         public WASAPILoopback(string name) { }
 
@@ -102,21 +105,30 @@ namespace ColorChord.NET.Sources
             if (IsErrorAndOut(ErrorCode, "Could not get mix format.")) { return; }
             this.MixFormat = AudioTools.FormatFromPointer(MixFormatPtr);
 
+            ErrorCode = this.Client.GetDevicePeriod(out ulong DefaultInterval, out ulong MinimumInterval);
+            if (IsErrorAndOut(ErrorCode, "Could not get device timing info.")) { return; }
+
             Log.Info(string.Format("Audio format is {0} channel, {1}Hz sample rate, {2}b per sample.", this.MixFormat.nChannels, this.MixFormat.nSamplesPerSec, this.MixFormat.wBitsPerSample));
+            Log.Info(string.Format("Default transaction period is {0} ticks, minimum is {1} ticks.", DefaultInterval, MinimumInterval));
             this.BytesPerFrame = this.MixFormat.nChannels * (this.MixFormat.wBitsPerSample / 8);
 
             NoteFinder.SetSampleRate((int)this.MixFormat.nSamplesPerSec);
 
             uint StreamFlags;
-            if (DeviceIsCapture == true) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST; }
-            else if (DeviceIsCapture == false) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK; }
+            if (DeviceIsCapture == true) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST | AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_EVENTCALLBACK; }
+            else if (DeviceIsCapture == false) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_EVENTCALLBACK; }
             else { Log.Error("Device type was not determined!"); return; }
 
-            ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, BufferLength, 0, MixFormatPtr);
+            ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, MinimumInterval, MinimumInterval, MixFormatPtr);
             if (IsErrorAndOut(ErrorCode, "Could not init audio client.")) { return; }
+
+            this.AudioEventHandle = GCHandle.Alloc(this.AudioEvent);
+
+            ErrorCode = this.Client.SetEventHandle(this.AudioEvent.SafeWaitHandle.DangerousGetHandle()); // DANGEROUS, OH NO
 
             ErrorCode = this.Client.GetBufferSize(out uint BufferFrameCount);
             if (IsErrorAndOut(ErrorCode, "Could not get audio client buffer size.")) { return; }
+            this.SystemBufferLength = BufferFrameCount;
 
             ErrorCode = this.Client.GetService(new Guid(ComIIDs.IAudioCaptureClientIID), out object CaptureClientObj);
             if (IsErrorAndOut(ErrorCode, "Could not get audio capture client.")) { return; }
@@ -129,7 +141,7 @@ namespace ColorChord.NET.Sources
             this.StreamReady = true;
 
             this.KeepGoing = true;
-            this.ProcessThread = new Thread(ProcessAudio) { Name = "WASAPILoopback" };
+            this.ProcessThread = new Thread(ProcessEventAudio) { Name = "WASAPILoopbackEVT" };
             this.ProcessThread.Start();
         }
 
@@ -193,6 +205,49 @@ namespace ColorChord.NET.Sources
         {
             this.KeepGoing = false;
             this.ProcessThread.Join();
+        }
+
+
+        private void ProcessEventAudio()
+        {
+            int ErrorCode;
+            while (this.KeepGoing)
+            {
+                this.AudioEvent.WaitOne();
+
+                ErrorCode = this.CaptureClient.GetNextPacketSize(out uint PacketLength);
+                if (IsErrorAndOut(ErrorCode, "Failed to get audio packet size.")) { continue; }
+
+                ErrorCode = this.CaptureClient.GetBuffer(out IntPtr DataBuffer, out uint FramesAvailable, out AUDCLNT_BUFFERFLAGS BufferStatus, out ulong DevicePosition, out ulong CounterPosition);
+                if (IsErrorAndOut(ErrorCode, "Failed to get audio buffer.")) { continue; }
+
+                if (BufferStatus.HasFlag(AUDCLNT_BUFFERFLAGS.AUDCLNT_BUFFERFLAGS_SILENT))
+                {
+                    // TODO: Clear the buffer, as the device is not currently playing audio.
+                }
+                else
+                {
+                    byte[] AudioData = new byte[FramesAvailable * this.BytesPerFrame];
+                    Marshal.Copy(DataBuffer, AudioData, 0, (int)(FramesAvailable * this.BytesPerFrame));
+                    for (int Frame = 0; Frame < FramesAvailable; Frame++)
+                    {
+                        float Sample = 0;
+                        // TODO: Make multi-channel downmixing toggleable, maybe some stereo visualizations?
+                        for (ushort Chn = 0; Chn < this.MixFormat.nChannels; Chn++) { Sample += BitConverter.ToSingle(AudioData, (Frame * this.BytesPerFrame) + ((this.MixFormat.wBitsPerSample / 8) * Chn)); }
+                        NoteFinder.AudioBuffer[NoteFinder.AudioBufferHeadWrite] = Sample / this.MixFormat.nChannels; // Use the average of the channels.
+                        NoteFinder.AudioBufferHeadWrite = (NoteFinder.AudioBufferHeadWrite + 1) % NoteFinder.AudioBuffer.Length;
+                    }
+                    NoteFinder.LastDataAdd = DateTime.UtcNow;
+                }
+
+                ErrorCode = this.CaptureClient.ReleaseBuffer(FramesAvailable);
+                if (IsErrorAndOut(ErrorCode, "Failed to release audio buffer.")) { continue; }
+            }
+
+            ErrorCode = this.Client.Stop();
+            IsErrorAndOut(ErrorCode, "Failed to stop audio client.");
+
+            this.StreamReady = false;
         }
 
         private void ProcessAudio()
