@@ -66,6 +66,9 @@
     <Compile Include="AudioTools.cs" />
     <Compile Include="NoteFinder.cs" />
     <Compile Include="Outputs\DisplayOpenGL.cs" />
+    <Compile Include="Outputs\Display\BlockStrip.cs" />
+    <Compile Include="Outputs\Display\IDisplayMode.cs" />
+    <Compile Include="Outputs\Display\Shader.cs" />
     <Compile Include="Outputs\IOutput.cs" />
     <Compile Include="Outputs\PacketUDP.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -82,8 +85,8 @@
     <None Include="..\.editorconfig">
       <Link>.editorconfig</Link>
     </None>
-    <EmbeddedResource Include="1d-discrete.frag" />
-    <EmbeddedResource Include="1d-discrete.vert" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\BlockStrip.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\BlockStrip.vert" />
     <None Include="App.config" />
     <None Include="OpenTK.dll.config" />
     <None Include="packages.config" />
