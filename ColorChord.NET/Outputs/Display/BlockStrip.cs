@@ -34,7 +34,7 @@ namespace ColorChord.NET.Outputs.Display
             if (this.GeometryData.Length != this.BlockCount * 6 * 5) { this.GeometryData = new float[this.BlockCount * 6 * 5]; } // 6 vertices per block, with 2+3 floats each.
             float Width = 2F / this.BlockCount;
             for (int i = 0; i < this.BlockCount; i++)
-            {
+            { // TODO: This generates triangles with opposing directions.
                 for (int v = 0; v < 6; v++) // Top-Left, Bottom-Left, Bottom-Right | Top-Left, Top-Right, Bottom-Right
                 { // This inner block runs once per vertex, per block.
                     switch (v) // X
@@ -104,7 +104,7 @@ namespace ColorChord.NET.Outputs.Display
 
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferHandle);
-            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 5 * sizeof(float), 0);
+            GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 5 * sizeof(float), 0);
             GL.EnableVertexAttribArray(0);
             GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 5 * sizeof(float), 2 * sizeof(float));
             GL.EnableVertexAttribArray(1);

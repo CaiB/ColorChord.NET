@@ -20,9 +20,20 @@
         byte[,] GetData();
     }
 
+    public struct ContinuousDataUnit
+    {
+        public float Location;
+        public float Size;
+        public byte R, G, B;
+    }
+
     /// <summary> Used by visualizers to indicate that they output a 1D variable-size array of colour boundaries with no specified resolution. </summary>
-    /// <remarks> NOT YET IMPLEMENTED. </remarks>
-    public interface IContinuous1D : IVisualizerFormat { }
+    public interface IContinuous1D : IVisualizerFormat
+    {
+        int GetCount();
+        ContinuousDataUnit[] GetData();
+        int MaxPossibleUnits { get; }
+    }
 
     /// <summary> Used to distinguish formats that don't fit other descriptions. </summary>
     public interface IOtherFormat : IVisualizerFormat { }
