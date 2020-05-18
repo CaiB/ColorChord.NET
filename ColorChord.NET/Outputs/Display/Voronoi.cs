@@ -1,0 +1,42 @@
+﻿using ColorChord.NET.Visualizers.Formats;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ColorChord.NET.Outputs.Display
+{
+    public class Voronoi : IDisplayMode
+    {
+        private readonly DisplayOpenGL HostWindow;
+        private Visualizers.Voronoi DataSource;
+
+        private Shader Shader;
+
+        public void Close()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Dispatch()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Load()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Render()
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool SupportsFormat(IVisualizerFormat format)
+        {
+            throw new NotImplementedException();
+        }
+    }
+}
