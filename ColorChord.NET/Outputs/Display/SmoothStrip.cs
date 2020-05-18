@@ -38,14 +38,14 @@ namespace ColorChord.NET.Outputs.Display
             if (this.DataSource.MaxPossibleUnits > NOTE_COUNT)
             {
                 Log.Error("SmoothStrip cannot use the provided visualizer, as it outputs too much data.");
-                throw new InvalidOperationException("Incompatible visualizer. MaxPossibleNotes exceeds the shader's capabilities.");
+                throw new InvalidOperationException("Incompatible visualizer. MaxPossibleUnits exceeds this shader's capabilities.");
             }
         }
 
         public void Dispatch()
         {
-            int Count = this.DataSource.GetCount();
-            ContinuousDataUnit[] Data = this.DataSource.GetData();
+            int Count = this.DataSource.GetCountContinuous();
+            ContinuousDataUnit[] Data = this.DataSource.GetDataContinuous();
 
             // TODO: Upload new data.
         }

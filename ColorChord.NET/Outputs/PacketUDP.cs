@@ -56,8 +56,8 @@ namespace ColorChord.NET.Outputs
             byte[] Output;
             if (this.Source is IDiscrete1D Source1D)
             {
-                Output = new byte[Source1D.GetCount() * 3 + this.FrontPadding + this.BackPadding];
-                byte[] SourceData = Source1D.GetData();
+                Output = new byte[Source1D.GetCountDiscrete() * 3 + this.FrontPadding + this.BackPadding];
+                byte[] SourceData = Source1D.GetDataDiscrete();
                 for (int i = 0; i < SourceData.Length; i++) { Output[i + this.FrontPadding] = SourceData[i]; }
             }
             else { return; }

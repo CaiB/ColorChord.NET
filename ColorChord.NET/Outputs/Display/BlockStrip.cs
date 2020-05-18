@@ -68,7 +68,7 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> Called by the visualizer when new data is available. </summary>
         public void Dispatch()
         {
-            byte[] Data = this.DataSource.GetData();
+            byte[] Data = this.DataSource.GetDataDiscrete();
             if (Data.Length / 3 != this.BlockCount) // The number of blocks has changed!
             {
                 this.BlockCount = Data.Length / 3;

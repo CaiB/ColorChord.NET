@@ -8,8 +8,8 @@
     /// <summary> Used by visualizers to indicate that they output a 1D constant-size array of individual colour data points, like LEDs. </summary>
     public interface IDiscrete1D : IVisualizerFormat
     {
-        int GetCount();
-        byte[] GetData();
+        int GetCountDiscrete();
+        byte[] GetDataDiscrete();
     }
 
     /// <summary> Used by visualizers to indicate that they output a 2D constant-size array of individual colour data points, like a screen. </summary>
@@ -17,7 +17,7 @@
     {
         int GetWidth();
         int GetHeight();
-        byte[,] GetData();
+        byte[,] GetDataDiscrete();
     }
 
     public struct ContinuousDataUnit
@@ -30,8 +30,8 @@
     /// <summary> Used by visualizers to indicate that they output a 1D variable-size array of colour boundaries with no specified resolution. </summary>
     public interface IContinuous1D : IVisualizerFormat
     {
-        int GetCount();
-        ContinuousDataUnit[] GetData();
+        int GetCountContinuous();
+        ContinuousDataUnit[] GetDataContinuous();
         int MaxPossibleUnits { get; }
     }
 

@@ -86,8 +86,8 @@ namespace ColorChord.NET.Visualizers
             }
         }
 
-        public int GetCount() => this.LEDCount;
-        public byte[] GetData() => this.OutputData;
+        public int GetCountDiscrete() => this.LEDCount;
+        public byte[] GetDataDiscrete() => this.OutputData;
 
         #region ColorChord Magic
         private int[] led_note_attached;

@@ -113,8 +113,8 @@ namespace ColorChord.NET.Visualizers
             }
         }
 
-        public int GetCount() => this.LEDCount;
-        public byte[] GetData() => this.OutputData;
+        public int GetCountDiscrete() => this.LEDCount;
+        public byte[] GetDataDiscrete() => this.OutputData;
 
 
         // These variables are only used to keep inter-frame info for Update(). Do not touch.
