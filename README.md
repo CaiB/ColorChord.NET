@@ -80,6 +80,9 @@ You may add as many visualizers as you desire, even multiple of the same type. A
 * `type`: The name of the visualizer to use. Must match the titles below.
 * `name`: A unique identifier used to attach outputs and controllers.
 ## [Cells](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Cells.cs)
+![Example](Docs/Images/Output-Display-Cells.gif)
+(Output: `DisplayOpenGL:BlockStrip`, 30 blocks, `timeBased`=true)  
+
 Supported data output modes: `Discrete 1D`  
 A 1D output with cells appearing and decaying in a scattered pattern.
 <details>
@@ -101,7 +104,7 @@ A 1D output with cells appearing and decaying in a scattered pattern.
 
 ## [Linear](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Linear.cs)
 ![Example](Docs/Images/Output-Display-LinearSmooth.gif)
-(Output: `DisplayOpenGL:SmoothStrip`)  
+(Output: `DisplayOpenGL:SmoothStrip`, continuous)  
 Supported data output modes: `Discrete 1D`, `Continuous 1D`  
 A 1D output with contiguous blocks of colour, size corresponding to relative note volume, and with inter-frame continuity.
 - Circular mode is not recommended in continuous mode, but works fine in discrete mode.
