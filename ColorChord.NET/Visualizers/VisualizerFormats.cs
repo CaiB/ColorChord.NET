@@ -20,7 +20,7 @@
         byte[,] GetDataDiscrete();
     }
 
-    public struct ContinuousDataUnit
+    public class ContinuousDataUnit
     {
         public float Location;
         public float Size;

@@ -12,34 +12,31 @@ namespace ColorChord.NET.Outputs.Display
 
         private Shader Shader;
 
-        private const int NOTE_COUNT = 12;
-
-        private readonly float[] GeometryData = new float[] // {[X,Y]} x 6
-        {
-            -1, 1, // Top-Left
-            -1, -1, // Bottom-Left
-            1, -1, // Bottom-Right
-            1, -1, // Bottom-Right
-            1, 1, // Top-Right
-            -1, 1 // Top-Left
+        private static readonly float[] DefaultGeometryData = new float[] // {[X,Y,R,G,B]} x 6
+        { // X   Y    R  G  B
+            -1,  1,   0, 0, 0, // Top-Left
+            -1, -1,   0, 0, 0, // Bottom-Left
+             1, -1,   0, 0, 0, // Bottom-Right
+             1, -1,   0, 0, 0, // Bottom-Right
+             1,  1,   0, 0, 0, // Top-Right
+            -1,  1,   0, 0, 0  // Top-Left
         };
 
+        private float[] GeometryData = DefaultGeometryData; // {[X,Y,R,G,B] x6} x NoteCount
+
+        /// <summary> True if new data needs to be sent to the GPU. </summary>
+        private bool NewData;
         private int VertexBufferHandle, VertexArrayHandle;
 
         public SmoothStrip(DisplayOpenGL parent, IVisualizer visualizer)
         {
             if (!(visualizer is IContinuous1D))
             {
-                Log.Error("SmmothStrip cannot use the provided visualizer, as it does not output 1D continuous data.");
+                Log.Error("SmoothStrip cannot use the provided visualizer, as it does not output 1D continuous data.");
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IContinuous1D.");
             }
             this.HostWindow = parent;
             this.DataSource = (IContinuous1D)visualizer;
-            if (this.DataSource.MaxPossibleUnits > NOTE_COUNT)
-            {
-                Log.Error("SmoothStrip cannot use the provided visualizer, as it outputs too much data.");
-                throw new InvalidOperationException("Incompatible visualizer. MaxPossibleUnits exceeds this shader's capabilities.");
-            }
         }
 
         public void Dispatch()
@@ -47,27 +44,70 @@ namespace ColorChord.NET.Outputs.Display
             int Count = this.DataSource.GetCountContinuous();
             ContinuousDataUnit[] Data = this.DataSource.GetDataContinuous();
 
-            // TODO: Upload new data.
+            if (Count == 0 && this.GeometryData != DefaultGeometryData) // We just switched to having no input
+            {
+                this.GeometryData = DefaultGeometryData;
+                this.NewData = true;
+                return;
+            }
+            if (Count == 0) { return; } // We still have no input
+
+            /*if (this.GeometryData.Length != Count * 6 * 5) { */this.GeometryData = new float[Count * 6 * 5];// }
+            for (int Block = 0; Block < Count; Block++)
+            {
+                for (int v = 0; v < 6; v++)
+                {
+                    switch (v) // X
+                    {
+                        case 0:
+                        case 1:
+                        case 5:
+                            this.GeometryData[(Block * 5 * 6) + (v * 5) + 0] = (Data[Block].Location * 2F) - 1F; break; // Left
+                        case 2:
+                        case 3:
+                        case 4:
+                            this.GeometryData[(Block * 5 * 6) + (v * 5) + 0] = ((Data[Block].Location + Data[Block].Size) * 2F) - 1F; break; // Right
+                    }
+                    switch(v) // Y
+                    {
+                        case 0:
+                        case 4:
+                        case 5:
+                            this.GeometryData[(Block * 5 * 6) + (v * 5) + 1] = 1F; break; // Top
+                        case 1:
+                        case 2:
+                        case 3:
+                            this.GeometryData[(Block * 5 * 6) + (v * 5) + 1] = -1F; break; // Bottom
+                    }
+                    this.GeometryData[(Block * 5 * 6) + (v * 5) + 2] = Data[Block].R / 255F; // R
+                    this.GeometryData[(Block * 5 * 6) + (v * 5) + 3] = Data[Block].G / 255F; // G
+                    this.GeometryData[(Block * 5 * 6) + (v * 5) + 4] = Data[Block].B / 255F; // B
+                }
+            }
+            this.NewData = true;
         }
 
         public void Render()
         {
             this.Shader.Use();
             GL.BindVertexArray(this.VertexArrayHandle);
+            if (this.NewData) { GL.BufferData(BufferTarget.ArrayBuffer, this.GeometryData.Length * sizeof(float), this.GeometryData, BufferUsageHint.DynamicDraw); }
             GL.DrawArrays(PrimitiveType.Triangles, 0, this.GeometryData.Length / 2);
         }
 
         public void Load()
         {
-            this.Shader = new Shader("SmoothStrip.vert", "SmoothStrip.frag");
+            this.Shader = new Shader("BlockStrip.vert", "BlockStrip.frag"); // We can just re-use the BlockStrip shader, as this uses exactly the same geometry format.
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
 
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferHandle);
-            GL.BufferData(BufferTarget.ArrayBuffer, this.GeometryData.Length * sizeof(float), this.GeometryData, BufferUsageHint.StaticDraw);
-            GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 2 * sizeof(float), 0);
+            GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 5 * sizeof(float), 0);
             GL.EnableVertexAttribArray(0);
+            GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false, 5 * sizeof(float), 2 * sizeof(float));
+            GL.EnableVertexAttribArray(1);
+            this.NewData = true;
         }
 
         public void Close()
@@ -77,6 +117,6 @@ namespace ColorChord.NET.Outputs.Display
             this.Shader.Dispose();
         }
 
-        public bool SupportsFormat(IVisualizerFormat format) => (format is IContinuous1D) && (((IContinuous1D)format).MaxPossibleUnits <= NOTE_COUNT);
+        public bool SupportsFormat(IVisualizerFormat format) => format is IContinuous1D;
     }
 }

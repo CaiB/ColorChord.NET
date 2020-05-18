@@ -8,9 +8,10 @@ using System.Threading.Tasks;
 
 namespace ColorChord.NET.Visualizers
 {
-    public class Linear : IVisualizer, IDiscrete1D
+    public class Linear : IVisualizer, IDiscrete1D, IContinuous1D
     {
         /// <summary> The number of discrete elements outputted by this visualizer. </summary>
+        /// <remarks> If only using continuous mode, set this to 12 or 24. </remarks>
         public int LEDCount
         {
             get => this.P_LEDCount;
@@ -50,11 +51,19 @@ namespace ColorChord.NET.Visualizers
         public float SaturationAmplifier { get; set; }
 
         private readonly List<IOutput> Outputs = new List<IOutput>();
-        public byte[] OutputData;
+        public byte[] OutputDataDiscrete;
+        public ContinuousDataUnit[] OutputDataContinuous;
+        public int OutputCountContinuous;
+
         private bool KeepGoing = true;
         private Thread ProcessThread;
 
-        public Linear(string name) { this.Name = name; }
+        public Linear(string name)
+        {
+            this.Name = name;
+            this.OutputDataContinuous = new ContinuousDataUnit[NoteFinder.NoteCount];
+            for (int i = 0; i < this.OutputDataContinuous.Length; i++) { this.OutputDataContinuous[i] = new ContinuousDataUnit(); }
+        }
 
         public void ApplyConfig(Dictionary<string, object> options)
         {
@@ -76,7 +85,7 @@ namespace ColorChord.NET.Visualizers
         /// <summary> Used to update internal structures when the number of LEDs changes. </summary>
         private void UpdateSize()
         {
-            this.OutputData = new byte[this.LEDCount * 3];
+            this.OutputDataDiscrete = new byte[this.LEDCount * 3];
             LastLEDColours = new float[this.LEDCount];
             LastLEDPositionsFiltered = new float[this.LEDCount];
             LastLEDSaturations = new float[this.LEDCount];
@@ -114,12 +123,15 @@ namespace ColorChord.NET.Visualizers
         }
 
         public int GetCountDiscrete() => this.LEDCount;
-        public byte[] GetDataDiscrete() => this.OutputData;
+        public byte[] GetDataDiscrete() => this.OutputDataDiscrete;
 
+        public int GetCountContinuous() => this.OutputCountContinuous;
+        public ContinuousDataUnit[] GetDataContinuous() => this.OutputDataContinuous;
+        public int MaxPossibleUnits { get => NoteFinder.NoteCount; }
 
         // These variables are only used to keep inter-frame info for Update(). Do not touch.
         private float[] LastLEDColours;
-        private float[] LastLEDPositionsFiltered; // Only used when IsCirculr is true.
+        private float[] LastLEDPositionsFiltered; // Only used when IsCircular is true.
         private float[] LastLEDSaturations;
         private int PrevAdvance;
 
@@ -158,7 +170,10 @@ namespace ColorChord.NET.Visualizers
             float[] LEDColours = new float[this.LEDCount]; // The colour (range 0 ~ 1) of each LED in the chain.
             float[] LEDAmplitudes = new float[this.LEDCount]; // The amplitude (time-smoothed) of each LED in the chain.
             float[] LEDAmplitudesFast = new float[this.LEDCount]; // The amplitude (fast-updating) of each LED in the chain.
+            
             int LEDsFilled = 0; // How many LEDs have been assigned a colour.
+            float VectorPosition = 0; // Where in the continuous line we are (continuous equivalent of LEDsFilled).
+            this.OutputCountContinuous = 0;
 
             // Fill the LED slots with available notes.
             for (int NoteIndex = 0; NoteIndex < BIN_QTY; NoteIndex++)
@@ -173,8 +188,26 @@ namespace ColorChord.NET.Visualizers
                     LEDAmplitudesFast[LEDsFilled] = NoteAmplitudesFast[NoteIndex];
                     LEDsFilled++;
                 }
-                // GRAB VECTOR DATA HERE
+
+                // TODO: Currently the continuous output doesn't handle circular output well (as the Advance calculations and adjustments are not done).
+                float VectorSizeColour = (NoteAmplitudes[NoteIndex] / AmplitudeSum);
+                if (VectorSizeColour == 0 || float.IsNaN(VectorSizeColour)) { continue; }
+                this.OutputDataContinuous[NoteIndex].Location = VectorPosition;
+                this.OutputDataContinuous[NoteIndex].Size = VectorSizeColour;
+
+                float OutSaturation = (this.SteadyBright ? NoteAmplitudes[NoteIndex] : NoteAmplitudesFast[NoteIndex]) * this.SaturationAmplifier;
+                if (OutSaturation > 1) { OutSaturation = 1; }
+                if (OutSaturation > LEDLimit) { OutSaturation = LEDLimit; }
+
+                uint Colour = VisualizerTools.CCtoHEX(NotePositions[NoteIndex], 1.0F, OutSaturation);
+                this.OutputDataContinuous[NoteIndex].R = (byte)((Colour >> 16) & 0xff);
+                this.OutputDataContinuous[NoteIndex].G = (byte)((Colour >> 8) & 0xff);
+                this.OutputDataContinuous[NoteIndex].B = (byte)((Colour) & 0xff);
+
+                VectorPosition += VectorSizeColour;
+                this.OutputCountContinuous++;
             }
+
 
             // If there are no notes to display, set the first to 0.
             if (LEDsFilled == 0)
@@ -253,9 +286,9 @@ namespace ColorChord.NET.Visualizers
 
                 uint Colour = VisualizerTools.CCtoHEX(LastLEDColours[LEDIndex], 1.0F, OutSaturation);
 
-                this.OutputData[LEDIndex * 3 + 0] = (byte)((Colour >> 16) & 0xff);
-                this.OutputData[LEDIndex * 3 + 1] = (byte)((Colour >> 8) & 0xff);
-                this.OutputData[LEDIndex * 3 + 2] = (byte)((Colour) & 0xff);
+                this.OutputDataDiscrete[LEDIndex * 3 + 0] = (byte)((Colour >> 16) & 0xff);
+                this.OutputDataDiscrete[LEDIndex * 3 + 1] = (byte)((Colour >> 8) & 0xff);
+                this.OutputDataDiscrete[LEDIndex * 3 + 2] = (byte)((Colour) & 0xff);
             }
 
             if (this.IsCircular)

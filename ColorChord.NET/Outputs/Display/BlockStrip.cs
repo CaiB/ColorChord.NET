@@ -15,7 +15,7 @@ namespace ColorChord.NET.Outputs.Display
         private int BlockCount;
         private float[] GeometryData; // {[X,Y,R,G,B] x 6} x BlockCount
 
-        /// <summary> False if new data is waiting to be sent to the GPU. </summary>
+        /// <summary> True if new data is waiting to be sent to the GPU. </summary>
         private bool NewData;
         private int VertexBufferHandle, VertexArrayHandle;
 
