@@ -33,16 +33,17 @@ namespace ColorChord.NET.Visualizers
         /// <summary> Whether the output should be treated as a line with ends, or a continuous circle. </summary>
         public bool IsCircular { get; set; }
 
-        // TODO: Determine what this does.
+        /// <summary> Exponent used to convert raw note amplitudes to strength. </summary>
         public float LightSiding { get; set; }
 
-        // TODO: Determine what this does.
+        /// <summary> Applies inter-frame smoothing to the LED brightnesses to prevent fast flickering. </summary>
         public bool SteadyBright { get; set; }
 
-        /// <summary> The minimum brightness before LEDs are not outputted. </summary>
+        /// <summary> The minimum relative amplitude of a note required to consider it for output. </summary>
         public float LEDFloor { get; set; }
 
-        /// <summary> The maximum brightness. </summary>
+        /// <summary> The maximum brightness of all output LEDs. </summary>
+        /// <remarks> Caps the brightness at this, doesn't scale brightnesses below. </remarks>
         public float LEDLimit { get; set; }
 
         /// <summary> How intense to make the colours. </summary>
@@ -76,9 +77,9 @@ namespace ColorChord.NET.Visualizers
         private void UpdateSize()
         {
             this.OutputData = new byte[this.LEDCount * 3];
-            last_led_pos = new float[this.LEDCount];
-            last_led_pos_filter = new float[this.LEDCount];
-            last_led_amp = new float[this.LEDCount];
+            LastLEDColours = new float[this.LEDCount];
+            LastLEDPositionsFiltered = new float[this.LEDCount];
+            LastLEDSaturations = new float[this.LEDCount];
         }
 
         public void Start()
@@ -115,150 +116,172 @@ namespace ColorChord.NET.Visualizers
         public int GetCount() => this.LEDCount;
         public byte[] GetData() => this.OutputData;
 
-        #region ColorChord Magic
-        private float[] last_led_pos;
-        private float[] last_led_pos_filter;
-        private float[] last_led_amp;
-        private int lastadvance;
+
+        // These variables are only used to keep inter-frame info for Update(). Do not touch.
+        private float[] LastLEDColours;
+        private float[] LastLEDPositionsFiltered; // Only used when IsCirculr is true.
+        private float[] LastLEDSaturations;
+        private int PrevAdvance;
 
         public void Update()
         {
-            //Step 1: Calculate the quantity of all the LEDs we'll want.
-            int totbins = NoteFinder.NoteCount;//nf->dists;
-            int i, j;
-            float[] binvals = new float[totbins];
-            float[] binvalsQ = new float[totbins];
-            float[] binpos = new float[totbins];
-            float totalbinval = 0;
+            const int BIN_QTY = NoteFinder.NoteCount; // Number of bins present
+            float[] NoteAmplitudes = new float[BIN_QTY]; // The amplitudes of each note, time-smoothed
+            float[] NoteAmplitudesFast = new float[BIN_QTY]; // The amplitudes of each note, with minimal time-smoothing
+            float[] NotePositions = new float[BIN_QTY]; // The locations of the notes, range 0 ~ 1.
+            float AmplitudeSum = 0;
 
-            for (i = 0; i < totbins; i++)
+            // Populate data from the NoteFinder.
+            for (int i = 0; i < BIN_QTY; i++)
             {
-                binpos[i] = NoteFinder.Notes[i].Position / NoteFinder.OctaveBinCount;
-                binvals[i] = (float)Math.Pow(NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
-                binvalsQ[i] = (float)Math.Pow(NoteFinder.Notes[i].Amplitude, this.LightSiding);
-                totalbinval += binvals[i];
+                NotePositions[i] = NoteFinder.Notes[i].Position / NoteFinder.OctaveBinCount;
+                NoteAmplitudes[i] = (float)Math.Pow(NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
+                NoteAmplitudesFast[i] = (float)Math.Pow(NoteFinder.Notes[i].Amplitude, this.LightSiding);
+                AmplitudeSum += NoteAmplitudes[i];
             }
 
-            float newtotal = 0;
-
-            for (i = 0; i < totbins; i++)
+            // Adjust AmplitudeSum to remove notes that are too weak to be included.
+            float AmplitudeSumAdj = 0;
+            for (int i = 0; i < BIN_QTY; i++)
             {
-                binvals[i] -= this.LEDFloor * totalbinval;
-                if (binvals[i] / totalbinval < 0) { binvals[i] = binvalsQ[i] = 0; }
-                newtotal += binvals[i];
-            }
-            totalbinval = newtotal;
-
-            float[] rledpos = new float[this.LEDCount];
-            float[] rledamp = new float[this.LEDCount];
-            float[] rledampQ = new float[this.LEDCount];
-            int rbinout = 0;
-
-            for (i = 0; i < totbins; i++)
-            {
-                int nrleds = (int)((binvals[i] / totalbinval) * this.LEDCount);
-                for (j = 0; j < nrleds && rbinout < this.LEDCount; j++)
+                NoteAmplitudes[i] -= this.LEDFloor * AmplitudeSum;
+                if (NoteAmplitudes[i] / AmplitudeSum < 0) // Note too weak, remove it from consideration.
                 {
-                    rledpos[rbinout] = binpos[i];
-                    rledamp[rbinout] = binvals[i];
-                    rledampQ[rbinout] = binvalsQ[i];
-                    rbinout++;
+                    NoteAmplitudes[i] = 0;
+                    NoteAmplitudesFast[i] = 0;
                 }
+                AmplitudeSumAdj += NoteAmplitudes[i];
             }
+            AmplitudeSum = AmplitudeSumAdj;
+            // AmplitudeSum now only includes notes that are large enough (relative to others) to be worth displaying.
 
-            if (rbinout == 0)
+            float[] LEDColours = new float[this.LEDCount]; // The colour (range 0 ~ 1) of each LED in the chain.
+            float[] LEDAmplitudes = new float[this.LEDCount]; // The amplitude (time-smoothed) of each LED in the chain.
+            float[] LEDAmplitudesFast = new float[this.LEDCount]; // The amplitude (fast-updating) of each LED in the chain.
+            int LEDsFilled = 0; // How many LEDs have been assigned a colour.
+
+            // Fill the LED slots with available notes.
+            for (int NoteIndex = 0; NoteIndex < BIN_QTY; NoteIndex++)
             {
-                rledpos[0] = 0;
-                rledamp[0] = 0;
-                rledampQ[0] = 0;
-                rbinout++;
+                // How many of the LEDs should be taken up by this colour.
+                int LEDCountColour = (int)((NoteAmplitudes[NoteIndex] / AmplitudeSum) * this.LEDCount);
+                // Fill those LEDs with this note's data.
+                for (int LEDIndex = 0; LEDIndex < LEDCountColour && LEDsFilled < this.LEDCount; LEDIndex++)
+                {
+                    LEDColours[LEDsFilled] = NotePositions[NoteIndex];
+                    LEDAmplitudes[LEDsFilled] = NoteAmplitudes[NoteIndex];
+                    LEDAmplitudesFast[LEDsFilled] = NoteAmplitudesFast[NoteIndex];
+                    LEDsFilled++;
+                }
+                // GRAB VECTOR DATA HERE
             }
 
-            for (; rbinout < this.LEDCount; rbinout++)
+            // If there are no notes to display, set the first to 0.
+            if (LEDsFilled == 0)
             {
-                rledpos[rbinout] = rledpos[rbinout - 1];
-                rledamp[rbinout] = rledamp[rbinout - 1];
-                rledampQ[rbinout] = rledampQ[rbinout - 1];
+                LEDColours[0] = 0;
+                LEDAmplitudes[0] = 0;
+                LEDAmplitudesFast[0] = 0;
+                LEDsFilled++;
             }
 
-            //Now we have to minimize "advance".
-            int minadvance = 0;
+            // Fill the remaining LEDs at the end with the last present colour.
+            // If there are no notes to display, fills the strip with 0s.
+            // If there are notes, this should only fill the last few in case of rounding errors earlier.
+            for (; LEDsFilled < this.LEDCount; LEDsFilled++)
+            {
+                LEDColours[LEDsFilled] = LEDColours[LEDsFilled - 1];
+                LEDAmplitudes[LEDsFilled] = LEDAmplitudes[LEDsFilled - 1];
+                LEDAmplitudesFast[LEDsFilled] = LEDAmplitudesFast[LEDsFilled - 1];
+            }
+
+            // In case of a circular display, we need to try and keep the colours in the same locations between frames.
+            int Advance = 0; // How many LEDs to shift the output by to achieve minimal movement.
+
+            // Advance is not used in non-circular displays.
+            if (this.IsCircular)
+            {
+                // Used to compare inter-frame difference for different Advance values.
+                float MinDifference = 1e20F;
+
+                // Check every potential Advance value to find the best for this frame.
+                for (int ShiftQty = 0; ShiftQty < this.LEDCount; ShiftQty++)
+                {
+                    float ThisDistance = 0;
+
+                    // Check how different the colours are at each LED compared to last frame.
+                    for (int LEDIndex = 0; LEDIndex < this.LEDCount; LEDIndex++)
+                    {
+                        int NewIndex = (LEDIndex + ShiftQty) % this.LEDCount;
+                        float ColourDifference = MinCircleDistance(LastLEDPositionsFiltered[LEDIndex], LEDColours[NewIndex]);
+                        ThisDistance += ColourDifference;
+                    }
+
+                    // Compare the Advance value of this and last frame if we were to use ShiftQty as the new Advance.
+                    int AdvanceDifference = Math.Abs(PrevAdvance - ShiftQty);
+                    if (AdvanceDifference > this.LEDCount / 2) AdvanceDifference = this.LEDCount - AdvanceDifference;
+
+                    float NormAdvance = (float)AdvanceDifference / this.LEDCount; // Normalized advance difference (range 0 ~ 1)
+                    ThisDistance += NormAdvance * NormAdvance;
+
+                    if (ThisDistance < MinDifference) // We found a better shift distance.
+                    {
+                        MinDifference = ThisDistance;
+                        Advance = ShiftQty;
+                    }
+                }
+
+            }
+            this.PrevAdvance = Advance;
+
+            // Shift the LEDs by Advance, then output.
+            for (int LEDIndex = 0; LEDIndex < this.LEDCount; LEDIndex++)
+            {
+                // The index, shifted by Advance.
+                int ShiftedIndex = (LEDIndex + Advance + this.LEDCount) % this.LEDCount;
+
+                float Saturation = LEDAmplitudes[ShiftedIndex] * this.SaturationAmplifier;
+                float SaturationFast = LEDAmplitudesFast[ShiftedIndex] * this.SaturationAmplifier;
+                if (SaturationFast > 1) { SaturationFast = 1; }
+
+                LastLEDColours[LEDIndex] = LEDColours[ShiftedIndex];
+                LastLEDSaturations[LEDIndex] = Saturation;
+
+                float OutSaturation = (this.SteadyBright ? Saturation : SaturationFast);
+                if (OutSaturation > 1) { OutSaturation = 1; }
+                if (OutSaturation > LEDLimit) { OutSaturation = LEDLimit; }
+
+                uint Colour = VisualizerTools.CCtoHEX(LastLEDColours[LEDIndex], 1.0F, OutSaturation);
+
+                this.OutputData[LEDIndex * 3 + 0] = (byte)((Colour >> 16) & 0xff);
+                this.OutputData[LEDIndex * 3 + 1] = (byte)((Colour >> 8) & 0xff);
+                this.OutputData[LEDIndex * 3 + 2] = (byte)((Colour) & 0xff);
+            }
 
             if (this.IsCircular)
             {
-                float mindiff = 1e20F;
-
-                //Uncomment this for a rotationally continuous surface.
-                for (i = 0; i < this.LEDCount; i++)
+                for (int i = 0; i < this.LEDCount; i++)
                 {
-                    float diff = 0;
-                    for (j = 0; j < this.LEDCount; j++)
-                    {
-                        int r = (j + i) % this.LEDCount;
-                        float rd = lindiff(last_led_pos_filter[j], rledpos[r]);
-                        diff += rd;//*rd;
-                    }
-
-                    int advancediff = (lastadvance - i);
-                    if (advancediff < 0) advancediff *= -1;
-                    if (advancediff > this.LEDCount / 2) advancediff = this.LEDCount - advancediff;
-
-                    float ad = (float)advancediff / (float)this.LEDCount;
-                    diff += ad * ad;// * led->this.LEDCount;
-
-                    if (diff < mindiff)
-                    {
-                        mindiff = diff;
-                        minadvance = i;
-                    }
-                }
-
-            }
-            lastadvance = minadvance;
-
-            //Advance the LEDs to this position when outputting the values.
-            for (i = 0; i < this.LEDCount; i++)
-            {
-                int ia = (i + minadvance + this.LEDCount) % this.LEDCount;
-                float sat = rledamp[ia] * this.SaturationAmplifier;
-                float satQ = rledampQ[ia] * this.SaturationAmplifier;
-                if (satQ > 1) satQ = 1;
-                last_led_pos[i] = rledpos[ia];
-                last_led_amp[i] = sat;
-                float sendsat = (this.SteadyBright ? sat : satQ);
-                if (sendsat > 1) sendsat = 1;
-
-                if (sendsat > LEDLimit) sendsat = LEDLimit;
-
-                uint r = VisualizerTools.CCtoHEX(last_led_pos[i], 1.0F, sendsat);
-
-                this.OutputData[i * 3 + 0] = (byte)((r >> 16) & 0xff);
-                this.OutputData[i * 3 + 1] = (byte)((r >> 8) & 0xff);
-                this.OutputData[i * 3 + 2] = (byte)((r) & 0xff);
-            }
-
-            if (this.IsCircular)
-            {
-                for (i = 0; i < this.LEDCount; i++)
-                {
-                    last_led_pos_filter[i] = last_led_pos_filter[i] * .9F + last_led_pos[i] * .1F;
+                    LastLEDPositionsFiltered[i] = (LastLEDPositionsFiltered[i] * 0.9F) + (LastLEDColours[i] * 0.1F);
                 }
             }
         }
 
-        private static float lindiff(float a, float b)  //Find the minimum change around a wheel.
+        /// <summary> Gets the shortest distance of two points around the circumference of a circle, where the circumference is 1.0. </summary>
+        /// <param name="a"> Location of point A. </param>
+        /// <param name="b"> Location of point B. </param>
+        /// <returns> The (positive) distance between the two points using the more direct route. </returns>
+        private static float MinCircleDistance(float a, float b)
         {
-            float diff = a - b;
-            if (diff < 0) { diff *= -1; }
+            // The distance by just going straight.
+            float DirectDiff = Math.Abs(a - b);
 
-            float otherdiff = (a < b) ? (a + 1) : (a - 1);
-            otherdiff -= b;
-            if (otherdiff < 0) { otherdiff *= -1; }
+            // The distance if we wrap around the "ends" of the circle.
+            float WrapDiff = (a < b) ? (a + 1) : (a - 1);
+            WrapDiff -= b;
+            WrapDiff = Math.Abs(WrapDiff);
 
-            if (diff < otherdiff) { return diff; }
-            else { return otherdiff; }
+            return Math.Min(DirectDiff, WrapDiff);
         }
-        #endregion
-
     }
 }
