@@ -192,22 +192,21 @@ namespace ColorChord.NET.Visualizers
                 // TODO: Currently the continuous output doesn't handle circular output well (as the Advance calculations and adjustments are not done).
                 float VectorSizeColour = (NoteAmplitudes[NoteIndex] / AmplitudeSum);
                 if (VectorSizeColour == 0 || float.IsNaN(VectorSizeColour)) { continue; }
-                this.OutputDataContinuous[NoteIndex].Location = VectorPosition;
-                this.OutputDataContinuous[NoteIndex].Size = VectorSizeColour;
+                this.OutputDataContinuous[this.OutputCountContinuous].Location = VectorPosition;
+                this.OutputDataContinuous[this.OutputCountContinuous].Size = VectorSizeColour;
 
                 float OutSaturation = (this.SteadyBright ? NoteAmplitudes[NoteIndex] : NoteAmplitudesFast[NoteIndex]) * this.SaturationAmplifier;
                 if (OutSaturation > 1) { OutSaturation = 1; }
                 if (OutSaturation > LEDLimit) { OutSaturation = LEDLimit; }
 
                 uint Colour = VisualizerTools.CCtoHEX(NotePositions[NoteIndex], 1.0F, OutSaturation);
-                this.OutputDataContinuous[NoteIndex].R = (byte)((Colour >> 16) & 0xff);
-                this.OutputDataContinuous[NoteIndex].G = (byte)((Colour >> 8) & 0xff);
-                this.OutputDataContinuous[NoteIndex].B = (byte)((Colour) & 0xff);
+                this.OutputDataContinuous[this.OutputCountContinuous].R = (byte)((Colour >> 16) & 0xff);
+                this.OutputDataContinuous[this.OutputCountContinuous].G = (byte)((Colour >> 8) & 0xff);
+                this.OutputDataContinuous[this.OutputCountContinuous].B = (byte)((Colour) & 0xff);
 
                 VectorPosition += VectorSizeColour;
                 this.OutputCountContinuous++;
             }
-
 
             // If there are no notes to display, set the first to 0.
             if (LEDsFilled == 0)
