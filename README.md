@@ -3,6 +3,8 @@ My WIP port of [CNLohr's ColorChord2](https://github.com/cnlohr/colorchord) to C
 
 **[You can find binary downloads here.](https://github.com/CaiB/ColorChord.NET/releases)**
 
+**:warning: This is a music visualizer tool, and both this documentation page and the program have bright, coloured, potentially fast flashing lights. If you are epileptic, I recommend avoiding this project and page.**
+
 Uses [Vannatech/dorba's netcoreaudio](https://github.com/dorba/netcoreaudio) for WASAPI support.
 
 Somewhat different from Charles' version, I divided components into 4 categories, centered around the `NoteFinder`:
@@ -29,7 +31,7 @@ Configuration is done through the `config.json` file. There is a sample config p
 
 _* indicates an uncertain description. I don't fully understand the methodology of some of the visualizers that Charles included in ColorChord, so some of these are guesses. Play with the vaules until you get something nice :)_
 
-## Sources
+# Sources
 **Only one source can be defined at once currently.**
 ### [WASAPILoopback](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Sources/WASAPILoopback.cs)
 Gets data out of the Windows Audio Session API. Supports input and output devices (e.g. microphones or the system speaker output, etc)
@@ -38,7 +40,7 @@ Gets data out of the Windows Audio Session API. Supports input and output device
 
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
-| `device` | `string` | `"default"` | `"default"`, `"defaultTracking"`, Device IDs | If `"default"`, then the default device at the time of startup will be used. If `"defaultTracking"`, the default device will be used, and will keep up with changes to the default, switching as the system does (not yet implemented). If a device ID is sepcified, that device is used, but if it is not found, then behaviour reverts to `"default"`. |
+| `device` | `string` | `"default"` | `"default"`, ~~`"defaultTracking"`~~, Device IDs | If `"default"`, then the default device at the time of startup will be used. If `"defaultTracking"`, the default device will be used, and will keep up with changes to the default, switching as the system does (not yet implemented). If a device ID is sepcified, that device is used, but if it is not found, then behaviour reverts to `"default"`. |
 | `useInput` | `bool` | `false` | | Determines whether to choose the default capture device (e.g. microphone), or default render device (e.g. speakers) when choosing a device. Only useful if the default device is selected in `device` (above).
 | `printDeviceInfo` | `bool` | `true` | | If `true`, outputs currently connected devices and their IDs at startup, to help you find a device. |
 </details>
@@ -47,7 +49,7 @@ Gets data out of the Windows Audio Session API. Supports input and output device
 Device IDs are unique for each device on the system, vary between different computers, and only change if drivers are updated/changed. Removal and re-attachment of a USB device will not change the ID. They are not readily visible to the user, but other software using WASAPI will have access to the same IDs. Use `printDeviceInfo` (above) to find the ID for your preferred device. Output format is:
 > [`Index`] "`Device Name`" = "`Device ID`"
 
-## [NoteFinder](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/NoteFinder.cs)
+# [NoteFinder](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/NoteFinder.cs)
 There is always a single instance of the NoteFinder running. All sources and visualizers connect to the NoteFinder.
 
 The NoteFinder uses a complex, lengthy algorithm to turn sound data into note information. The options below are mostly listed in the order used.
@@ -72,12 +74,13 @@ The NoteFinder uses a complex, lengthy algorithm to turn sound data into note in
 | `noteOutputChop` | `note_out_chop` | `float` | 0.05 | 0.0~100.0 | Notes below this value get zeroed. Increase if low-amplitude notes are causing noise in output. |
 </details>
 
-## Visualizers
+# Visualizers
 
 You may add as many visualizers as you desire, even multiple of the same type. All visualizer instances must have at least these 2 string properties:
 * `type`: The name of the visualizer to use. Must match the titles below.
 * `name`: A unique identifier used to attach outputs and controllers.
-### [Cells](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Cells.cs)
+## [Cells](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Cells.cs)
+Supported data output modes: `Discrete 1D`  
 A 1D output with cells appearing and decaying in a scattered pattern.
 <details>
 <summary>View Configuration Table</summary>
@@ -96,47 +99,66 @@ A 1D output with cells appearing and decaying in a scattered pattern.
 | `enable` | `bool` | true | | Whether to use this visualizer. |
 </details>
 
-### [Linear](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Linear.cs)
-A 1D output with contiguous blocks of colour, size corresponding to relative note volume, and inter-frame continuity.
+## [Linear](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Linear.cs)
+![Example](Docs/Images/Output-Display-LinearSmooth.gif)
+(Output: `DisplayOpenGL:SmoothStrip`)  
+Supported data output modes: `Discrete 1D`, `Continuous 1D`  
+A 1D output with contiguous blocks of colour, size corresponding to relative note volume, and with inter-frame continuity.
+- Circular mode is not recommended in continuous mode, but works fine in discrete mode.
 <details>
 <summary>View Configuration Table</summary>
 
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
 | `ledCount` | `int` | 50 | 1~100000 | The number of discrete data points to output. |
-| `lightSiding` | `float` | 1.0 | 0.0~100.0 | *Not sure. |
-| `ledFloor` | `float` | 0.1 | 0.0~1.0 | *The minimum intensity of an LED, before it is output as black instead. |
-| `frameRate` | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is outputted. |
-| `isCircular` | `bool` | false | | Whether to treat the output as a circle, allowing wrap-around, or as a line with hard ends. |
-| `steadyBright` | `bool` | false | | *Not sure. |
-| `ledLimit` | `float` | 1.0 | 0.0~1.0 | *The maximum LED brightness. |
-| `saturationAmplifier` | `float` | 1.6 | 0.0~100.0 | *Multiplier for colour saturation before conversion to RGB and output. |
+| `lightSiding` | `float` | 1.0 | 0.0~100.0 | Exponent used to convert raw note amplitudes to strength. |
+| `ledFloor` | `float` | 0.1 | 0.0~1.0 | The minimum relative amplitude of a note required to consider it for output. |
+| `frameRate` | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is output. |
+| `isCircular` | `bool` | false | | Whether to treat the output as a circle, allowing wrap-around, or as a line with defined ends. |
+| `steadyBright` | `bool` | false | | Applies inter-frame smoothing to the LED brightnesses to prevent fast flickering. |
+| `ledLimit` | `float` | 1.0 | 0.0~1.0 | The maximum LED brightness. Caps all LEDs at this value, but does not affect values below this threshold. |
+| `saturationAmplifier` | `float` | 1.6 | 0.0~100.0 | Multiplier for colour saturation before conversion to RGB and output. |
 | `enable` | `bool` | true | | Whether to use this visualizer. |
 </details>
 
-## Outputs
+# Outputs
 You may add as many outputs as you desire, even multiple of the same type, and any combination of compatible outputs can be added to a single visualizer. All output instances must have at least these 3 string properties:
 * `type`: The name of the output to use. Must match the titles below.
 * `name`: A unique identifier used to attach controllers.
 * `visualizerName`: The `name` property of the visualizer instance to attach to.
 
-### [DisplayOpenGL](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/DisplayOpenGL.cs)
-Currently supports 1D inputs only. Acts like a strip of LEDs, displaying a horizontal line of rectangles.
+## [DisplayOpenGL](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/DisplayOpenGL.cs)
+Supported input modes: Depends on display mode.  
+Behaviour depends on the display mode chosen, but uses OpenGL to render graphics to a window on the screen.
 <details>
 <summary>View Configuration Table</summary>
 
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
-| `paddingLeft` | `float` | 0.0 | 0.0~2.0 | Amount of blank space to leave on the left side of the window. 1 corresponds to half of the window. |
-| `paddingRight` | `float` | 0.0 | 0.0~2.0 | Amount of blank space to leave on the right side of the window. 1 corresponds to half of the window. |
-| `paddingTop` | `float` | 0.0 | 0.0~2.0 | Amount of blank space to leave on the top of the window. 1 corresponds to half of the window. |
-| `paddingBottom` | `float` | 0.0 | 0.0~2.0 | Amount of blank space to leave on the bottom of the window. 1 corresponds to half of the window. |
 | `windowHeight` | `int` | 100 | 10~4000 | The height of the window, in pixels. |
 | `windowWidth` | `int` | 1280 | 10~4000 | The width of the window, in pixels. |
+| `mode` | `object array` | | | The mode(s) to use. See the subsection below.
 </details>
 
-### [PacketUDP](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/PacketUDP.cs)
-Currently supports 1D inputs only. Packs the data for each LED in sequence into a UDP packet, then sends it to a given IP.
+<details>
+<summary>Display Modes</summary>
+
+### [BlockStrip](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/BlockStrip.cs)
+![Example](Docs/Images/Output-Display-LinearBlock.gif)
+(Visualizer: `Linear`, 15 blocks)  
+Supported input modes: `Discrete 1D`  
+> No additional configuration is available.
+
+### [SmoothStrip](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/SmoothStrip.cs)
+![Example](Docs/Images/Output-Display-LinearSmooth.gif)
+(Visualizer: `Linear`)  
+Supported input modes: `Continuous 1D`  
+> No additional configuration is available.
+</details>
+
+## [PacketUDP](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/PacketUDP.cs)
+Supported input modes: `Discrete 1D`  
+Packs the data for each LED in sequence into a UDP packet, then sends it to a given IP.
 <details>
 <summary>View Configuration Table</summary>
 
@@ -151,5 +173,5 @@ Currently supports 1D inputs only. Packs the data for each LED in sequence into 
 
 - Can only output up to 21,835 RGB LEDs due to 65,535 byte packet size limit.
 
-## Controllers
+# Controllers
 Not yet implemented.
