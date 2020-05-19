@@ -1,5 +1,5 @@
 # ColorChord.NET
-My WIP port of [CNLohr's ColorChord2](https://github.com/cnlohr/colorchord) to C#.NET, allowing for more flexibility and extendability.
+My WIP port of [CNLohr's ColorChord2](https://github.com/cnlohr/colorchord) to C#.NET, allowing for more flexibility and extendability. Also includes significantly more documentation, see below for explanations of all modes & config options.
 
 **[You can find binary downloads here.](https://github.com/CaiB/ColorChord.NET/releases)**
 
