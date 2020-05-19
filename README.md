@@ -1,5 +1,5 @@
 # ColorChord.NET
-My WIP port of [CNLohr's ColorChord2](https://github.com/cnlohr/colorchord) to C#.NET, allowing for more flexibility and extendability. Also uses new WASAPI Loopback methods for getting audio on Windows, which appears to work more reliably.
+My WIP port of [CNLohr's ColorChord2](https://github.com/cnlohr/colorchord) to C#.NET, allowing for more flexibility and extendability.
 
 **[You can find binary downloads here.](https://github.com/CaiB/ColorChord.NET/releases)**
 
