@@ -34,6 +34,8 @@ namespace ColorChord.NET.Outputs.Display
             throw new NotImplementedException();
         }
 
+        public void Resize(int width, int height) { }
+
         public bool SupportsFormat(IVisualizerFormat format)
         {
             throw new NotImplementedException();

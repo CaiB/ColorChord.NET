@@ -128,10 +128,11 @@ namespace ColorChord.NET
             return default;
         }
 
-        /// <summary> Takes a JSON token, and converts all single-valued children into a Dictionary. Arrays and objects are ignored. </summary>
+        /// <summary> Takes a JSON token, and converts all single-valued children into a Dictionary. </summary>
         /// <param name="parent"> The JSON token whose child elements should be converted. </param>
+        /// <param name="convertComplex"> Whether to also convert arrays and objects, or to just convert single value items. </param>
         /// <returns> A Dictionary containing all properties contained in the parent element. </returns>
-        private static Dictionary<string, object> ToDict(JToken parent)
+        private static Dictionary<string, object> ToDict(JToken parent, bool convertComplex = false)
         {
             Dictionary<string, object> Items = new Dictionary<string, object>();
             foreach(JToken ItemToken in parent.Children())

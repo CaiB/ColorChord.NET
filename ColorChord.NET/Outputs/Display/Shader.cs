@@ -59,6 +59,8 @@ namespace ColorChord.NET.Outputs.Display
 
         public void Use() => GL.UseProgram(this.ShaderHandle);
 
+        public int GetUniformLocation(string name) => GL.GetUniformLocation(this.ShaderHandle, name);
+
         protected virtual void Dispose(bool disposing)
         {
             if (!this.IsDisposed)

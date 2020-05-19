@@ -15,6 +15,9 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> Passed through from the visualizer. </summary>
         void Dispatch();
 
+        /// <summary> Called when the window gets resized. </summary>
+        void Resize(int width, int height);
+
         /// <summary> Called when this display is no longer being shown. </summary>
         void Close();
     }

@@ -92,8 +92,10 @@ namespace ColorChord.NET.Outputs.Display
             this.Shader.Use();
             GL.BindVertexArray(this.VertexArrayHandle);
             if (this.NewData) { GL.BufferData(BufferTarget.ArrayBuffer, this.GeometryData.Length * sizeof(float), this.GeometryData, BufferUsageHint.DynamicDraw); }
-            GL.DrawArrays(PrimitiveType.Triangles, 0, this.GeometryData.Length / 2);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, this.GeometryData.Length / 5);
         }
+
+        public void Resize(int width, int height) { }
 
         public void Load()
         {

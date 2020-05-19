@@ -69,6 +69,7 @@
     <Compile Include="Outputs\Display\BlockStrip.cs" />
     <Compile Include="Outputs\Display\IDisplayMode.cs" />
     <Compile Include="Outputs\Display\Shader.cs" />
+    <Compile Include="Outputs\Display\SmoothCircle.cs" />
     <Compile Include="Outputs\Display\SmoothStrip.cs" />
     <Compile Include="Outputs\Display\Voronoi.cs" />
     <Compile Include="Outputs\IOutput.cs" />
@@ -92,6 +93,8 @@
     <EmbeddedResource Include="Outputs\Display\Shaders\BlockStrip.vert" />
     <None Include="App.config" />
     <None Include="OpenTK.dll.config" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.vert" />
     <None Include="packages.config" />
     <EmbeddedResource Include="sample-config.json" />
   </ItemGroup>

@@ -1,4 +1,6 @@
-﻿namespace ColorChord.NET.Visualizers.Formats
+﻿using System;
+
+namespace ColorChord.NET.Visualizers.Formats
 {
     /// <summary> Just used as a parent category, provides no direct functionality. </summary>
     public interface IVisualizerFormat { }
@@ -20,11 +22,18 @@
         byte[,] GetDataDiscrete();
     }
 
-    public class ContinuousDataUnit
+    public class ContinuousDataUnit : IComparable<ContinuousDataUnit>
     {
         public float Location;
         public float Size;
         public byte R, G, B;
+
+        public int CompareTo(ContinuousDataUnit other)
+        {
+            if (other.Location > this.Location) { return -1; }
+            if (other.Location < this.Location) { return 1; }
+            else { return 0; }
+        }
     }
 
     /// <summary> Used by visualizers to indicate that they output a 1D variable-size array of colour boundaries with no specified resolution. </summary>
@@ -32,6 +41,7 @@
     {
         int GetCountContinuous();
         ContinuousDataUnit[] GetDataContinuous();
+        float GetAdvanceContinuous();
         int MaxPossibleUnits { get; }
     }
 

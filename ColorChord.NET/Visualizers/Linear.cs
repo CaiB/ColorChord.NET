@@ -54,6 +54,7 @@ namespace ColorChord.NET.Visualizers
         public byte[] OutputDataDiscrete;
         public ContinuousDataUnit[] OutputDataContinuous;
         public int OutputCountContinuous;
+        public float OutputAdvanceContinuous;
 
         private bool KeepGoing = true;
         private Thread ProcessThread;
@@ -127,6 +128,7 @@ namespace ColorChord.NET.Visualizers
 
         public int GetCountContinuous() => this.OutputCountContinuous;
         public ContinuousDataUnit[] GetDataContinuous() => this.OutputDataContinuous;
+        public float GetAdvanceContinuous() => this.OutputAdvanceContinuous;
         public int MaxPossibleUnits { get => NoteFinder.NoteCount; }
 
         // These variables are only used to keep inter-frame info for Update(). Do not touch.
@@ -134,6 +136,8 @@ namespace ColorChord.NET.Visualizers
         private float[] LastLEDPositionsFiltered; // Only used when IsCircular is true.
         private float[] LastLEDSaturations;
         private int PrevAdvance;
+        private float PrevAdvanceVector = 0;
+        private float[] LastVectorCenters = new float[NoteFinder.NoteCount]; // Where the center-point of each block was last frame
 
         public void Update()
         {
@@ -174,6 +178,7 @@ namespace ColorChord.NET.Visualizers
             int LEDsFilled = 0; // How many LEDs have been assigned a colour.
             float VectorPosition = 0; // Where in the continuous line we are (continuous equivalent of LEDsFilled).
             this.OutputCountContinuous = 0;
+            float[] VectorCenters = new float[BIN_QTY];
 
             // Fill the LED slots with available notes.
             for (int NoteIndex = 0; NoteIndex < BIN_QTY; NoteIndex++)
@@ -189,11 +194,12 @@ namespace ColorChord.NET.Visualizers
                     LEDsFilled++;
                 }
 
-                // TODO: Currently the continuous output doesn't handle circular output well (as the Advance calculations and adjustments are not done).
+                // For continuous outputs
                 float VectorSizeColour = (NoteAmplitudes[NoteIndex] / AmplitudeSum);
                 if (VectorSizeColour == 0 || float.IsNaN(VectorSizeColour)) { continue; }
                 this.OutputDataContinuous[this.OutputCountContinuous].Location = VectorPosition;
                 this.OutputDataContinuous[this.OutputCountContinuous].Size = VectorSizeColour;
+                VectorCenters[NoteIndex] = VectorPosition + (VectorSizeColour / 2);
 
                 float OutSaturation = (this.SteadyBright ? NoteAmplitudes[NoteIndex] : NoteAmplitudesFast[NoteIndex]) * this.SaturationAmplifier;
                 if (OutSaturation > 1) { OutSaturation = 1; }
@@ -263,8 +269,19 @@ namespace ColorChord.NET.Visualizers
                     }
                 }
 
+                // For continuous output mode
+                float VectorCenterOffset = 0;
+                for(int NoteIndex = 0; NoteIndex < BIN_QTY; NoteIndex++)
+                {
+                    VectorCenterOffset += (VectorCenters[NoteIndex] - LastVectorCenters[NoteIndex]) * NoteAmplitudes[NoteIndex];
+                }
+                //VectorCenterOffset /= (this.OutputCountContinuous + 2); // This is now an average offset.
+                const float IIR = 0.6F;
+                this.OutputAdvanceContinuous = (VectorCenterOffset * IIR) + (this.OutputAdvanceContinuous * (1 - IIR));
+                if (float.IsNaN(this.OutputAdvanceContinuous)) { this.OutputAdvanceContinuous = 0; }
             }
             this.PrevAdvance = Advance;
+            this.PrevAdvanceVector = this.OutputAdvanceContinuous;
 
             // Shift the LEDs by Advance, then output.
             for (int LEDIndex = 0; LEDIndex < this.LEDCount; LEDIndex++)
@@ -296,6 +313,7 @@ namespace ColorChord.NET.Visualizers
                 {
                     LastLEDPositionsFiltered[i] = (LastLEDPositionsFiltered[i] * 0.9F) + (LastLEDColours[i] * 0.1F);
                 }
+                for (int i = 0; i < BIN_QTY; i++) { LastVectorCenters[i] = VectorCenters[i]; }
             }
         }
 

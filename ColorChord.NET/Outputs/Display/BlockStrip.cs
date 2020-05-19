@@ -110,6 +110,8 @@ namespace ColorChord.NET.Outputs.Display
             GL.EnableVertexAttribArray(1);
         }
 
+        public void Resize(int width, int height) { }
+
         public void Close()
         {
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
