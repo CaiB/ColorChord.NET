@@ -67,6 +67,7 @@
     <Compile Include="NoteFinder.cs" />
     <Compile Include="Outputs\DisplayOpenGL.cs" />
     <Compile Include="Outputs\Display\BlockStrip.cs" />
+    <Compile Include="Outputs\Display\FrameBuffer.cs" />
     <Compile Include="Outputs\Display\IDisplayMode.cs" />
     <Compile Include="Outputs\Display\Shader.cs" />
     <Compile Include="Outputs\Display\SmoothCircle.cs" />
@@ -95,6 +96,8 @@
     <None Include="OpenTK.dll.config" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.vert" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.vert" />
     <None Include="packages.config" />
     <EmbeddedResource Include="sample-config.json" />
   </ItemGroup>

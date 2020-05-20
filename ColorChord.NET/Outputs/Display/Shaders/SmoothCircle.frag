@@ -20,9 +20,8 @@ void main()
     {
         Colour = mix(Colour, vec3(Colours[(i*3)], Colours[(i*3)+1], Colours[(i*3)+2]), step(Starts[i], Angle) - step(Starts[i+1], Angle));
     }
-    //Colour = mix(Colour, vec3(Colours[0], Colours[1], Colours[2]), step(Starts[0], Angle) - step(Starts[1], Angle));
-    //Colour = mix(Colour, vec3(Colours[3], Colours[4], Colours[5]), step(Starts[1], Angle) - step(Starts[2], Angle));
 
-    Colour *= smoothstep(0.6, 0.60001, Radius) - smoothstep(0.9, 0.90001, Radius); // TODO actually smooth this by 1 pixel based on resolution
-    FragColor = vec4(Colour, 1.0);
+    float RegionMult = smoothstep(0.6, 0.60001, Radius) - smoothstep(0.9, 0.90001, Radius); // TODO actually smooth this by 1 pixel based on resolution
+    Colour *= RegionMult;
+    FragColor = vec4(Colour, RegionMult);
 }

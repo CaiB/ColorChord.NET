@@ -51,9 +51,9 @@ namespace ColorChord.NET.Outputs
             this.Source = ColorChord.VisualizerInsts[(string)options["visualizerName"]];
             this.Source.AttachOutput(this);
 
-            //this.Display = new BlockStrip(this, this.Source as IDiscrete1D, 24);
+            this.Display = new BlockStrip(this, this.Source as IDiscrete1D, 24);
             //this.Display = new SmoothStrip(this, this.Source);
-            this.Display = new SmoothCircle(this, this.Source);
+            //this.Display = new SmoothCircle(this, this.Source);
             if (this.Loaded) { this.Display.Load(); } // We already loaded, we want to make sure our display does as well.
 
             this.WindowWidth = ConfigTools.CheckInt(options, "windowWidth", 10, 4000, 1280, true);

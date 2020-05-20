@@ -273,7 +273,7 @@ namespace ColorChord.NET.Visualizers
                 float VectorCenterOffset = 0;
                 for(int NoteIndex = 0; NoteIndex < BIN_QTY; NoteIndex++)
                 {
-                    VectorCenterOffset += (VectorCenters[NoteIndex] - LastVectorCenters[NoteIndex]) * NoteAmplitudes[NoteIndex];
+                    VectorCenterOffset += (VectorCenters[NoteIndex] - LastVectorCenters[NoteIndex]) * NoteAmplitudes[NoteIndex]; // TODO: CONSIDER USINGBLOCK SIZE INSTEAD OF AMPLITUDE
                 }
                 //VectorCenterOffset /= (this.OutputCountContinuous + 2); // This is now an average offset.
                 const float IIR = 0.6F;
