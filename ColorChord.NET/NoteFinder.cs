@@ -344,7 +344,7 @@ namespace ColorChord.NET
                         // TODO: I'm honestly a little bit lost as to what happens in here...
                         NoteDistributions[DistrIndex].HasNote = true; // Don't let this distribution affect other notes.
                         if (PersistentNoteIDs[PeakIndex] == 0) { PersistentNoteIDs[PeakIndex] = CurrentNoteID++; }
-                        NotesAssociated[DistrIndex] = true; // This note has been influenced by a distribution, so is still active.
+                        NotesAssociated[PeakIndex] = true; // This note has been influenced by a distribution, so is still active.
                         Notes[PeakIndex].Position = LoopAverageWeighted(Notes[PeakIndex].Position, (1F - NoteAttachFrequencyIIRMultiplier), NoteDistributions[DistrIndex].Mean, NoteAttachFrequencyIIRMultiplier, OctaveBinCount);
 
                         float NewAmplitude = Notes[PeakIndex].Amplitude;
