@@ -12,7 +12,7 @@ namespace ColorChord.NET.Outputs.Display
         private readonly DisplayOpenGL HostWindow;
         private readonly IContinuous1D DataSource;
 
-        private Shader CircleShader, HistoryShader;
+        private Shader CircleShader, HistoryShader, CircleFinishShader;
 
         private static readonly float[] RingShaderGeometry = new float[] // {[X,Y]} x 6
         { // X   Y 
@@ -46,7 +46,9 @@ namespace ColorChord.NET.Outputs.Display
         };
 
         private int VertexBufferHandle, VertexArrayHandle;
-        private int VertexBufferHistoryHandle, VertexArrayHistoryHandle;
+        private int VertexBufferSmallHandle, VertexArraySmallHandle;
+        private int VertexBufferFullHandle, VertexArrayFullHandle;
+
         private int LocationColours, LocationStarts, LocationResolution, LocationAdvance;
         private bool SetupDone = false;
         private Vector2 Resolution = new Vector2(600, 600);
@@ -129,13 +131,15 @@ namespace ColorChord.NET.Outputs.Display
 
             // Draw the buffer containing the newest ring into the other, but slightly smaller to push it in.
             this.HistoryShader.Use();
-            GL.BindVertexArray(this.VertexArrayHistoryHandle);
+            GL.BindVertexArray(this.VertexArraySmallHandle);
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferSmallHandle);
             GL.DrawArrays(PrimitiveType.Triangles, 0, BufferGeometrySmall.Length / 4);
 
             // Go back to the default buffer (window), and render the new composite buffer.
             if (this.CurrentFB) { BufferB.Unbind(); }
             else { BufferA.Unbind(); }
-            GL.BindVertexArray(this.VertexArrayHistoryHandle);
+            GL.BindVertexArray(this.VertexArraySmallHandle);
+            //GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferFullHandle);
             GL.DrawArrays(PrimitiveType.Triangles, 0, BufferGeometryFull.Length / 4);
 
             // Switch buffers next time to keep going back and forth.
@@ -153,7 +157,8 @@ namespace ColorChord.NET.Outputs.Display
 
         public void Load()
         {
-            this.CircleShader = new Shader("SmoothCircle.vert", "SmoothCircle.frag");
+            this.CircleShader = new Shader("SmoothCircle.vert", "SmoothCircleFinish.frag");
+            //this.CircleFinishShader = new Shader("SmoothCircle.vert", "SmoothCircleFinish.frag");
             this.HistoryShader = new Shader("Passthrough2Textured.vert", "Passthrough2Textured.frag");
             this.BufferA = new FrameBuffer(this.HostWindow.Width, this.HostWindow.Height);
             this.BufferB = new FrameBuffer(this.HostWindow.Width, this.HostWindow.Height);
@@ -164,21 +169,27 @@ namespace ColorChord.NET.Outputs.Display
             this.CircleShader.Use();
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
-            this.VertexBufferHistoryHandle = GL.GenBuffer();
-            this.VertexArrayHistoryHandle = GL.GenVertexArray();
+            this.VertexBufferSmallHandle = GL.GenBuffer();
+            this.VertexArraySmallHandle = GL.GenVertexArray();
+            this.VertexBufferFullHandle = GL.GenBuffer();
+
             this.LocationColours = this.CircleShader.GetUniformLocation("Colours");
             this.LocationStarts = this.CircleShader.GetUniformLocation("Starts");
             this.LocationResolution = this.CircleShader.GetUniformLocation("Resolution");
             this.LocationAdvance = this.CircleShader.GetUniformLocation("Advance");
             GL.Uniform2(this.LocationResolution, ref this.Resolution);
 
-            GL.BindVertexArray(this.VertexArrayHistoryHandle);
-            GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferHistoryHandle);
+            GL.BindVertexArray(this.VertexArraySmallHandle);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferSmallHandle);
             GL.BufferData(BufferTarget.ArrayBuffer, BufferGeometrySmall.Length * sizeof(float), BufferGeometrySmall, BufferUsageHint.DynamicDraw);
             GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), 0);
             GL.EnableVertexAttribArray(0);
             GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), 2 * sizeof(float));
             GL.EnableVertexAttribArray(1);
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferFullHandle);
+            GL.BufferData(BufferTarget.ArrayBuffer, BufferGeometryFull.Length * sizeof(float), BufferGeometryFull, BufferUsageHint.DynamicDraw);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferSmallHandle);
 
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferHandle);
@@ -192,7 +203,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.DeleteBuffer(this.VertexBufferHandle);
-            GL.DeleteBuffer(this.VertexArrayHistoryHandle);
+            GL.DeleteBuffer(this.VertexArraySmallHandle);
             this.CircleShader.Dispose();
             this.HistoryShader.Dispose();
         }

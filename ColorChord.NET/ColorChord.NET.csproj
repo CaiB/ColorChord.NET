@@ -98,6 +98,7 @@
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.vert" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircleFinish.frag" />
     <None Include="packages.config" />
     <EmbeddedResource Include="sample-config.json" />
   </ItemGroup>
