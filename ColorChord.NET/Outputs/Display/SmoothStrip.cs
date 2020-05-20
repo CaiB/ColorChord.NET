@@ -99,7 +99,7 @@ namespace ColorChord.NET.Outputs.Display
 
         public void Load()
         {
-            this.Shader = new Shader("BlockStrip.vert", "BlockStrip.frag"); // We can just re-use the BlockStrip shader, as this uses exactly the same geometry format.
+            this.Shader = new Shader("Passthrough2Colour.vert", "Passthrough2Colour.frag");
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
 

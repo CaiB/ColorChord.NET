@@ -14,7 +14,7 @@ namespace ColorChord.NET.Outputs.Display
 
         private Shader CircleShader, HistoryShader;
 
-        private static readonly float[] DefaultGeometryData = new float[] // {[X,Y]} x 6
+        private static readonly float[] RingShaderGeometry = new float[] // {[X,Y]} x 6
         { // X   Y 
             -1,  1, // Top-Left
             -1, -1, // Bottom-Left
@@ -25,14 +25,24 @@ namespace ColorChord.NET.Outputs.Display
         };
 
         private const float Nudge = 0.98F;
-        private static readonly float[] SmallerGeometryData = new float[] // {[X,Y][U,V]} x 6
-        { //   X       Y     U   V
+        private static readonly float[] BufferGeometrySmall = new float[] // {[X,Y][U,V]} x 6
+        { //   X       Y    U  V
             -Nudge,  Nudge, 0, 1, // Top-Left
             -Nudge, -Nudge, 0, 0, // Bottom-Left
              Nudge, -Nudge, 1, 0, // Bottom-Right
              Nudge, -Nudge, 1, 0, // Bottom-Right
              Nudge,  Nudge, 1, 1, // Top-Right
             -Nudge,  Nudge, 0, 1  // Top-Left
+        };
+
+        private static readonly float[] BufferGeometryFull = new float[] // {[X,Y][U,V]} x 6
+        { // X   Y  U  V
+            -1,  1, 0, 1, // Top-Left
+            -1, -1, 0, 0, // Bottom-Left
+             1, -1, 1, 0, // Bottom-Right
+             1, -1, 1, 0, // Bottom-Right
+             1,  1, 1, 1, // Top-Right
+            -1,  1, 0, 1  // Top-Left
         };
 
         private int VertexBufferHandle, VertexArrayHandle;
@@ -85,6 +95,7 @@ namespace ColorChord.NET.Outputs.Display
             }
         }
 
+        // TODO: Does this currently delay the window view by 1 frame? Not sure, but I think it may.
         public void Render()
         {
             if (!this.SetupDone) { return; }
@@ -94,14 +105,15 @@ namespace ColorChord.NET.Outputs.Display
             if (this.CurrentFB) { BufferA.Bind(); }
             else { BufferB.Bind(); }
 
-            // Render the ring.
+            // Render the ring into the buffer.
             this.CircleShader.Use();
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.Uniform1(this.LocationStarts, 12, this.Starts);
             GL.Uniform1(this.LocationColours, 36, this.Colours);
             GL.Uniform1(this.LocationAdvance, this.Advance);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, DefaultGeometryData.Length / 2);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, RingShaderGeometry.Length / 2);
 
+            // Bind the opposite buffer, and use the one now containing the ring as a texture.
             if (this.CurrentFB)
             {
                 BufferA.Unbind();
@@ -115,22 +127,18 @@ namespace ColorChord.NET.Outputs.Display
                 BufferA.Bind();
             }
 
+            // Draw the buffer containing the newest ring into the other, but slightly smaller to push it in.
             this.HistoryShader.Use();
             GL.BindVertexArray(this.VertexArrayHistoryHandle);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, SmallerGeometryData.Length / 4);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, BufferGeometrySmall.Length / 4);
 
-            if (this.CurrentFB)
-            {
-                BufferB.Unbind();
-            }
-            else
-            {
-                BufferA.Unbind();
-            }
+            // Go back to the default buffer (window), and render the new composite buffer.
+            if (this.CurrentFB) { BufferB.Unbind(); }
+            else { BufferA.Unbind(); }
             GL.BindVertexArray(this.VertexArrayHistoryHandle);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, SmallerGeometryData.Length / 4);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, BufferGeometryFull.Length / 4);
 
-
+            // Switch buffers next time to keep going back and forth.
             GL.Disable(EnableCap.Blend);
             this.CurrentFB = !this.CurrentFB;
         }
@@ -166,7 +174,7 @@ namespace ColorChord.NET.Outputs.Display
 
             GL.BindVertexArray(this.VertexArrayHistoryHandle);
             GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferHistoryHandle);
-            GL.BufferData(BufferTarget.ArrayBuffer, SmallerGeometryData.Length * sizeof(float), SmallerGeometryData, BufferUsageHint.DynamicDraw);
+            GL.BufferData(BufferTarget.ArrayBuffer, BufferGeometrySmall.Length * sizeof(float), BufferGeometrySmall, BufferUsageHint.DynamicDraw);
             GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), 0);
             GL.EnableVertexAttribArray(0);
             GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), 2 * sizeof(float));
@@ -174,7 +182,7 @@ namespace ColorChord.NET.Outputs.Display
 
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferHandle);
-            GL.BufferData(BufferTarget.ArrayBuffer, DefaultGeometryData.Length * sizeof(float), DefaultGeometryData, BufferUsageHint.DynamicDraw);
+            GL.BufferData(BufferTarget.ArrayBuffer, RingShaderGeometry.Length * sizeof(float), RingShaderGeometry, BufferUsageHint.DynamicDraw);
             GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 2 * sizeof(float), 0);
             GL.EnableVertexAttribArray(0);
             this.SetupDone = true;

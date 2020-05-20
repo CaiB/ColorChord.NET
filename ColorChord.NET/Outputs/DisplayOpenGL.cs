@@ -51,6 +51,7 @@ namespace ColorChord.NET.Outputs
             this.Source = ColorChord.VisualizerInsts[(string)options["visualizerName"]];
             this.Source.AttachOutput(this);
 
+            // TODO THIS IS TERRIBLE AND NEEDS TO BE CONFIGURABLE AAAAAAAAAAA
             //this.Display = new BlockStrip(this, this.Source as IDiscrete1D, 24);
             //this.Display = new SmoothStrip(this, this.Source);
             this.Display = new SmoothCircle(this, this.Source);

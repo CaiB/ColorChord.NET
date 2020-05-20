@@ -98,7 +98,7 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> Called when OpenGL and the window are ready. </summary>
         public void Load()
         {
-            this.Shader = new Shader("BlockStrip.vert", "BlockStrip.frag");
+            this.Shader = new Shader("Passthrough2Colour.vert", "Passthrough2Colour.frag");
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
 

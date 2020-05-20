@@ -90,8 +90,8 @@
     <None Include="..\.editorconfig">
       <Link>.editorconfig</Link>
     </None>
-    <EmbeddedResource Include="Outputs\Display\Shaders\BlockStrip.frag" />
-    <EmbeddedResource Include="Outputs\Display\Shaders\BlockStrip.vert" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.vert" />
     <None Include="App.config" />
     <None Include="OpenTK.dll.config" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.frag" />
