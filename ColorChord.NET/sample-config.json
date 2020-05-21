@@ -15,8 +15,8 @@
         {
             "type": "Linear",
             "name": "SampleLinear",
-            "ledCount": 150,
-            "isCircular": false,
+            "ledCount": 50,
+            "isCircular": true,
             "frameRate": 60,
             "lightSiding": 1.0,
             "steadyBright": false,
@@ -36,18 +36,22 @@
             "port": 7777,
             "paddingFront": 0,
             "paddingBack": 0,
-            "enable": true
+            "enable": false
         },
         {
             "type": "DisplayOpenGL",
             "name": "SampleDisplay",
             "visualizerName": "SampleLinear",
-            "paddingLeft": 0.0,
-            "paddingRight": 0.0,
-            "paddingTop": 0.0,
-            "paddingBottom": 0.0,
-            "windowWidth": 1280,
-            "windowHeight": 100,
+            "modes":
+            [
+                {
+                    "type": "SmoothCircle",
+                    "IsInfinity": true,
+                    "enable": true
+                }
+            ],
+            "windowWidth": 600,
+            "windowHeight": 600,
             "enable": true
         }
     ],
