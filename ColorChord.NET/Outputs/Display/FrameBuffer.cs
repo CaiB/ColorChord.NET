@@ -65,10 +65,7 @@ namespace ColorChord.NET.Outputs.Display
 
         /// <summary> Resets the current binding to the default framebuffer. </summary>
         /// <remarks> Make sure to set the canvas size back to the window size! </remarks>
-        public void Unbind()
-        {
-            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-        }
+        public void Unbind() => GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
 
         /// <summary> Activates the FBO's colour buffer as the currently active texture. </summary>
         /// <param name="unit"> The texture unit to bind to. </param>

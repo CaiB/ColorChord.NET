@@ -7,10 +7,7 @@ using OpenTK.Graphics.ES30;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Text;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace ColorChord.NET.Outputs
 {

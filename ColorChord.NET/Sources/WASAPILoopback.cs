@@ -32,8 +32,8 @@ namespace ColorChord.NET.Sources
         private IAudioClient Client;
         private IAudioCaptureClient CaptureClient;
         private AudioTools.WAVEFORMATEX MixFormat;
-        AutoResetEvent AudioEvent = new AutoResetEvent(false);
-        GCHandle AudioEventHandle;
+        private readonly AutoResetEvent AudioEvent = new AutoResetEvent(false);
+        private static GCHandle AudioEventHandle;
 
         public WASAPILoopback(string name) { }
 
@@ -122,7 +122,7 @@ namespace ColorChord.NET.Sources
             ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, MinimumInterval, MinimumInterval, MixFormatPtr);
             if (IsErrorAndOut(ErrorCode, "Could not init audio client.")) { return; }
 
-            this.AudioEventHandle = GCHandle.Alloc(this.AudioEvent);
+            AudioEventHandle = GCHandle.Alloc(this.AudioEvent);
 
             ErrorCode = this.Client.SetEventHandle(this.AudioEvent.SafeWaitHandle.DangerousGetHandle()); // DANGEROUS, OH NO
 
@@ -205,6 +205,8 @@ namespace ColorChord.NET.Sources
         {
             this.KeepGoing = false;
             this.ProcessThread.Join();
+            this.AudioEvent.Dispose();
+            AudioEventHandle.Free();
         }
 
 

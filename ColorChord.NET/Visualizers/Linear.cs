@@ -96,8 +96,7 @@ namespace ColorChord.NET.Visualizers
         {
             if (this.LEDCount <= 0) { Log.Error("Attempted to start Linear visualizer \"" + this.Name + "\" with invalid LED count."); return; }
             this.KeepGoing = true;
-            this.ProcessThread = new Thread(DoProcessing);
-            this.ProcessThread.Name = "Linear " + this.Name;
+            this.ProcessThread = new Thread(DoProcessing) { Name = "Linear " + this.Name };
             this.ProcessThread.Start();
             NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
         }
@@ -302,9 +301,9 @@ namespace ColorChord.NET.Visualizers
 
                 uint Colour = VisualizerTools.CCtoHEX(LastLEDColours[LEDIndex], 1.0F, OutSaturation);
 
-                this.OutputDataDiscrete[LEDIndex * 3 + 0] = (byte)((Colour >> 16) & 0xff);
-                this.OutputDataDiscrete[LEDIndex * 3 + 1] = (byte)((Colour >> 8) & 0xff);
-                this.OutputDataDiscrete[LEDIndex * 3 + 2] = (byte)((Colour) & 0xff);
+                this.OutputDataDiscrete[(LEDIndex * 3) + 0] = (byte)((Colour >> 16) & 0xff);
+                this.OutputDataDiscrete[(LEDIndex * 3) + 1] = (byte)((Colour >> 8) & 0xff);
+                this.OutputDataDiscrete[(LEDIndex * 3) + 2] = (byte)((Colour) & 0xff);
             }
 
             if (this.IsCircular)

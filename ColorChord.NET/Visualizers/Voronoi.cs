@@ -38,8 +38,7 @@ namespace ColorChord.NET.Visualizers
         public void Start()
         {
             this.KeepGoing = true;
-            this.ProcessThread = new Thread(DoProcessing);
-            this.ProcessThread.Name = "Voronoi " + this.Name;
+            this.ProcessThread = new Thread(DoProcessing) { Name = "Voronoi " + this.Name };
             this.ProcessThread.Start();
             NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
         }

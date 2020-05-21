@@ -203,7 +203,7 @@ namespace ColorChord.NET
             {
                 Timer.Restart();
                 Cycle();
-                int WaitTime = (int)(ShortestPeriod - (Timer.ElapsedMilliseconds));
+                int WaitTime = (int)(ShortestPeriod - Timer.ElapsedMilliseconds);
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
             }
         }
@@ -221,7 +221,7 @@ namespace ColorChord.NET
             {
                 float NewData = DFTBinData[RawBinIndex]; // The raw DFT data for this bin
                 NewData *= DFTDataAmplifier; // Amplify incoming data by a constant
-                NewData *= (1 + DFTSensitivitySlope * RawBinIndex); // Apply a frequency-dependent amplifier to increase sensitivity at higher frequencies.
+                NewData *= (1 + (DFTSensitivitySlope * RawBinIndex)); // Apply a frequency-dependent amplifier to increase sensitivity at higher frequencies.
 
                 FrequencyBinValues[RawBinIndex] = (FrequencyBinValues[RawBinIndex] * DFTIIRMultiplier) + // Keep data from last frame, but reduce by a factor.
                                                (NewData * (1 - DFTIIRMultiplier)); // Add new data

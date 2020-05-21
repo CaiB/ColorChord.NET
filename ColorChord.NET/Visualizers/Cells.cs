@@ -81,7 +81,7 @@ namespace ColorChord.NET.Visualizers
                 Timer.Restart();
                 Update();
                 foreach (IOutput Output in this.Outputs) { Output.Dispatch(); }
-                int WaitTime = (int)(this.FramePeriod - (Timer.ElapsedMilliseconds));
+                int WaitTime = (int)(this.FramePeriod - Timer.ElapsedMilliseconds);
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
             }
         }

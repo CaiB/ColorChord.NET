@@ -11,7 +11,7 @@ namespace ColorChord.NET.Visualizers
 
         public static uint CCtoHEX(float note, float sat, float value)
         {
-            float hue = 0.0F;
+            float hue;
             note = ((note % 1.0F) * 12) - 3;
             if (note < 0) { note += 12; }
             if (note < 4)
@@ -29,7 +29,7 @@ namespace ColorChord.NET.Visualizers
             {
                 //             [8] [12]
                 //Needs to be BLUE->YELLOW
-                hue = (12F - note) * 45F + 60F;
+                hue = ((12F - note) * 45F) + 60F;
             }
             return HsvToRgb(hue, sat, value);
         }
