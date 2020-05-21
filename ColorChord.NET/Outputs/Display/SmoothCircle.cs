@@ -15,7 +15,7 @@ namespace ColorChord.NET.Outputs.Display
         private readonly IContinuous1D DataSource;
 
         /// <summary> False just renders the ring, true also renders a decaying persistence effect, appearing to go off to infinity. </summary>
-        private bool IsInfinity = false;
+        private bool IsInfinity = true;
 
         /// <summary> Used to create the current ring, with transparent background and no antialiasing. </summary>
         /// <remarks> Used only in infinity mode. </remarks>
