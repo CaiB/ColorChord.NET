@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Text;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -36,7 +37,7 @@ namespace ColorChord.NET.Outputs
         private IDisplayMode Display;
         private bool Loaded = false;
 
-        public DisplayOpenGL(string name) : base(1280, 150, GraphicsMode.Default, "ColorChord.NET: " + name)
+        public DisplayOpenGL(string name) : base(1280, 720, GraphicsMode.Default, "ColorChord.NET: " + name)
         {
             this.Name = name;
         }
@@ -51,15 +52,41 @@ namespace ColorChord.NET.Outputs
             this.Source = ColorChord.VisualizerInsts[(string)options["visualizerName"]];
             this.Source.AttachOutput(this);
 
-            // TODO THIS IS TERRIBLE AND NEEDS TO BE CONFIGURABLE AAAAAAAAAAA
-            //this.Display = new BlockStrip(this, this.Source as IDiscrete1D, 24);
-            //this.Display = new SmoothStrip(this, this.Source);
-            this.Display = new SmoothCircle(this, this.Source);
-            if (this.Loaded) { this.Display.Load(); } // We already loaded, we want to make sure our display does as well.
-
             this.WindowWidth = ConfigTools.CheckInt(options, "windowWidth", 10, 4000, 1280, true);
-            this.WindowHeight = ConfigTools.CheckInt(options, "windowHeight", 10, 4000, 100, true);
+            this.WindowHeight = ConfigTools.CheckInt(options, "windowHeight", 10, 4000, 720, true);
+
+            if (options.ContainsKey("modes")) // Make sure that everything else is configured before creating the modes!
+            {
+                Dictionary<string, object>[] ModeList = (Dictionary<string, object>[])options["modes"];
+                for (int i = 0; i < 1/*ModeList.Length*/; i++) // TODO: Add support for multiple modes.
+                {
+                    if (!ModeList[i].ContainsKey("type")) { Log.Error("Mode at index " + i + " is missing \"type\" specification."); continue; }
+                    this.Display = CreateMode("ColorChord.NET.Outputs.Display." + ModeList[i]["type"], ModeList[i]);
+                    if (this.Display == null) { Log.Error("Failed to create display of type \"" + ModeList[i]["type"] + "\" under \"" + this.Name + "\"."); }
+
+                    // We already loaded, we want to make sure our display does as well.
+                    if (this.Loaded) { this.Display?.Load(); }
+                }
+                if (ModeList.Length > 1) { Log.Warn("Config specifies multiple modes. This is not yet supported, so only the first one will be used."); }
+                Log.Info("Finished reading display modes under \"" + this.Name + "\".");
+            }
+
             ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
+        }
+
+        private IDisplayMode CreateMode(string fullName, Dictionary<string, object> config)
+        {
+            Type ObjType = Type.GetType(fullName);
+            if (!typeof(IDisplayMode).IsAssignableFrom(ObjType)) { return null; } // Does not implement the right interface.
+            object Instance = ObjType == null ? null : Activator.CreateInstance(ObjType, this, this.Source);
+            if (Instance != null)
+            {
+                IDisplayMode Instance2 = (IDisplayMode)Instance;
+                if (Instance2 is IConfigurable InstanceForConfig) { InstanceForConfig.ApplyConfig(config); }
+                else { Log.Warn("Display mode \"" + fullName + "\" does not support configuration."); }
+                return Instance2;
+            }
+            return null;
         }
 
         protected override void OnLoad(EventArgs evt)

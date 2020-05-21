@@ -81,6 +81,7 @@ namespace ColorChord.NET
             {
                 if (Item == "type" || Item == "name") { continue; }
                 if (interfaceType == typeof(IOutput) && Item == "visualizerName") { continue; }
+                if (interfaceType == typeof(IOutput) && Item == "modes") { continue; }
                 Log.Warn("Unknown config entry found: \"" + Item + "\". Ignoring.");
             }
         }

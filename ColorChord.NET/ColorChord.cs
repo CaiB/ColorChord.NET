@@ -26,23 +26,7 @@ namespace ColorChord.NET
             if (!File.Exists(ConfigFile)) // No config file
             {
                 Log.Warn("Could not find config file. Creating and using default.");
-                try
-                {
-                    Assembly Asm = Assembly.GetExecutingAssembly();
-                    using (Stream InStream = Asm.GetManifestResourceStream("ColorChord.NET.sample-config.json"))
-                    {
-                        using (FileStream OutStream = File.Create(ConfigFile))
-                        {
-                            InStream.Seek(0, SeekOrigin.Begin);
-                            InStream.CopyTo(OutStream);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error("Failed to create default config file.");
-                    throw ex; // The program cannot execute without configuration.
-                }
+                WriteDefaultConfig();
             }
 
             ReadConfig();
@@ -52,6 +36,27 @@ namespace ColorChord.NET
         public static Dictionary<string, IOutput> OutputInsts;
         //public static Dictionary<string, IController> Controllers;
         public static IAudioSource Source;
+
+        private static void WriteDefaultConfig()
+        {
+            try
+            {
+                Assembly Asm = Assembly.GetExecutingAssembly();
+                using (Stream InStream = Asm.GetManifestResourceStream("ColorChord.NET.sample-config.json"))
+                {
+                    using (FileStream OutStream = File.Create(ConfigFile))
+                    {
+                        InStream.Seek(0, SeekOrigin.Begin);
+                        InStream.CopyTo(OutStream);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Failed to create default config file.");
+                throw ex; // The program cannot execute without configuration.
+            }
+        }
 
         public static void ReadConfig()
         {
@@ -101,7 +106,7 @@ namespace ColorChord.NET
             {
                 foreach (JToken Entry in (JArray)JSON["outputs"])
                 {
-                    IOutput Out = CreateObject<IOutput>("ColorChord.NET.Outputs." + (string)Entry["type"], Entry);
+                    IOutput Out = CreateObject<IOutput>("ColorChord.NET.Outputs." + (string)Entry["type"], Entry, true);
                     Out.Start();
                     OutputInsts.Add((string)Entry["name"], Out);
                 }
@@ -114,7 +119,7 @@ namespace ColorChord.NET
         /// <param name="fullName"> The full name (namespace + type) of the object to create. </param>
         /// <param name="configEntry"> The config entry containing options that should be applied to the resulting object. </param>
         /// <returns> A configured, ready object, or null if it was not able to be made. </returns>
-        private static InterfaceType CreateObject<InterfaceType>(string fullName, JToken configEntry) where InterfaceType: IConfigurable
+        private static InterfaceType CreateObject<InterfaceType>(string fullName, JToken configEntry, bool complexConfig = false) where InterfaceType: IConfigurable
         {
             Type ObjType = Type.GetType(fullName);
             if (!typeof(InterfaceType).IsAssignableFrom(ObjType)) { return default; } // Does not implement the right interface.
@@ -122,7 +127,7 @@ namespace ColorChord.NET
             if (Instance != null)
             {
                 InterfaceType Instance2 = (InterfaceType)Instance;
-                Instance2.ApplyConfig(ToDict(configEntry));
+                Instance2.ApplyConfig(ToDict(configEntry, complexConfig));
                 return Instance2;
             }
             return default;
@@ -138,8 +143,20 @@ namespace ColorChord.NET
             foreach(JToken ItemToken in parent.Children())
             {
                 JProperty Item = (JProperty)ItemToken;
-                if (Item.Type == JTokenType.Array || Item.Type == JTokenType.Object) { continue; } // TODO: Consider supporting these if needed.
-                Items.Add(Item.Name, Item.Value.ToString());
+                if (Item.Value is JArray && convertComplex) // TODO: See if Object needs to be handled.
+                {
+                    JArray Array = (JArray)Item.Value;
+                    Dictionary<string, object>[] ArrayItems = new Dictionary<string, object>[Array.Count];
+                    for (int i = 0; i < ArrayItems.Length; i++)
+                    {
+                        ArrayItems[i] = ToDict(Array[i], true);
+                    }
+                    Items.Add(Item.Name, ArrayItems);
+                }
+                else
+                {
+                    Items.Add(Item.Name, Item.Value.ToString());
+                }
             }
             return Items;
         }

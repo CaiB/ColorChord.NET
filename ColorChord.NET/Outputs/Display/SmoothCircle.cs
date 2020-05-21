@@ -3,11 +3,14 @@ using ColorChord.NET.Visualizers.Formats;
 using System;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK;
+using System.Collections.Generic;
 
 namespace ColorChord.NET.Outputs.Display
 {
-    public class SmoothCircle : IDisplayMode
+    public class SmoothCircle : IDisplayMode, IConfigurable
     {
+        // TODO: Use only the central square in the window, rather than assuming a 1:1 aspect ratio and rendering an ellipse
+
         /// <summary> This needs to correspond to NOTE_QTY in the fragment shaders. </summary>
         private const int MAX_COUNT = 12;
 
@@ -195,6 +198,14 @@ namespace ColorChord.NET.Outputs.Display
 
             this.BufferA.Resize(width, height);
             this.BufferB.Resize(width, height);
+        }
+
+        public void ApplyConfig(Dictionary<string, object> options)
+        {
+            Log.Info("Reading config for SmoothCircle \"");// + this.Name + "\".");
+            this.IsInfinity = ConfigTools.CheckBool(options, "IsInfinity", false, true);
+
+            ConfigTools.WarnAboutRemainder(options, typeof(IVisualizer));
         }
 
         public void Load()
