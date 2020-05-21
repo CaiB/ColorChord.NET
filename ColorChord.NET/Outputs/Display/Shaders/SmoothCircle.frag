@@ -1,9 +1,13 @@
 ﻿#version 330 core
 
+#define NOTE_QTY 12
+#define INSIDE 0.6
+#define OUTSIDE 0.9
+
 out vec4 FragColor;
 
-uniform float Colours[36];
-uniform float Starts[12];
+uniform float Colours[NOTE_QTY * 3];
+uniform float Starts[NOTE_QTY];
 uniform vec2 Resolution;
 uniform float Advance;
 
@@ -16,12 +20,13 @@ void main()
     
     vec3 Colour = vec3(0.1);
 
-    for(int i = 0; i < 11; i++)
+    for(int i = 0; i < (NOTE_QTY - 1); i++)
     {
         Colour = mix(Colour, vec3(Colours[(i*3)], Colours[(i*3)+1], Colours[(i*3)+2]), step(Starts[i], Angle) - step(Starts[i+1], Angle));
     }
 
-    float RegionMult = smoothstep(0.6, 0.60001, Radius) - smoothstep(0.9, 0.90001, Radius); // TODO actually smooth this by 1 pixel based on resolution
+
+    float RegionMult = step(INSIDE, Radius) - step(OUTSIDE, Radius);
     Colour *= RegionMult;
-    FragColor = vec4(Colour, RegionMult);
+    FragColor = vec4(Colour, RegionMult); // Transparent everywhere else
 }
