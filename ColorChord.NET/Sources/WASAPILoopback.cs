@@ -225,7 +225,7 @@ namespace ColorChord.NET.Sources
                 {
                     // TODO: Clear the buffer, as the device is not currently playing audio.
                 }
-                else
+                else if(FramesAvailable > 0)
                 {
                     byte[] AudioData = new byte[FramesAvailable * this.BytesPerFrame];
                     Marshal.Copy(DataBuffer, AudioData, 0, (int)(FramesAvailable * this.BytesPerFrame));
