@@ -26,7 +26,7 @@ void main()
     }
 
     float OnePixelDist = 2.0 / Resolution.x;
-    float RegionMult = step(INSIDE, Radius) - smoothstep(OUTSIDE, OUTSIDE + OnePixelDist, Radius);
+    float RegionMult = 1.0 - smoothstep(OUTSIDE, OUTSIDE + OnePixelDist, Radius);
     Colour *= RegionMult;
-    FragColor = vec4(Colour, step(INSIDE, Radius)); // Black outside, transparent inside
+    FragColor = vec4(Colour, smoothstep(INSIDE - OnePixelDist, INSIDE, Radius)); // Black outside, transparent inside
 }
