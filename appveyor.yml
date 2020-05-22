@@ -1,0 +1,35 @@
+version: 0.5-pre{build}
+branches:
+  only:
+  - master
+skip_tags: true
+skip_commits:
+  message: /\[NAB\]/
+configuration: Release
+platform: x64
+assembly_info:
+  patch: true
+  file: '**\AssemblyInfo.*'
+  assembly_version: '{version}'
+  assembly_file_version: '{version}'
+  assembly_informational_version: '{version}'
+before_build:
+- ps: nuget restore
+build:
+  verbosity: minimal
+after_build:
+- cmd: >-
+    7z a autobuild-v%appveyor_build_version%.zip %APPVEYOR_BUILD_FOLDER%\ColorChord.NET\bin\Release\*.dll
+
+    7z a autobuild-v%appveyor_build_version%.zip %APPVEYOR_BUILD_FOLDER%\ColorChord.NET\bin\Release\*.exe
+artifacts:
+- path: autobuild-v*.zip
+deploy:
+- provider: GitHub
+  tag: auto-v$(appveyor_build_version)
+  release: Automatic Build v$(appveyor_build_version)
+  description: This is an automatic build of the latest commits. Usage is at your own risk. Unless you are actively debugging, it is recommended to use a regular release instead.
+  auth_token:
+    secure: GVyDvu1oRIFcaipBySErsm8tNaX/dFtqemRShlOkPOaVKCOOHuI2k/8p46FY87F8
+  artifact: autobuild-v$(appveyor_build_version).zip
+  prerelease: true
