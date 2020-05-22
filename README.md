@@ -7,29 +7,38 @@ My port of [CNLohr's ColorChord2](https://github.com/cnlohr/colorchord) to C#.NE
 
 Uses [Vannatech/dorba's netcoreaudio](https://github.com/dorba/netcoreaudio) for WASAPI support.
 
-Somewhat different from Charles' version, I divided components into 4 categories, centered around the `NoteFinder`:
+Somewhat different from Charles' version, I divided components into 5 categories:
 - Audio Sources: Pipes audio data from some location into the NoteFinder. (e.g. WASAPI Loopback)
+- Note Finder: Turns raw audio data into note information. Currently not replaceable.
 - Visualizers: Takes note info from the NoteFinder, and turns it into a format that is outputtable via some method. (e.g. Linear)
 - Outputs: Takes data from a visualizer, and actually displays/outputs it somewhere. (e.g. UDP packets)
 - Controllers: Edits the behaviour of any of the above system components during runtime.
 
 A single instance of the application supports a single audio source, any number of visualizers, each with its own set of (any number of) outputs. This allows for a single audio stream to be processed and displayed in almost any desired combination of ways.
 
-Only some sources, visualizers, and outputs have been implemented.
+Only some sources, visualizers, and outputs from the base version have been implemented, but some new additions are also available.
 
 The core math is done in a C library, `ColorChordLib` due to complexity.
 
 The system performs very well, requiring negligible CPU and RAM, especially if only network output is needed.
 
-# Configuration
-Configuration is done through the `config.json` file. There is a sample config provided at the root of the repo, but you'll want to customize it to suit your needs. Find the supported options for each module below.
+I try to maintain the same behaviour given the same inputs as CNLohr's version. If you notice an undocumented difference, please let me know.
 
+# Configuration
+Configuration is done through the `config.json` file. There is a [sample config provided](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/sample-config.json), but you'll want to customize it to suit your needs. Find the supported options for each module below.
+
+- If a config file is not found, a default `config.json` will be created for you when you run the program. (The default config has the same content as the sample linked above)
 - If an option is not specified in the configuration file, the default value is used.
-- If an unrecognized option or invalid value is specified, a warning is output to the console. Always check for these after modifying the config in case you made a mistake.
+- If an unrecognized option or invalid value is specified, a warning is output to the console. Always check for these after modifying the config in case you made a spelling mistake.
 - You can choose a different configuration file by running the program with the command line option `config <YourFile.json>`.
 - Range specifies the set of input values that _can_ be used. Extreme values may not make any sense in practice though, so make small changes from the defaults to start. Range is just specified to prevent completely invalid input.
 
-_* indicates an uncertain description. I don't fully understand the methodology of some of the visualizers that Charles included in ColorChord, so some of these are guesses. Play with the vaules until you get something nice :)_
+_* indicates an uncertain description. I don't fully understand the methodology of some of the visualizers that Charles included in ColorChord, so some of these are guesses. Play with the values until you get something nice :)_
+
+### Moving a config file from CNLohr's ColorChord
+- The parameters for almost everything are backwards-compatible with cnlohr's version, so you can usually copy the **values**. If there is a difference, it should be noted in the relevant section below.
+- Note that the config file structure and parameter names are quite different, so a simple copy-paste of the entire file will not work.
+- If you want to replicate an existing setup, start with the default `config.json` file, and copy parameters over to my format one-by-one, finding the appropriate place to put them.
 
 # Sources
 **Only one source can be defined at once currently.**
@@ -49,11 +58,12 @@ Gets data out of the Windows Audio Session API. Supports input and output device
 Device IDs are unique for each device on the system, vary between different computers, and only change if drivers are updated/changed. Removal and re-attachment of a USB device will not change the ID. They are not readily visible to the user, but other software using WASAPI will have access to the same IDs. Use `printDeviceInfo` (above) to find the ID for your preferred device. Output format is:
 > [`Index`] "`Device Name`" = "`Device ID`"
 
+(Index is not used, it is just present to make the list easier to read)
+
 # [NoteFinder](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/NoteFinder.cs)
 There is always a single instance of the NoteFinder running. All sources and visualizers connect to the NoteFinder.
 
 The NoteFinder uses a complex, lengthy algorithm to turn sound data into note information. The options below are mostly listed in the order used.
-> All values are the same as the corresponding values in cnlohr's ColorChord2, but some options have a different name to be more clear. If you are transitioning an existing config file built for cnlohr's implementation, the values can be kept the same, but the items' names need to be updated.
 
 <details>
 <summary>View Configuration Table</summary>
@@ -81,48 +91,49 @@ You may add as many visualizers as you desire, even multiple of the same type. A
 * `name`: A unique identifier used to attach outputs and controllers.
 ## [Cells](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Cells.cs)
 ![Example](Docs/Images/Output-Display-Cells.gif)
-(Output: `DisplayOpenGL:BlockStrip`, 30 blocks, `timeBased`=true)  
+(Output shown: `DisplayOpenGL:BlockStrip`, 30 blocks, `timeBased`=true)  
 
 Supported data output modes: `Discrete 1D`  
 A 1D output with cells appearing and decaying in a scattered pattern.
 <details>
 <summary>View Configuration Table</summary>
 
-| Name | Type | Default | Range | Description |
-|---|---|---|---|---|
-| `ledCount` | `int` | 50 | 1~100000 | The number of discrete data points to output. |
-| `frameRate` | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is outputted. |
-| `ledFloor` | `float` | 0.1 | 0.0~1.0 | *The minimum intensity of an LED, before it is output as black instead. |
-| `lightSiding` | `float` | 1.9 | 0.0~100.0 | *Not sure. |
-| `saturationAmplifier` | `float` | 2.0 | 0.0~100.0 | *Multiplier for colour saturation before conversion to RGB and output. |
-| `qtyAmp` | `float` | 20 | 0.0~100.0 | *Not sure. |
-| `steadyBright` | `bool` | false | | *Not sure. |
-| `timeBased` | `bool` | false | | *Whether lights get added from the left side creating a time-dependent decay pattern, or are added randomly. |
-| `snakey` | `bool` | false | | *Not sure. |
-| `enable` | `bool` | true | | Whether to use this visualizer. |
+| Name | cnlohr Name | Type | Default | Range | Description |
+|---|---|---|---|---|---|
+| `ledCount` | `leds` | `int` | 50 | 1~100000 | The number of discrete data points to output. |
+| `frameRate` | | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is outputted. |
+| `ledFloor` | `led_floor` | `float` | 0.1 | 0.0~1.0 | *The minimum intensity of an LED, before it is output as black instead. |
+| `lightSiding` | `light_siding` | `float` | 1.9 | 0.0~100.0 | *Not sure. |
+| `saturationAmplifier` | `satamp` | `float` | 2.0 | 0.0~100.0 | *Multiplier for colour saturation before conversion to RGB and output. |
+| `qtyAmp` | `qtyamp` | `float` | 20 | 0.0~100.0 | *Not sure. |
+| `steadyBright` | `seady_bright` or `steady_bright` | `bool` | false | | *Not sure. |
+| `timeBased` | `bool` | `timebased` | false | | *Whether lights get added from the left side creating a time-dependent decay pattern, or are added randomly. |
+| `snakey` | `snakey` | `bool` | false | | *Not sure. |
+| `enable` | | `bool` | true | | Whether to use this visualizer. |
 </details>
 
 ## [Linear](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Linear.cs)
 ![Example](Docs/Images/Output-Display-LinearSmooth.gif)
-(Output: `DisplayOpenGL:SmoothStrip`, continuous)  
+(Output shown: `DisplayOpenGL:SmoothStrip`, continuous mode)  
 Supported data output modes: `Discrete 1D`, `Continuous 1D`  
 A 1D output with contiguous blocks of colour, size corresponding to relative note volume, and with inter-frame continuity.
-- Circular mode is not recommended in continuous mode, but works fine in discrete mode.
 <details>
 <summary>View Configuration Table</summary>
 
-| Name | Type | Default | Range | Description |
-|---|---|---|---|---|
-| `ledCount` | `int` | 50 | 1~100000 | The number of discrete data points to output. |
-| `lightSiding` | `float` | 1.0 | 0.0~100.0 | Exponent used to convert raw note amplitudes to strength. |
-| `ledFloor` | `float` | 0.1 | 0.0~1.0 | The minimum relative amplitude of a note required to consider it for output. |
-| `frameRate` | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is output. |
-| `isCircular` | `bool` | false | | Whether to treat the output as a circle, allowing wrap-around, or as a line with defined ends. |
-| `steadyBright` | `bool` | false | | Applies inter-frame smoothing to the LED brightnesses to prevent fast flickering. |
-| `ledLimit` | `float` | 1.0 | 0.0~1.0 | The maximum LED brightness. Caps all LEDs at this value, but does not affect values below this threshold. |
-| `saturationAmplifier` | `float` | 1.6 | 0.0~100.0 | Multiplier for colour saturation before conversion to RGB and output. |
-| `enable` | `bool` | true | | Whether to use this visualizer. |
+| Name | cnlohr Name | Type | Default | Range | Description |
+|---|---|---|---|---|---|
+| `ledCount` | `leds` | `int` | 50 | 1~100000 | The number of discrete data points to output. Set this to a low value like 24 if only continuous output is used to save CPU time. |
+| `lightSiding` | `light_siding` | `float` | 1.0 | 0.0~100.0 | Exponent used to convert raw note amplitudes to strength. |
+| `ledFloor` | `led_floor` | `float` | 0.1 | 0.0~1.0 | The minimum relative amplitude of a note required to consider it for output. |
+| `frameRate` | | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is output. |
+| `isCircular` | `is_loop` | `bool` | false | | Whether to treat the output as a circle, allowing wrap-around, or as a line with defined ends. :information_source: See below note. |
+| `steadyBright` | `steady_bright` | `bool` | false | | Applies inter-frame smoothing to the LED brightnesses to prevent fast flickering. |
+| `ledLimit` | `led_limit` | `float` | 1.0 | 0.0~1.0 | The maximum LED brightness. Caps all LEDs at this value, but does not affect values below this threshold. |
+| `saturationAmplifier` | `satamp` | `float` | 1.6 | 0.0~100.0 | Multiplier for colour saturation before conversion to RGB and output. |
+| `enable` | | `bool` | true | | Whether to use this visualizer. |
 </details>
+
+> :information_source: `"isCircular": true` in continuous mode does not match the behaviour of base ColorChord, as it uses a different, custom algorithm for positioning. However, discrete mode should match the base version. `"isCircular": false` should match base ColorChord in both continuous and discrete mode.
 
 # Outputs
 You may add as many outputs as you desire, even multiple of the same type, and any combination of compatible outputs can be added to a single visualizer. All output instances must have at least these 3 string properties:
@@ -132,49 +143,62 @@ You may add as many outputs as you desire, even multiple of the same type, and a
 
 ## [DisplayOpenGL](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/DisplayOpenGL.cs)
 Supported input modes: Depends on display mode.  
-Behaviour depends on the display mode chosen, but uses OpenGL to render graphics to a window on the screen.
+Behaviour depends on the display mode chosen, but uses OpenGL to render graphics to a single window on the screen.
+
+> Currently only one display mode is supported at a time.
+
 <details>
 <summary>View Configuration Table</summary>
 
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
-| `windowHeight` | `int` | 100 | 10~4000 | The height of the window, in pixels. |
 | `windowWidth` | `int` | 1280 | 10~4000 | The width of the window, in pixels. |
+| `windowHeight` | `int` | 720 | 10~4000 | The height of the window, in pixels. |
 | `mode` | `object array` | | | The mode(s) to use. See the subsection below.
 </details>
 
 <details>
 <summary>Display Modes</summary>
 
+Every display mode is required to have a `"type"` configured, matching one of the headings below.
+
 ### [BlockStrip](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/BlockStrip.cs)
 ![Example](Docs/Images/Output-Display-LinearBlock.gif)
-(Visualizer: `Linear`, 15 blocks)  
+(Visualizer shown: `Linear`, 15 blocks)  
 Supported input modes: `Discrete 1D`  
+Number of blocks displayed adjusts to match the attached visualizer.  
 > No additional configuration is available.
 
 ### [SmoothStrip](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/SmoothStrip.cs)
 ![Example](Docs/Images/Output-Display-LinearSmooth.gif)
-(Visualizer: `Linear`)  
+(Visualizer shown: `Linear`)  
 Supported input modes: `Continuous 1D`  
 > No additional configuration is available.
+
+### [SmoothCircle](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/SmoothCircle.cs)
+Supported input modes: `Continuous 1D`
+| Name | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `IsInfinity` | `bool` | false | | `false` just renders the ring, `true` also renders a decaying persistence effect, appearing to go off to infinity. |
 </details>
 
 ## [PacketUDP](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/PacketUDP.cs)
 Supported input modes: `Discrete 1D`  
+Number of LEDs sent adjusts to match the attached visualizer.  
 Packs the data for each LED in sequence into a UDP packet, then sends it to a given IP.
 <details>
 <summary>View Configuration Table</summary>
 
-| Name | Type | Default | Range | Description |
-|---|---|---|---|---|
-| `ip` | `string` | 127.0.0.1 | Valid IPs | The IP to send the packets to. |
-| `port` | `int` | 7777 | 0~65535 | The port to send the packets to. |
-| `paddingFront` | `int` | 0 | 0~1000 | Blank bytes to append to the front of the packet. (Charles' output seemed to always append a single blank byte, so this is just to maintain compatibility) |
-| `paddingBack` | `int` | 0 | 0~1000 | Blank bytes to append to the back of the packet. |
-| `enable` | `bool` | true | | Whether to use this output. |
+| Name | cnlohr Name | Type | Default | Range | Description |
+|---|---|---|---|---|---|
+| `ip` | `address` | `string` | 127.0.0.1 | Valid IPs | The IP to send the packets to. |
+| `port` | `port` | `int` | 7777 | 0~65535 | The port to send the packets to. |
+| `paddingFront` | `skipfirst` | `int` | 0 | 0~1000 | Blank bytes to append to the front of the packet. |
+| `paddingBack` | | `int` | 0 | 0~1000 | Blank bytes to append to the back of the packet. |
+| `enable` | | `bool` | true | | Whether to use this output. |
 </details>
 
-- Can only output up to 21,835 RGB LEDs due to 65,535 byte packet size limit.
+> Packets have 65,535 byte size limit. This means no more than 21,835 RGB LEDs can be output at once.
 
 # Controllers
 Not yet implemented.
