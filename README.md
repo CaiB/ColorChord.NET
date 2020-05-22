@@ -1,5 +1,5 @@
 # ColorChord.NET
-My WIP port of [CNLohr's ColorChord2](https://github.com/cnlohr/colorchord) to C#.NET, allowing for more flexibility and extendability. Also includes significantly more documentation, see below for explanations of all modes & config options.
+My port of [CNLohr's ColorChord2](https://github.com/cnlohr/colorchord) to C#.NET, allowing for more flexibility and extendability. Also includes significantly more documentation, see below for explanations of all modes & config options.
 
 **[You can find binary downloads here.](https://github.com/CaiB/ColorChord.NET/releases)**
 
@@ -178,3 +178,7 @@ Packs the data for each LED in sequence into a UDP packet, then sends it to a gi
 
 # Controllers
 Not yet implemented.
+
+# Development
+I work in Visual Studio 2019, and auto-builds are done by AppVeyor.  
+To prevent a commit from triggering an auto-build and release, prepend the commit message with `[NAB]`.
