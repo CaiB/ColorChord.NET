@@ -19,11 +19,16 @@ namespace ColorChord.NET.Outputs.Display
         private bool NewData;
         private int VertexBufferHandle, VertexArrayHandle;
 
-        public BlockStrip(DisplayOpenGL parent, IDiscrete1D visualizer, int blockCount)
+        public BlockStrip(DisplayOpenGL parent, IVisualizer visualizer)
         {
+            if (!(visualizer is IDiscrete1D))
+            {
+                Log.Error("BlockStrip cannot use the provided visualizer, as it does not output 1D discrete data.");
+                throw new InvalidOperationException("Incompatible visualizer. Must implement IDiscrete1D.");
+            }
             this.HostWindow = parent;
-            this.DataSource = visualizer;
-            this.BlockCount = blockCount;
+            this.DataSource = (IDiscrete1D)visualizer;
+            this.BlockCount = this.DataSource.GetCountDiscrete();
             this.GeometryData = new float[1];
             GenerateGeometry();
         }

@@ -75,7 +75,18 @@ namespace ColorChord.NET.Outputs
         {
             Type ObjType = Type.GetType(fullName);
             if (!typeof(IDisplayMode).IsAssignableFrom(ObjType)) { return null; } // Does not implement the right interface.
-            object Instance = ObjType == null ? null : Activator.CreateInstance(ObjType, this, this.Source);
+
+            object Instance = null;
+            try
+            {
+                Instance = ObjType == null ? null : Activator.CreateInstance(ObjType, this, this.Source);
+            }
+            catch (MissingMethodException exc)
+            {
+                Log.Error("Could not create an instance of \"" + fullName + "\".");
+                Console.WriteLine(exc);
+            }
+
             if (Instance != null)
             {
                 IDisplayMode Instance2 = (IDisplayMode)Instance;
