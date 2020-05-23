@@ -10,6 +10,9 @@ namespace ColorChord.NET.Sources
         private CNFAConfig Driver;
         private IntPtr DriverPtr;
 
+        private CNFACallback Callback;
+        private GCHandle CallbackHandle;
+
         public CNFABinding(string name) { }
 
         public void ApplyConfig(Dictionary<string, object> configSection)
@@ -19,11 +22,18 @@ namespace ColorChord.NET.Sources
         
         public void Start()
         {
-            this.DriverPtr = Initialize("WASAPI", "ColorChord.NET", Marshal.GetFunctionPointerForDelegate<CNFACallback>(SoundCallback), 48000, 48000, 2, 2, 480, null, "defaultRender", IntPtr.Zero);
+            this.Callback = SoundCallback;
+            this.CallbackHandle = GCHandle.Alloc(this.Callback);
+            this.DriverPtr = Initialize("WASAPI", "ColorChord.NET", Marshal.GetFunctionPointerForDelegate(this.Callback), 48000, 48000, 2, 2, 480, "defaultRender", "defaultRender", IntPtr.Zero);
             this.Driver = Marshal.PtrToStructure<CNFAConfig>(this.DriverPtr);
         }
 
-        public void Stop() => this.Driver.Close(this.DriverPtr);
+        public void Stop()
+        {
+            this.Driver.Close(this.DriverPtr);
+            this.CallbackHandle.Free();
+            this.Callback = null;
+        }
 
         /// <summary> Called by CNFA when audio data is ready for sending/receiving. </summary>
         /// <param name="driver"> The <see cref="CNFAConfig"/> for the driver. </param>
@@ -31,9 +41,19 @@ namespace ColorChord.NET.Sources
         /// <param name="output"> Place data here to send to the system. </param>
         /// <param name="framesIn"> How many frames of input data are available. </param>
         /// <param name="framesOut"> How many frames of space are available for output data. </param>
-        private void SoundCallback(IntPtr driver, short[] input, short[] output, int framesIn, int framesOut)
+        private void SoundCallback(IntPtr driver, IntPtr input, IntPtr output, int framesIn, int framesOut)
         {
-            Console.WriteLine("CALLBACK with " + framesIn + " frames of input, and " + framesOut + " frames of space for output.");
+            //Console.WriteLine("CALLBACK with " + framesIn + " frames of input, and " + framesOut + " frames of space for output.");
+            short[] AudioData = new short[framesIn * this.Driver.ChannelCountRecord];
+            Marshal.Copy(input, AudioData, 0, (framesIn * this.Driver.ChannelCountRecord));
+            for (int Frame = 0; Frame < framesIn; Frame++)
+            {
+                float Sample = 0;
+                for (ushort Chn = 0; Chn < this.Driver.ChannelCountRecord; Chn++) { Sample += AudioData[(Frame * this.Driver.ChannelCountRecord) + Chn] / 32767.5F; }
+                NoteFinder.AudioBuffer[NoteFinder.AudioBufferHeadWrite] = Sample / this.Driver.ChannelCountRecord; // Use the average of the channels.
+                NoteFinder.AudioBufferHeadWrite = (NoteFinder.AudioBufferHeadWrite + 1) % NoteFinder.AudioBuffer.Length;
+            }
+            NoteFinder.LastDataAdd = DateTime.UtcNow;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -75,16 +95,16 @@ namespace ColorChord.NET.Sources
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal delegate int StatusFunction(IntPtr driver);
 
-        [DllImport("CNFA4", CallingConvention = CallingConvention.Cdecl, EntryPoint = "CNFAInit", CharSet = CharSet.Ansi)]
+        [DllImport("CNFA5", CallingConvention = CallingConvention.Cdecl, EntryPoint = "CNFAInit", CharSet = CharSet.Ansi)]
         internal static extern IntPtr Initialize(string driverName, string ourName, IntPtr callback, int requestedSampleRatePlay, int requestedSampleRateRecord, int requestedChannelsPlay, int requestedChannelRecord, int suggestedBufferSize, string outputSelect, string inputSelect, IntPtr notUsed);
 
         /// <summary> The delegate for the function you must implement to receive sound callbacks from CNFA. </summary>
         /// <param name="driver"> The <see cref="CNFAConfig"/> for the driver. </param>
-        /// <param name="input"> The data coming in from the system. </param>
-        /// <param name="output"> Place data here to send to the system. </param>
+        /// <param name="inputData"> The data coming in from the system. Type <see cref="short[]"/> </param>
+        /// <param name="outputData"> Place data here to send to the system. Type <see cref="short[]"/> </param>
         /// <param name="framesIn"> How many frames of input data are available. </param>
         /// <param name="framesOut"> How many frames of space are available for output data. </param>
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void CNFACallback([In] IntPtr driver, [In] short[] input, [In, Out] short[] output, [In] int framesIn, [In] int framesOut);
+        internal delegate void CNFACallback([In] IntPtr driver, [In] IntPtr inputData, [In, Out] IntPtr outputData, [In] int framesIn, [In] int framesOut);
     }
 }
