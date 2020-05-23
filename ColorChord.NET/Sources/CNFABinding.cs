@@ -10,7 +10,7 @@ namespace ColorChord.NET.Sources
         private CNFAConfig Driver;
         private IntPtr DriverPtr;
 
-        public CNFABinding() { }
+        public CNFABinding(string name) { }
 
         public void ApplyConfig(Dictionary<string, object> configSection)
         {
@@ -19,7 +19,8 @@ namespace ColorChord.NET.Sources
         
         public void Start()
         {
-            Initialize("WASAPI", "ColorChord.NET", Marshal.GetFunctionPointerForDelegate<CNFACallback>(SoundCallback), 48000, 48000, 2, 2, 480, null, "defaultRender", IntPtr.Zero);
+            this.DriverPtr = Initialize("WASAPI", "ColorChord.NET", Marshal.GetFunctionPointerForDelegate<CNFACallback>(SoundCallback), 48000, 48000, 2, 2, 480, null, "defaultRender", IntPtr.Zero);
+            this.Driver = Marshal.PtrToStructure<CNFAConfig>(this.DriverPtr);
         }
 
         public void Stop() => this.Driver.Close(this.DriverPtr);
@@ -74,7 +75,7 @@ namespace ColorChord.NET.Sources
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal delegate int StatusFunction(IntPtr driver);
 
-        [DllImport("CNFA", CallingConvention = CallingConvention.Cdecl, EntryPoint = "CNFAInit")]
+        [DllImport("CNFA4", CallingConvention = CallingConvention.Cdecl, EntryPoint = "CNFAInit", CharSet = CharSet.Ansi)]
         internal static extern IntPtr Initialize(string driverName, string ourName, IntPtr callback, int requestedSampleRatePlay, int requestedSampleRateRecord, int requestedChannelsPlay, int requestedChannelRecord, int suggestedBufferSize, string outputSelect, string inputSelect, IntPtr notUsed);
 
         /// <summary> The delegate for the function you must implement to receive sound callbacks from CNFA. </summary>
@@ -84,6 +85,6 @@ namespace ColorChord.NET.Sources
         /// <param name="framesIn"> How many frames of input data are available. </param>
         /// <param name="framesOut"> How many frames of space are available for output data. </param>
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void CNFACallback(IntPtr driver, short[] input, short[] output, int framesIn, int framesOut);
+        internal delegate void CNFACallback([In] IntPtr driver, [In] short[] input, [In, Out] short[] output, [In] int framesIn, [In] int framesOut);
     }
 }

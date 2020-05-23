@@ -206,3 +206,8 @@ Not yet implemented.
 # Development
 I work in Visual Studio 2019, and auto-builds are done by AppVeyor.  
 To prevent a commit from triggering an auto-build and release, prepend the commit message with `[NAB]`.
+
+**Random other notes for myself:**
+
+Compiling .so from C source on Linux:  
+`gcc [Input File].c -shared -fpic -o [Output File].so`
