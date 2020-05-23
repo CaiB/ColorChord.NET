@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace ColorChord.NET.Sources
 {
@@ -13,19 +12,33 @@ namespace ColorChord.NET.Sources
         private CNFACallback Callback;
         private GCHandle CallbackHandle;
 
+        private string DriverMode;
+        private int SuggestedSampleRate;
+        private int SuggestedChannelCount;
+        private int SuggestedBufferSize;
+        private string DeviceRecord, DevicePlay;
+
         public CNFABinding(string name) { }
 
-        public void ApplyConfig(Dictionary<string, object> configSection)
+        public void ApplyConfig(Dictionary<string, object> options)
         {
-
+            Log.Info("Reading config for CFNABinding.");
+            this.DriverMode = ConfigTools.CheckString(options, "Driver", "AUTO", true).ToUpper();
+            this.SuggestedSampleRate = ConfigTools.CheckInt(options, "SampleRate", 8000, 384000, 48000, true);
+            this.SuggestedChannelCount = ConfigTools.CheckInt(options, "ChannelCount", 1, 20, 2, true);
+            this.SuggestedBufferSize = ConfigTools.CheckInt(options, "BufferSize", 1, 10000, 480, true);
+            this.DeviceRecord = ConfigTools.CheckString(options, "device", "default", true);
+            this.DevicePlay = ConfigTools.CheckString(options, "DeviceOutput", "default", true); // This isn't actually used, as no sounds are played.
+            ConfigTools.WarnAboutRemainder(options, typeof(IAudioSource));
         }
         
         public void Start()
         {
             this.Callback = SoundCallback;
             this.CallbackHandle = GCHandle.Alloc(this.Callback);
-            this.DriverPtr = Initialize("WASAPI", "ColorChord.NET", Marshal.GetFunctionPointerForDelegate(this.Callback), 48000, 48000, 2, 2, 480, "defaultRender", "defaultRender", IntPtr.Zero);
+            this.DriverPtr = Initialize(this.DriverMode == "AUTO" ? null : this.DriverMode, "ColorChord.NET", Marshal.GetFunctionPointerForDelegate(this.Callback), this.SuggestedSampleRate, this.SuggestedSampleRate, this.SuggestedChannelCount, this.SuggestedChannelCount, this.SuggestedBufferSize, this.DevicePlay, this.DeviceRecord, IntPtr.Zero);
             this.Driver = Marshal.PtrToStructure<CNFAConfig>(this.DriverPtr);
+            NoteFinder.SetSampleRate(this.Driver.SampleRateRecord);
         }
 
         public void Stop()
