@@ -21,14 +21,14 @@ namespace ColorChord.NET.Outputs
         public int WindowWidth
         {
             get => this.ClientSize.Width;
-            set => this.ClientSize = new Size(value, this.Size.Height);
+            set => this.ClientSize = new OpenTK.Size(value, this.Size.Height);
         }
 
         /// <summary> The height of the window, in pixels. </summary>
         public int WindowHeight
         {
             get => this.ClientSize.Height;
-            set => this.ClientSize = new Size(this.Size.Width, value);
+            set => this.ClientSize = new OpenTK.Size(this.Size.Width, value);
         }
 
         private IDisplayMode Display;

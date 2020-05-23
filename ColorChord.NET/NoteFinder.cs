@@ -512,7 +512,7 @@ namespace ColorChord.NET
             public float AmplitudeFinal;
         }
 
-        [DllImport("ColorChordLib.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("ColorChordLib", CallingConvention = CallingConvention.Cdecl)]
         private static extern void DoDFTProgressive32([In, Out] float[] OutBins, [In, Out] float[] Frequencies, int Bins, float[] DataBuffer, int DataBufferLoc, int DataBufferSize, float Q, float Speedup);
     }
 }
