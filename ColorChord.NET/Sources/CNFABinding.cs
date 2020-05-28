@@ -56,6 +56,7 @@ namespace ColorChord.NET.Sources
         /// <param name="framesOut"> How many frames of space are available for output data. </param>
         private void SoundCallback(IntPtr driver, IntPtr input, IntPtr output, int framesIn, int framesOut)
         {
+            if (input == IntPtr.Zero) { return; } // Needed for ALSA?
             //Console.WriteLine("CALLBACK with " + framesIn + " frames of input, and " + framesOut + " frames of space for output.");
             short[] AudioData = new short[framesIn * this.Driver.ChannelCountRecord];
             Marshal.Copy(input, AudioData, 0, (framesIn * this.Driver.ChannelCountRecord));
@@ -108,7 +109,7 @@ namespace ColorChord.NET.Sources
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal delegate int StatusFunction(IntPtr driver);
 
-        [DllImport("CNFA5", CallingConvention = CallingConvention.Cdecl, EntryPoint = "CNFAInit", CharSet = CharSet.Ansi)]
+        [DllImport("CNFA", CallingConvention = CallingConvention.Cdecl, EntryPoint = "CNFAInit", CharSet = CharSet.Ansi)]
         internal static extern IntPtr Initialize(string driverName, string ourName, IntPtr callback, int requestedSampleRatePlay, int requestedSampleRateRecord, int requestedChannelsPlay, int requestedChannelRecord, int suggestedBufferSize, string outputSelect, string inputSelect, IntPtr notUsed);
 
         /// <summary> The delegate for the function you must implement to receive sound callbacks from CNFA. </summary>
