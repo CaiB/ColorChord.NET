@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace ColorChord.NET.NoteFinder
@@ -14,6 +15,7 @@ namespace ColorChord.NET.NoteFinder
         public byte BinsPerOctave = 24;
 
         /// <summary> How long our sample window is. </summary>
+        /// <remarks> This must be divisible by 2 ^ <see cref="OctaveCount"/>. </remarks>
         public ushort WindowSize = 8192;
 
         /// <summary> The sample rate of the incoming audio signal, and our reference waveforms. </summary>
@@ -21,6 +23,9 @@ namespace ColorChord.NET.NoteFinder
 
         /// <summary> The total number of bins over all octaves. </summary>
         public ushort BinCount => (ushort)(this.OctaveCount * this.BinsPerOctave);
+
+        /// <summary> Gets the index of the first bin in the topmost octave. </summary>
+        private ushort StartOfTopOctave => (ushort)((this.OctaveCount - 1) * this.BinsPerOctave);
 
         /// <summary> The frequencies of all bins, in Hz. </summary>
         /// <remarks> Length = <see cref="BinCount"/>. </remarks>
@@ -48,11 +53,16 @@ namespace ColorChord.NET.NoteFinder
         /// <remarks> Dimensions = [<see cref="BinCount"/>, <see cref="WindowSize"/>]. </remarks>
         private float[,] CosProducts;
 
+        /// <summary> The sin and cos products at for each bin, summed over the entire window. </summary>
+        /// <remarks> Length = <see cref="BinCount"/>. </remarks>
         private float[] PrevSinSum, PrevCosSum;
 
         /// <summary> The magnitudes of summed sin and cos products, for each bin. </summary>
         /// <remarks> Length = <see cref="BinCount"/>. </remarks>
         private float[] Magnitudes;
+
+        /// <summary> Stores the current cycle count, which is used in determining which lower octaves need to be updated. </summary>
+        private uint CycleCount = 0;
 
         public ShinNoteFinderDFT()
         {
@@ -105,8 +115,12 @@ namespace ColorChord.NET.NoteFinder
         public void AddSample(float sample, bool doMagCalc = true)
         {
             this.AudioBuffer[this.HeadLocation] = sample;
+
             CalculateProducts();
+
             this.HeadLocation = (ushort)((this.HeadLocation + 1) % this.WindowSize);
+            this.CycleCount++;
+
             if (doMagCalc) { CalculateMagnitudes(); }
         }
 
@@ -123,19 +137,47 @@ namespace ColorChord.NET.NoteFinder
         /// <summary> Calculates sin and cos products at the current buffer head location. </summary>
         private void CalculateProducts()
         {
-            for (byte Bin = 0; Bin < this.BinsPerOctave; Bin++) // TODO: This needs to be calculated for all octaves.
+            // Calculate the top octave.
+            for (ushort Bin = this.StartOfTopOctave; Bin < this.BinCount; Bin++)
             {
                 // Remove the previous data from the sum.
                 this.PrevSinSum[Bin] -= this.SinProducts[Bin, this.HeadLocation];
                 this.PrevCosSum[Bin] -= this.CosProducts[Bin, this.HeadLocation];
 
                 // Calculate new data.
-                this.SinProducts[Bin, this.HeadLocation] = this.SinTable[Bin, this.HeadLocation] * this.AudioBuffer[this.HeadLocation];
-                this.CosProducts[Bin, this.HeadLocation] = this.CosTable[Bin, this.HeadLocation] * this.AudioBuffer[this.HeadLocation];
+                ushort TableSlot = (ushort)(Bin % this.BinsPerOctave);
+                this.SinProducts[Bin, this.HeadLocation] = this.SinTable[TableSlot, this.HeadLocation] * this.AudioBuffer[this.HeadLocation];
+                this.CosProducts[Bin, this.HeadLocation] = this.CosTable[TableSlot, this.HeadLocation] * this.AudioBuffer[this.HeadLocation];
 
                 // Add the new data to the sum.
                 this.PrevSinSum[Bin] += this.SinProducts[Bin, this.HeadLocation];
                 this.PrevCosSum[Bin] += this.CosProducts[Bin, this.HeadLocation];
+            }
+
+            // Calculate the other octaves if needed.
+            // [Down] is how many octaves down we are from the top. This makes subsequent math nicer.
+            // E.g. in the case of 5 octaves, [Down] values would be: Lowest Octave-> [4 3 2 1 x] <-Highest Octave
+            for (byte Down = 1; Down < this.OctaveCount; Down++)
+            {
+                uint LastCycle = this.CycleCount - 1;
+                // If this octave needs to be calculated this cycle
+                if (((this.CycleCount >> (Down - 1)) & 0b1) == 0b1 &&
+                    ((      LastCycle >> (Down - 1)) & 0b1) == 0b0) // If the cycle counter switched to having a 1 in the appropriate bit
+                {
+                    float[] AudioBufferCondensed = new float[this.WindowSize >> Down]; // Audio buffer of size that is halved with each octave away from top.
+                    uint HeadLocationCondensed = this.HeadLocation >> Down; // Buffer head location in this new buffer to match with the main buffer location.
+
+                    for (uint i = 0; i < AudioBufferCondensed.Length; i++) // TODO: Move this out of here! Just need to come up with a nice storage method.
+                    { // TODO: Use a better averaging method.
+                        AudioBufferCondensed[i] = 
+                    }
+
+                    ushort BinOffset = (ushort)((this.OctaveCount - Down) * this.BinsPerOctave); // The bottom bin in this octave
+                    for (ushort Bin = BinOffset; Bin < BinOffset + this.BinsPerOctave; Bin++)
+                    {
+                        CalculateSingleProduct(Bin);
+                    }
+                }
             }
         }
 
