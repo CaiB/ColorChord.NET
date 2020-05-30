@@ -1,0 +1,151 @@
+using System;
+using System.Reflection;
+using ColorChord.NET.NoteFinder;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace ColorChordTests
+{
+    [TestClass]
+    public class ShinNoteFinderTest
+    {
+        [TestMethod]
+        public void BinFrequencyList()
+        {
+            const float BASE_FREQ = 55F;
+            ShinNoteFinderDFT NF = new ShinNoteFinderDFT();
+            NF.CalculateFrequencies(BASE_FREQ);
+
+            FieldInfo BinFreq = typeof(ShinNoteFinderDFT).GetField("BinFrequencies", BindingFlags.NonPublic | BindingFlags.Instance);
+            float[] Value = (float[])BinFreq.GetValue(NF);
+
+            // Make sure we have the correct number of frequency bins.
+            Assert.AreEqual(NF.BinCount, Value.Length, "Bin count was incorrect");
+
+            // Make sure the first bin is the base frequency we set earlier.
+            Assert.AreEqual(BASE_FREQ, Value[0], "Base frequency was incorrectly set");
+
+            float CalcNextOctave = Value[NF.BinsPerOctave];
+
+            // Make sure the bin 1 octave up is double the base frequency.
+            Assert.IsTrue(Math.Abs((BASE_FREQ * 2) - CalcNextOctave) < 0.01F, "Higher frequencies were incorrectly calculated");
+        }
+
+        [TestMethod]
+        [DataRow(73.42F, 10, DisplayName = "D2")]
+        [DataRow(92.50F, 18, DisplayName = "F#2")]
+        [DataRow(100.87F, 21, DisplayName = "G2-G#2 midpoint")]
+        public void OutputBinTestSingleValueWithPureSine(float testFreq, int expectedPeak)
+        {
+            const float BASE_FREQ = 55F; // A2
+
+            ShinNoteFinderDFT NF = new ShinNoteFinderDFT();
+            NF.CalculateFrequencies(BASE_FREQ);
+            NF.FillReferenceTables();
+            NF.PrepareSampleStorage();
+
+            // Fill input.
+            float Omega1 = (float)(testFreq * Math.PI * 2 / NF.SampleRate);
+
+            float[] TestWaveform = new float[NF.WindowSize / 2];
+            for (uint i = 0; i < TestWaveform.Length; i++)
+            {
+                TestWaveform[i] = (float)Math.Sin(i * Omega1);
+            }
+            NF.AddSamples(TestWaveform);
+
+            // Get output
+            float[] Output = NF.GetBins();
+
+            // Find peak
+            float PeakVal = -1F;
+            int PeakInd = -1;
+
+            for (int i = 0; i < Output.Length; i++)
+            {
+                if (Output[i] > PeakVal)
+                {
+                    PeakVal = Output[i];
+                    PeakInd = i;
+                }
+            }
+
+            // Make sure peak is correct and large enough
+            Assert.IsTrue(PeakVal > 1500F, "Peak was not large enough");
+            Assert.IsTrue(PeakInd == expectedPeak, "Peak was in the wrong place");
+
+            // Make sure all far-away bins are small enough
+            for (int i = 0; i < Output.Length; i++)
+            {
+                if (Math.Abs(i - PeakInd) > 3) { Assert.IsTrue(Output[i] < (PeakVal / 2), "Other frequencies had content too strong compared to peak"); }
+            }
+        }
+
+        [TestMethod] // Note that the first one has to be the larger value.
+        [DataRow(73.42F, 92.50F, 10, 18, 0.5F, DisplayName = "D2 + F#2, 1:1 ratio")]
+        [DataRow(92.50F, 103.83F, 18, 22, 0.5F, DisplayName = "F#2 + G#2, 3:7 ratio")]
+        public void OutputBinTestCompondSineProprotional(float testFreq1, float testFreq2, int expectedPeak1, int expectedPeak2, float ratio)
+        {
+            const float BASE_FREQ = 55F; // A2
+
+            ShinNoteFinderDFT NF = new ShinNoteFinderDFT();
+            NF.CalculateFrequencies(BASE_FREQ);
+            NF.FillReferenceTables();
+            NF.PrepareSampleStorage();
+
+            // Fill input.
+            float Omega1 = (float)(testFreq1 * Math.PI * 2 / NF.SampleRate);
+            float Omega2 = (float)(testFreq2 * Math.PI * 2 / NF.SampleRate);
+
+            float[] TestWaveform = new float[NF.WindowSize / 2];
+            for (uint i = 0; i < TestWaveform.Length; i++)
+            {
+                double Wave1 = ratio * Math.Sin(i * Omega1);
+                double Wave2 = (1 - ratio) * Math.Sin(i * Omega2);
+                TestWaveform[i] = (float)(Wave1 + Wave2);
+            }
+            NF.AddSamples(TestWaveform);
+
+            // Get output
+            float[] Output = NF.GetBins();
+
+            // Find peaks
+            float PeakVal1 = -1F;
+            float PeakVal2 = -1F;
+            int PeakInd1 = -1;
+            int PeakInd2 = -1;
+
+            for (int i = 0; i < Output.Length; i++)
+            {
+                if (Output[i] > PeakVal1)
+                {
+                    PeakVal2 = PeakVal1;
+                    PeakVal1 = Output[i];
+                    PeakInd2 = PeakInd1;
+                    PeakInd1 = i;
+                }
+                else if (Output[i] > PeakVal2)
+                {
+                    PeakVal2 = Output[i];
+                    PeakInd2 = i;
+                }
+            }
+
+            // Make sure peaks are correct and large enough
+            Assert.IsTrue(PeakVal1 > (1500F * ratio), "Peak 1 was not large enough");
+            Assert.IsTrue(PeakVal2 > (1500F * (1 - ratio)), "Peak 2 was not large enough");
+
+            Assert.IsTrue(PeakInd1 == expectedPeak1, "Peak 1 was in the wrong place");
+            Assert.IsTrue(PeakInd2 == expectedPeak2, "Peak 2 was in the wrong place");
+
+            // Make sure all far-away bins are small enough
+            for (int i = 0; i < Output.Length; i++)
+            {
+                if (Math.Abs(i - PeakInd1) > 3 &&
+                    Math.Abs(i - PeakInd2) > 3)
+                {
+                    Assert.IsTrue(Output[i] < (Math.Max(PeakVal1, PeakVal2) / 1.5F), "Too much noise far away from peaks");
+                }
+            }
+        }
+    }
+}

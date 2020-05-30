@@ -62,7 +62,7 @@ namespace ColorChord.NET.Visualizers
         public Linear(string name)
         {
             this.Name = name;
-            this.OutputDataContinuous = new ContinuousDataUnit[NoteFinder.NoteCount];
+            this.OutputDataContinuous = new ContinuousDataUnit[BaseNoteFinder.NoteCount];
             for (int i = 0; i < this.OutputDataContinuous.Length; i++) { this.OutputDataContinuous[i] = new ContinuousDataUnit(); }
         }
 
@@ -98,7 +98,7 @@ namespace ColorChord.NET.Visualizers
             this.KeepGoing = true;
             this.ProcessThread = new Thread(DoProcessing) { Name = "Linear " + this.Name };
             this.ProcessThread.Start();
-            NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
+            BaseNoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
         }
 
         public void Stop()
@@ -128,7 +128,7 @@ namespace ColorChord.NET.Visualizers
         public int GetCountContinuous() => this.OutputCountContinuous;
         public ContinuousDataUnit[] GetDataContinuous() => this.OutputDataContinuous;
         public float GetAdvanceContinuous() => this.OutputAdvanceContinuous;
-        public int MaxPossibleUnits { get => NoteFinder.NoteCount; }
+        public int MaxPossibleUnits { get => BaseNoteFinder.NoteCount; }
 
         // These variables are only used to keep inter-frame info for Update(). Do not touch.
         private float[] LastLEDColours;
@@ -136,11 +136,11 @@ namespace ColorChord.NET.Visualizers
         private float[] LastLEDSaturations;
         private int PrevAdvance;
         private float PrevAdvanceVector = 0;
-        private float[] LastVectorCenters = new float[NoteFinder.NoteCount]; // Where the center-point of each block was last frame
+        private float[] LastVectorCenters = new float[BaseNoteFinder.NoteCount]; // Where the center-point of each block was last frame
 
         public void Update()
         {
-            const int BIN_QTY = NoteFinder.NoteCount; // Number of bins present
+            const int BIN_QTY = BaseNoteFinder.NoteCount; // Number of bins present
             float[] NoteAmplitudes = new float[BIN_QTY]; // The amplitudes of each note, time-smoothed
             float[] NoteAmplitudesFast = new float[BIN_QTY]; // The amplitudes of each note, with minimal time-smoothing
             float[] NotePositions = new float[BIN_QTY]; // The locations of the notes, range 0 ~ 1.
@@ -149,9 +149,9 @@ namespace ColorChord.NET.Visualizers
             // Populate data from the NoteFinder.
             for (int i = 0; i < BIN_QTY; i++)
             {
-                NotePositions[i] = NoteFinder.Notes[i].Position / NoteFinder.OctaveBinCount;
-                NoteAmplitudes[i] = (float)Math.Pow(NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
-                NoteAmplitudesFast[i] = (float)Math.Pow(NoteFinder.Notes[i].Amplitude, this.LightSiding);
+                NotePositions[i] = BaseNoteFinder.Notes[i].Position / BaseNoteFinder.OctaveBinCount;
+                NoteAmplitudes[i] = (float)Math.Pow(BaseNoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
+                NoteAmplitudesFast[i] = (float)Math.Pow(BaseNoteFinder.Notes[i].Amplitude, this.LightSiding);
                 AmplitudeSum += NoteAmplitudes[i];
             }
 

@@ -21,7 +21,7 @@ namespace ColorChord.NET
             {
                 if (args[0].Equals("config", StringComparison.InvariantCultureIgnoreCase) && args.Length >= 2) { ConfigFile = args[1]; }
             }
-            NoteFinder.Start();
+            BaseNoteFinder.Start();
 
             if (!File.Exists(ConfigFile)) // No config file
             {
@@ -85,7 +85,7 @@ namespace ColorChord.NET
             if (!JSON.ContainsKey("noteFinder")) { Log.Warn("Could not find valid \"noteFinder\" definition. All defaults will be used."); }
             else
             {
-                NoteFinder.ApplyConfig(ToDict(JSON["noteFinder"]));
+                BaseNoteFinder.ApplyConfig(ToDict(JSON["noteFinder"]));
             }
 
             // Visualizers

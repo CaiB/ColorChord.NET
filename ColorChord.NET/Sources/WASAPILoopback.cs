@@ -112,7 +112,7 @@ namespace ColorChord.NET.Sources
             Log.Info(string.Format("Default transaction period is {0} ticks, minimum is {1} ticks.", DefaultInterval, MinimumInterval));
             this.BytesPerFrame = this.MixFormat.nChannels * (this.MixFormat.wBitsPerSample / 8);
 
-            NoteFinder.SetSampleRate((int)this.MixFormat.nSamplesPerSec);
+            BaseNoteFinder.SetSampleRate((int)this.MixFormat.nSamplesPerSec);
 
             uint StreamFlags;
             if (DeviceIsCapture == true) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST | AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_EVENTCALLBACK; }
@@ -236,10 +236,10 @@ namespace ColorChord.NET.Sources
                         float Sample = 0;
                         // TODO: Make multi-channel downmixing toggleable, maybe some stereo visualizations?
                         for (ushort Chn = 0; Chn < this.MixFormat.nChannels; Chn++) { Sample += BitConverter.ToSingle(AudioData, (Frame * this.BytesPerFrame) + ((this.MixFormat.wBitsPerSample / 8) * Chn)); }
-                        NoteFinder.AudioBuffer[NoteFinder.AudioBufferHeadWrite] = Sample / this.MixFormat.nChannels; // Use the average of the channels.
-                        NoteFinder.AudioBufferHeadWrite = (NoteFinder.AudioBufferHeadWrite + 1) % NoteFinder.AudioBuffer.Length;
+                        BaseNoteFinder.AudioBuffer[BaseNoteFinder.AudioBufferHeadWrite] = Sample / this.MixFormat.nChannels; // Use the average of the channels.
+                        BaseNoteFinder.AudioBufferHeadWrite = (BaseNoteFinder.AudioBufferHeadWrite + 1) % BaseNoteFinder.AudioBuffer.Length;
                     }
-                    NoteFinder.LastDataAdd = DateTime.UtcNow;
+                    BaseNoteFinder.LastDataAdd = DateTime.UtcNow;
                 }
 
                 ErrorCode = this.CaptureClient.ReleaseBuffer(FramesAvailable);
@@ -270,8 +270,8 @@ namespace ColorChord.NET.Sources
 
                     if (BufferStatus.HasFlag(AUDCLNT_BUFFERFLAGS.AUDCLNT_BUFFERFLAGS_SILENT))
                     {
-                        NoteFinder.AudioBuffer[NoteFinder.AudioBufferHeadWrite] = 0;
-                        NoteFinder.AudioBufferHeadWrite = (NoteFinder.AudioBufferHeadWrite + 1) % NoteFinder.AudioBuffer.Length;
+                        BaseNoteFinder.AudioBuffer[BaseNoteFinder.AudioBufferHeadWrite] = 0;
+                        BaseNoteFinder.AudioBufferHeadWrite = (BaseNoteFinder.AudioBufferHeadWrite + 1) % BaseNoteFinder.AudioBuffer.Length;
                     }
                     else
                     {
@@ -283,10 +283,10 @@ namespace ColorChord.NET.Sources
                             float Sample = 0;
                             // TODO: Make multi-channel downmixing toggleable, maybe some stereo visualizations?
                             for (int c = 0; c < this.MixFormat.nChannels; c++) { Sample += BitConverter.ToSingle(AudioData, (i * this.BytesPerFrame) + ((this.MixFormat.wBitsPerSample / 8) * c)); }
-                            NoteFinder.AudioBuffer[NoteFinder.AudioBufferHeadWrite] = Sample / this.MixFormat.nChannels; // Use the average of the channels.
-                            NoteFinder.AudioBufferHeadWrite = (NoteFinder.AudioBufferHeadWrite + 1) % NoteFinder.AudioBuffer.Length;
+                            BaseNoteFinder.AudioBuffer[BaseNoteFinder.AudioBufferHeadWrite] = Sample / this.MixFormat.nChannels; // Use the average of the channels.
+                            BaseNoteFinder.AudioBufferHeadWrite = (BaseNoteFinder.AudioBufferHeadWrite + 1) % BaseNoteFinder.AudioBuffer.Length;
                         }
-                        NoteFinder.LastDataAdd = DateTime.UtcNow;
+                        BaseNoteFinder.LastDataAdd = DateTime.UtcNow;
                     }
 
                     ErrorCode = this.CaptureClient.ReleaseBuffer(NumFramesAvail);

@@ -62,7 +62,7 @@ namespace ColorChord.NET.Visualizers
             this.KeepGoing = true;
             this.ProcessThread = new Thread(DoProcessing);
             this.ProcessThread.Start();
-            NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
+            BaseNoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
         }
 
         public void Stop()
@@ -101,7 +101,7 @@ namespace ColorChord.NET.Visualizers
         private void Update()
         {
             //Step 1: Calculate the quantity of all the LEDs we'll want.
-            int totbins = NoteFinder.NoteCount;//nf->dists;
+            int totbins = BaseNoteFinder.NoteCount;//nf->dists;
             int i, j;
             float[] binvals = new float[totbins];
             float[] binvalsQ = new float[totbins];
@@ -121,9 +121,9 @@ namespace ColorChord.NET.Visualizers
 
             for (i = 0; i < totbins; i++)
             {
-                binpos[i] = NoteFinder.Notes[i].Position / NoteFinder.OctaveBinCount;
-                binvals[i] = (float)Math.Pow(NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding); //Slow
-                binvalsQ[i] = (float)Math.Pow(NoteFinder.Notes[i].Amplitude, this.LightSiding); //Fast
+                binpos[i] = BaseNoteFinder.Notes[i].Position / BaseNoteFinder.OctaveBinCount;
+                binvals[i] = (float)Math.Pow(BaseNoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding); //Slow
+                binvalsQ[i] = (float)Math.Pow(BaseNoteFinder.Notes[i].Amplitude, this.LightSiding); //Fast
                 totalbinval += binvals[i];
 
                 float want = binvals[i] * this.QtyAmp;

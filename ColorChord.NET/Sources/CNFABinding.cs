@@ -38,7 +38,7 @@ namespace ColorChord.NET.Sources
             this.CallbackHandle = GCHandle.Alloc(this.Callback);
             this.DriverPtr = Initialize(this.DriverMode == "AUTO" ? null : this.DriverMode, "ColorChord.NET", Marshal.GetFunctionPointerForDelegate(this.Callback), this.SuggestedSampleRate, this.SuggestedSampleRate, this.SuggestedChannelCount, this.SuggestedChannelCount, this.SuggestedBufferSize, this.DevicePlay, this.DeviceRecord, IntPtr.Zero);
             this.Driver = Marshal.PtrToStructure<CNFAConfig>(this.DriverPtr);
-            NoteFinder.SetSampleRate(this.Driver.SampleRateRecord);
+            BaseNoteFinder.SetSampleRate(this.Driver.SampleRateRecord);
         }
 
         public void Stop()
@@ -64,10 +64,10 @@ namespace ColorChord.NET.Sources
             {
                 float Sample = 0;
                 for (ushort Chn = 0; Chn < this.Driver.ChannelCountRecord; Chn++) { Sample += AudioData[(Frame * this.Driver.ChannelCountRecord) + Chn] / 32767.5F; }
-                NoteFinder.AudioBuffer[NoteFinder.AudioBufferHeadWrite] = Sample / this.Driver.ChannelCountRecord; // Use the average of the channels.
-                NoteFinder.AudioBufferHeadWrite = (NoteFinder.AudioBufferHeadWrite + 1) % NoteFinder.AudioBuffer.Length;
+                BaseNoteFinder.AudioBuffer[BaseNoteFinder.AudioBufferHeadWrite] = Sample / this.Driver.ChannelCountRecord; // Use the average of the channels.
+                BaseNoteFinder.AudioBufferHeadWrite = (BaseNoteFinder.AudioBufferHeadWrite + 1) % BaseNoteFinder.AudioBuffer.Length;
             }
-            NoteFinder.LastDataAdd = DateTime.UtcNow;
+            BaseNoteFinder.LastDataAdd = DateTime.UtcNow;
         }
 
         [StructLayout(LayoutKind.Sequential)]

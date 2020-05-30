@@ -6,7 +6,8 @@ using System.Threading;
 
 namespace ColorChord.NET
 {
-    public static class NoteFinder
+    /// <summary> Equivalent to the note finder found in the base C colorchord implementation, by cnlohr. </summary>
+    public static class BaseNoteFinder
     {
         /// <summary> The buffer for audio data gathered from a system device. Circular buffer, with the current write position stored in <see cref="AudioBufferHeadWrite"/>. </summary>
         public static float[] AudioBuffer = new float[8192]; // TODO: Make buffer size adjustable or auto-set based on sample rate (might be too short for super-high rates)
@@ -174,7 +175,7 @@ namespace ColorChord.NET
             NoteAttachAmplitudeIIRMultiplier2 = ConfigTools.CheckFloat(options, "noteAttachAmpIIR2", 0F, 1F, NoteAttachAmplitudeIIRMultiplier2, true);
             MinNoteCombineDistance = ConfigTools.CheckFloat(options, "noteCombineDistance", 0F, 100F, MinNoteCombineDistance, true);
             NoteOutputChop = ConfigTools.CheckFloat(options, "noteOutputChop", 0F, 100F, NoteOutputChop, true);
-            ConfigTools.WarnAboutRemainder(options, typeof(NoteFinder));
+            ConfigTools.WarnAboutRemainder(options, typeof(BaseNoteFinder));
 
             // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
             SetSampleRate(SampleRate);

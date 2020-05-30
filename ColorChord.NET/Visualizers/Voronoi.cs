@@ -17,7 +17,7 @@ namespace ColorChord.NET.Visualizers
 
         public int FramePeriod { get; private set; }
 
-        public VoronoiPoint[] OutputData = new VoronoiPoint[NoteFinder.NoteCount];
+        public VoronoiPoint[] OutputData = new VoronoiPoint[BaseNoteFinder.NoteCount];
 
         private readonly List<IOutput> Outputs = new List<IOutput>();
         private Thread ProcessThread;        
@@ -40,7 +40,7 @@ namespace ColorChord.NET.Visualizers
             this.KeepGoing = true;
             this.ProcessThread = new Thread(DoProcessing) { Name = "Voronoi " + this.Name };
             this.ProcessThread.Start();
-            NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
+            BaseNoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
         }
 
         public void Stop()
@@ -66,19 +66,19 @@ namespace ColorChord.NET.Visualizers
 
         private void Update()
         {
-            for (byte i = 0; i < NoteFinder.NoteCount; i++)
+            for (byte i = 0; i < BaseNoteFinder.NoteCount; i++)
             {
-                NoteFinder.Note Note = NoteFinder.Notes[i];
+                BaseNoteFinder.Note Note = BaseNoteFinder.Notes[i];
                 this.OutputData[i].Amplitude = Note.AmplitudeFiltered;
                 this.OutputData[i].Present = Note.AmplitudeFiltered < 0.05F;
                 if (!this.OutputData[i].Present) { continue; } // This one is off, no point calculating the rest.
 
                 const float RADIUS = 0.75F;
-                double Angle = (Note.Position / NoteFinder.OctaveBinCount) * Math.PI * 2; // Range 0 ~ 2pi
+                double Angle = (Note.Position / BaseNoteFinder.OctaveBinCount) * Math.PI * 2; // Range 0 ~ 2pi
                 this.OutputData[i].X = (float)Math.Cos(Angle) * RADIUS;
                 this.OutputData[i].Y = (float)Math.Sin(Angle) * RADIUS;
 
-                uint Colour = VisualizerTools.CCtoHEX(Note.Position / NoteFinder.OctaveBinCount, 1F, 1F);
+                uint Colour = VisualizerTools.CCtoHEX(Note.Position / BaseNoteFinder.OctaveBinCount, 1F, 1F);
                 this.OutputData[i].R = (byte)((Colour >> 16) & 0xFF);
                 this.OutputData[i].G = (byte)((Colour >> 8) & 0xFF);
                 this.OutputData[i].B = (byte)(Colour & 0xFF);
