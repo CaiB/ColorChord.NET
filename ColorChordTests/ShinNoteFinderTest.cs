@@ -59,7 +59,7 @@ namespace ColorChordTests
             //NF.SaveData();
 
             // Get output
-            float[] Output = NF.GetBins();
+            float[] Output = NF.Magnitudes;
 
             // Find peak
             float PeakVal = -1F;
@@ -113,7 +113,7 @@ namespace ColorChordTests
             NF.AddSamples(TestWaveform);
 
             // Get output
-            float[] Output = NF.GetBins();
+            float[] Output = NF.Magnitudes;
 
             // Find peaks
             float PeakVal1 = -1F;
@@ -158,7 +158,7 @@ namespace ColorChordTests
             // Make sure the ratio is about right
             float Total = PeakVal1 + PeakVal2;
             Assert.IsTrue(Math.Abs((PeakVal1 / Total) - ratio) < 0.05F, "Peak 1 was not balanced to ratio");
-            Assert.IsTrue(Math.Abs((PeakVal2 / Total) - (1 - ratio)) < 0.05F, "Peak 1 was not balanced to ratio");
+            Assert.IsTrue(Math.Abs((PeakVal2 / Total) - (1 - ratio)) < 0.05F, "Peak 2 was not balanced to ratio");
 
             // Make sure all far-away bins are small enough
             for (int i = 0; i < Output.Length; i++)
@@ -232,11 +232,11 @@ namespace ColorChordTests
             {
                 for (ushort i = 0; i < contentStart; i++) // This octave should not yet have been calculated.
                 {
-                    Assert.IsTrue(NF.GetBins()[i] == 0, "Bin " + i + " should have been empty");
+                    Assert.IsTrue(NF.Magnitudes[i] == 0, "Bin " + i + " should have been empty");
                 }
                 for (ushort i = (ushort)contentStart; i < NF.BinCount; i++) // All other bins should have at least a slight amount of content.
                 {
-                    Assert.IsTrue(NF.GetBins()[i] != 0, "Bin " + i + " should not have been empty");
+                    Assert.IsTrue(NF.Magnitudes[i] != 0, "Bin " + i + " should not have been empty");
                 }
             }
         }

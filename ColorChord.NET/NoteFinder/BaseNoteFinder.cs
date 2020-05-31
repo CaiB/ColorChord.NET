@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using ColorChord.NET.NoteFinder;
 
 namespace ColorChord.NET
 {
@@ -160,6 +161,8 @@ namespace ColorChord.NET
             if (period < ShortestPeriod) { ShortestPeriod = period; }
         }
 
+        public static ShinNoteFinderDFT DFT;
+
         public static void ApplyConfig(Dictionary<string, object> options)
         {
             Log.Info("Reading config for NoteFinder.");
@@ -179,11 +182,24 @@ namespace ColorChord.NET
 
             // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
             SetSampleRate(SampleRate);
+
+            //DFT = new ShinNoteFinderDFT();
+            DFT.SampleRate = (uint)SampleRate;
+            DFT.CalculateFrequencies(MinimumFrequency);
+            DFT.FillReferenceTables();
+            DFT.PrepareSampleStorage();
         }
 
         /// <summary> Starts the processing thread. </summary>
         public static void Start()
         {
+            DFT = new ShinNoteFinderDFT();
+            //DFT.WindowSize = 4096;
+            //DFT.BinsPerOctave = 24 * 8;
+            DFT.CalculateFrequencies(MinimumFrequency);
+            DFT.FillReferenceTables();
+            DFT.PrepareSampleStorage();
+
             KeepGoing = true;
             ProcessThread = new Thread(DoProcessing);
             ProcessThread.Start();
@@ -215,7 +231,10 @@ namespace ColorChord.NET
             float[] DFTBinData = new float[DFTRawBinCount];
 
             // This will read all buffer data from where it was called last up to [AudioBufferHeadWrite] in order to catch up.
-            DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
+            //DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
+            DFTBinData = DFT.Magnitudes;
+
+            //for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] /= 80000F; }
 
             // Pre-process input DFT data.
             for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)

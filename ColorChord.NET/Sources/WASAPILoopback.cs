@@ -231,6 +231,7 @@ namespace ColorChord.NET.Sources
                 {
                     byte[] AudioData = new byte[FramesAvailable * this.BytesPerFrame];
                     Marshal.Copy(DataBuffer, AudioData, 0, (int)(FramesAvailable * this.BytesPerFrame));
+                    float[] ReadyData = new float[FramesAvailable];
                     for (int Frame = 0; Frame < FramesAvailable; Frame++)
                     {
                         float Sample = 0;
@@ -238,7 +239,10 @@ namespace ColorChord.NET.Sources
                         for (ushort Chn = 0; Chn < this.MixFormat.nChannels; Chn++) { Sample += BitConverter.ToSingle(AudioData, (Frame * this.BytesPerFrame) + ((this.MixFormat.wBitsPerSample / 8) * Chn)); }
                         BaseNoteFinder.AudioBuffer[BaseNoteFinder.AudioBufferHeadWrite] = Sample / this.MixFormat.nChannels; // Use the average of the channels.
                         BaseNoteFinder.AudioBufferHeadWrite = (BaseNoteFinder.AudioBufferHeadWrite + 1) % BaseNoteFinder.AudioBuffer.Length;
+                        ReadyData[Frame] = Sample / this.MixFormat.nChannels;
+                        //BaseNoteFinder.DFT.AddSample(ReadyData[Frame]);
                     }
+                    BaseNoteFinder.DFT.AddSamples(ReadyData);
                     BaseNoteFinder.LastDataAdd = DateTime.UtcNow;
                 }
 

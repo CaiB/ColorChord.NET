@@ -67,14 +67,14 @@ namespace ColorChord.NET.NoteFinder
 
         /// <summary> The magnitudes of summed sin and cos products, for each bin. </summary>
         /// <remarks> Length = <see cref="BinCount"/>. </remarks>
-        private float[] Magnitudes;
+        public float[] Magnitudes;
 
         /// <summary> Stores the current cycle count, which is used in determining which lower octaves need to be updated. </summary>
         private uint CycleCount = 0;
 
         public ShinNoteFinderDFT()
         {
-            
+            Log.Info("Starting ShinNoteFinder DFT module");
         }
 
         /// <summary> Fills <see cref="BinFrequencies"/> with the frequency (in Hz) of each bin. </summary>
@@ -111,6 +111,7 @@ namespace ColorChord.NET.NoteFinder
         public void PrepareSampleStorage()
         {
             this.HeadLocation = 0;
+            this.CycleCount = 0;
             this.AudioBuffer = new float[this.WindowSize];
             this.SmallerAudioBuffers = new float[this.OctaveCount - 1][];
             for (int i = 0; i < this.OctaveCount - 1; i++) { this.SmallerAudioBuffers[i] = new float[this.WindowSize >> (i + 1)]; }
@@ -200,8 +201,8 @@ namespace ColorChord.NET.NoteFinder
                     for (ushort Bin = BinOffset; Bin < BinOffset + this.BinsPerOctave; Bin++)
                     {
                         // Remove the previous data from the sum.
-                        this.PrevSinSum[Bin] -= this.SinProducts[Bin, this.HeadLocation];
-                        this.PrevCosSum[Bin] -= this.CosProducts[Bin, this.HeadLocation];
+                        this.PrevSinSum[Bin] -= this.SinProducts[Bin, HeadLocationCondensed];
+                        this.PrevCosSum[Bin] -= this.CosProducts[Bin, HeadLocationCondensed];
 
                         // Calculate new data.
                         ushort TableSlot = (ushort)(Bin % this.BinsPerOctave);
@@ -225,7 +226,7 @@ namespace ColorChord.NET.NoteFinder
             }
         }
 
-        public float[] GetBins() => this.Magnitudes;
+        //public float[] GetBins() => this.Magnitudes;
 
         // TODO: Remove this or move elsewhere, only for testing
         public void SaveData()
