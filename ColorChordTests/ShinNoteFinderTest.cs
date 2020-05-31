@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Runtime.Serialization;
 using ColorChord.NET.NoteFinder;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -31,9 +32,10 @@ namespace ColorChordTests
         }
 
         [TestMethod]
-        [DataRow(73.42F, 10, DisplayName = "D2")]
-        [DataRow(92.50F, 18, DisplayName = "F#2")]
-        [DataRow(100.87F, 21, DisplayName = "G2-G#2 midpoint")]
+        [DataRow(73.42F, 10, DisplayName = "D2")] // Bottom octave
+        [DataRow(92.50F, 18, DisplayName = "F#2")] // Bottom octave
+        [DataRow(100.87F, 21, DisplayName = "G2-G#2 midpoint")] // Bottom octave
+        [DataRow(1174.66F, 106, DisplayName = "D6")] // Top octave
         public void OutputBinTestSingleValueWithPureSine(float testFreq, int expectedPeak)
         {
             const float BASE_FREQ = 55F; // A2
@@ -144,6 +146,76 @@ namespace ColorChordTests
                     Math.Abs(i - PeakInd2) > 3)
                 {
                     Assert.IsTrue(Output[i] < (Math.Max(PeakVal1, PeakVal2) / 1.5F), "Too much noise far away from peaks");
+                }
+            }
+        }
+
+        [TestMethod]
+        public void CheckOctavePattern()
+        {
+            const float BASE_FREQ = 55F; // A2
+            const float SIGNAL_FREQ = 880F;
+            const double PHASE_OFFSET = Math.PI / 4; // Apply a small phase offset so that the signal doesn't start at 0.
+
+            ShinNoteFinderDFT NF = new ShinNoteFinderDFT();
+            NF.CalculateFrequencies(BASE_FREQ);
+            NF.FillReferenceTables();
+            NF.PrepareSampleStorage();
+
+            float Omega = (float)(SIGNAL_FREQ * Math.PI * 2 / NF.SampleRate);
+
+            // Add the first sample, so we should only see content in the topmost octave
+            NF.AddSample((float)Math.Sin((0 * Omega) + PHASE_OFFSET), true);
+            CheckAllBins((NF.OctaveCount - 1) * NF.BinsPerOctave);
+
+            // Second sample, now the top two octaves should be calculated.
+            NF.AddSample((float)Math.Sin((1 * Omega) + PHASE_OFFSET), true);
+            CheckAllBins((NF.OctaveCount - 2) * NF.BinsPerOctave);
+
+            // Third sample, only the top octave should update
+            NF.AddSample((float)Math.Sin((2 * Omega) + PHASE_OFFSET), true);
+            CheckAllBins((NF.OctaveCount - 2) * NF.BinsPerOctave);
+
+            // Fourth sample, the top 3 octaves should all get calculated
+            NF.AddSample((float)Math.Sin((3 * Omega) + PHASE_OFFSET), true);
+            CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
+
+            // Fifth sample, only top octave
+            NF.AddSample((float)Math.Sin((4 * Omega) + PHASE_OFFSET), true);
+            CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
+
+            // Sixth sample, top 2 octaves
+            NF.AddSample((float)Math.Sin((5 * Omega) + PHASE_OFFSET), true);
+            CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
+
+            // Seventh sample, only top
+            NF.AddSample((float)Math.Sin((6 * Omega) + PHASE_OFFSET), true);
+            CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
+
+            // Eighth sample, top 4 octaves should all be calculated.
+            NF.AddSample((float)Math.Sin((7 * Omega) + PHASE_OFFSET), true);
+            CheckAllBins((NF.OctaveCount - 4) * NF.BinsPerOctave);
+
+            // 9th - 15th samples, same pattern, no new octaves yet
+            for (int i = 8; i < 15; i++)
+            {
+                NF.AddSample((float)Math.Sin((i * Omega) + PHASE_OFFSET), true);
+                CheckAllBins((NF.OctaveCount - 4) * NF.BinsPerOctave);
+            }
+
+            // 16th sample, top 5 octaves should be calculated.
+            NF.AddSample((float)Math.Sin((15 * Omega) + PHASE_OFFSET), true);
+            CheckAllBins((NF.OctaveCount - 5) * NF.BinsPerOctave);
+
+            void CheckAllBins(int contentStart)
+            {
+                for (ushort i = 0; i < contentStart; i++) // This octave should not yet have been calculated.
+                {
+                    Assert.IsTrue(NF.GetBins()[i] == 0, "Bin " + i + " should have been empty");
+                }
+                for (ushort i = (ushort)contentStart; i < NF.BinCount; i++) // All other bins should have at least a slight amount of content.
+                {
+                    Assert.IsTrue(NF.GetBins()[i] != 0, "Bin " + i + " should not have been empty");
                 }
             }
         }

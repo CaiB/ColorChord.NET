@@ -45,6 +45,13 @@ namespace ColorChord.NET.NoteFinder
         /// <summary> The circular buffer containing input audio data. Length <see cref="WindowSize"/>. </summary>
         private float[] AudioBuffer;
 
+        /// <summary> The buffers for lower octaves, with downsampled audio. </summary>
+        /// <remarks>
+        /// Organized in order of descending octaves. Each step's buffer size is half of the previous.
+        /// i.e. Length[x] = <see cref="WindowSize"/> / (2 ^ x + 1)
+        /// </remarks>
+        private float[][] SmallerAudioBuffers;
+
         /// <summary> The product of (sin reference) * (input signal) at each sample, for each bin. </summary>
         /// <remarks> Dimensions = [<see cref="BinCount"/>, <see cref="WindowSize"/>]. </remarks>
         private float[,] SinProducts;
@@ -86,12 +93,12 @@ namespace ColorChord.NET.NoteFinder
             this.SinTable = new float[BinsPerOctave, WindowSize];
             this.CosTable = new float[BinsPerOctave, WindowSize];
             float Coefficient = (float)(Math.PI * 2 / this.SampleRate);
-            for (byte Bin = 0; Bin < this.BinsPerOctave; Bin++)
+            for (ushort Bin = 0; Bin < this.BinsPerOctave; Bin++)
             {
                 for (ushort Sample = 0; Sample < this.WindowSize; Sample++)
                 {
-                    this.SinTable[Bin, Sample] = (float)Math.Sin(Sample * this.BinFrequencies[Bin] * Coefficient);
-                    this.CosTable[Bin, Sample] = (float)Math.Cos(Sample * this.BinFrequencies[Bin] * Coefficient);
+                    this.SinTable[Bin, Sample] = (float)Math.Sin(Sample * this.BinFrequencies[Bin + this.StartOfTopOctave] * Coefficient);
+                    this.CosTable[Bin, Sample] = (float)Math.Cos(Sample * this.BinFrequencies[Bin + this.StartOfTopOctave] * Coefficient);
                 }
             }
         }
@@ -102,6 +109,8 @@ namespace ColorChord.NET.NoteFinder
         {
             this.HeadLocation = 0;
             this.AudioBuffer = new float[this.WindowSize];
+            this.SmallerAudioBuffers = new float[this.OctaveCount - 1][];
+            for (int i = 0; i < this.OctaveCount - 1; i++) { this.SmallerAudioBuffers[i] = new float[this.WindowSize >> (i + 1)]; }
             this.SinProducts = new float[this.BinCount, this.WindowSize];
             this.CosProducts = new float[this.BinCount, this.WindowSize];
             this.PrevSinSum = new float[this.BinCount];
@@ -128,10 +137,13 @@ namespace ColorChord.NET.NoteFinder
         /// <param name="samples"> The samples to add to the buffer. </param>
         public void AddSamples(float[] samples)
         {
+            if (samples == null || samples.Length == 0) { return; }
+
             for (uint i = 0; i < samples.Length; i++)
             {
-                AddSample(samples[i], (i == samples.Length - 1));
+                AddSample(samples[i], false); // Don't bother doing the final calculations except for the last sample.
             }
+            AddSample(samples[samples.Length - 1], true);
         }
 
         /// <summary> Calculates sin and cos products at the current buffer head location. </summary>
@@ -159,23 +171,42 @@ namespace ColorChord.NET.NoteFinder
             // E.g. in the case of 5 octaves, [Down] values would be: Lowest Octave-> [4 3 2 1 x] <-Highest Octave
             for (byte Down = 1; Down < this.OctaveCount; Down++)
             {
-                uint LastCycle = this.CycleCount - 1;
+                uint NextCycle = this.CycleCount + 1;
                 // If this octave needs to be calculated this cycle
                 if (((this.CycleCount >> (Down - 1)) & 0b1) == 0b1 &&
-                    ((      LastCycle >> (Down - 1)) & 0b1) == 0b0) // If the cycle counter switched to having a 1 in the appropriate bit
+                    ((      NextCycle >> (Down - 1)) & 0b1) == 0b0) // If the cycle counter switched to having a 1 in the appropriate bit
                 {
-                    float[] AudioBufferCondensed = new float[this.WindowSize >> Down]; // Audio buffer of size that is halved with each octave away from top.
                     uint HeadLocationCondensed = this.HeadLocation >> Down; // Buffer head location in this new buffer to match with the main buffer location.
 
-                    for (uint i = 0; i < AudioBufferCondensed.Length; i++) // TODO: Move this out of here! Just need to come up with a nice storage method.
-                    { // TODO: Use a better averaging method.
-                        AudioBufferCondensed[i] = 
+                    // TODO: Use a better averaging method
+                    if (Down > 1) // If we are averaging samples from another condensed buffer
+                    {
+                        this.SmallerAudioBuffers[Down - 1][HeadLocationCondensed] =
+                            this.SmallerAudioBuffers[Down - 2][HeadLocationCondensed >> 1] +
+                            this.SmallerAudioBuffers[Down - 2][(HeadLocationCondensed >> 1) + 1];
+                    }
+                    else // If we are averaging samples from the main buffer
+                    {
+                        this.SmallerAudioBuffers[0][HeadLocationCondensed] =
+                            this.AudioBuffer[this.HeadLocation] +
+                            this.AudioBuffer[this.HeadLocation - 1];
                     }
 
-                    ushort BinOffset = (ushort)((this.OctaveCount - Down) * this.BinsPerOctave); // The bottom bin in this octave
+                    ushort BinOffset = (ushort)((this.OctaveCount - (Down + 1)) * this.BinsPerOctave); // The bottom bin in this octave
                     for (ushort Bin = BinOffset; Bin < BinOffset + this.BinsPerOctave; Bin++)
                     {
-                        CalculateSingleProduct(Bin);
+                        // Remove the previous data from the sum.
+                        this.PrevSinSum[Bin] -= this.SinProducts[Bin, this.HeadLocation];
+                        this.PrevCosSum[Bin] -= this.CosProducts[Bin, this.HeadLocation];
+
+                        // Calculate new data.
+                        ushort TableSlot = (ushort)(Bin % this.BinsPerOctave);
+                        this.SinProducts[Bin, HeadLocationCondensed] = this.SinTable[TableSlot, HeadLocationCondensed] * this.SmallerAudioBuffers[Down - 1][HeadLocationCondensed];
+                        this.CosProducts[Bin, HeadLocationCondensed] = this.CosTable[TableSlot, HeadLocationCondensed] * this.SmallerAudioBuffers[Down - 1][HeadLocationCondensed];
+
+                        // Add the new data to the sum.
+                        this.PrevSinSum[Bin] += this.SinProducts[Bin, HeadLocationCondensed];
+                        this.PrevCosSum[Bin] += this.CosProducts[Bin, HeadLocationCondensed];
                     }
                 }
             }
@@ -190,9 +221,6 @@ namespace ColorChord.NET.NoteFinder
             }
         }
 
-        public float[] GetBins()
-        {
-            return this.Magnitudes;
-        }
+        public float[] GetBins() => this.Magnitudes;
     }
 }
