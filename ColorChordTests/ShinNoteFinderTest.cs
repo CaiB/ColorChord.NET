@@ -35,6 +35,8 @@ namespace ColorChordTests
         [DataRow(73.42F, 10, DisplayName = "D2")] // Bottom octave
         [DataRow(92.50F, 18, DisplayName = "F#2")] // Bottom octave
         [DataRow(100.87F, 21, DisplayName = "G2-G#2 midpoint")] // Bottom octave
+        [DataRow(185.00F, 42, DisplayName = "F#3")]
+        [DataRow(698.46F, 88, DisplayName = "F5")]
         [DataRow(1174.66F, 106, DisplayName = "D6")] // Top octave
         public void OutputBinTestSingleValueWithPureSine(float testFreq, int expectedPeak)
         {
@@ -54,6 +56,7 @@ namespace ColorChordTests
                 TestWaveform[i] = (float)Math.Sin(i * Omega1);
             }
             NF.AddSamples(TestWaveform);
+            //NF.SaveData();
 
             // Get output
             float[] Output = NF.GetBins();

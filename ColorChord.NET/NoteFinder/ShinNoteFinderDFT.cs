@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -166,15 +167,16 @@ namespace ColorChord.NET.NoteFinder
                 this.PrevCosSum[Bin] += this.CosProducts[Bin, this.HeadLocation];
             }
 
+            uint NextCycle = this.CycleCount + 1;
+
             // Calculate the other octaves if needed.
             // [Down] is how many octaves down we are from the top. This makes subsequent math nicer.
             // E.g. in the case of 5 octaves, [Down] values would be: Lowest Octave-> [4 3 2 1 x] <-Highest Octave
             for (byte Down = 1; Down < this.OctaveCount; Down++)
             {
-                uint NextCycle = this.CycleCount + 1;
                 // If this octave needs to be calculated this cycle
                 if (((this.CycleCount >> (Down - 1)) & 0b1) == 0b1 &&
-                    ((      NextCycle >> (Down - 1)) & 0b1) == 0b0) // If the cycle counter switched to having a 1 in the appropriate bit
+                    ((      NextCycle >> (Down - 1)) & 0b1) == 0b0) // If this is the last cycle where the corresponding bit has a 1
                 {
                     uint HeadLocationCondensed = this.HeadLocation >> Down; // Buffer head location in this new buffer to match with the main buffer location.
 
@@ -182,8 +184,8 @@ namespace ColorChord.NET.NoteFinder
                     if (Down > 1) // If we are averaging samples from another condensed buffer
                     {
                         this.SmallerAudioBuffers[Down - 1][HeadLocationCondensed] =
-                            this.SmallerAudioBuffers[Down - 2][HeadLocationCondensed >> 1] +
-                            this.SmallerAudioBuffers[Down - 2][(HeadLocationCondensed >> 1) + 1];
+                            this.SmallerAudioBuffers[Down - 2][HeadLocationCondensed << 1] +
+                            this.SmallerAudioBuffers[Down - 2][(HeadLocationCondensed << 1) + 1];
                     }
                     else // If we are averaging samples from the main buffer
                     {
@@ -222,5 +224,24 @@ namespace ColorChord.NET.NoteFinder
         }
 
         public float[] GetBins() => this.Magnitudes;
+
+        // TODO: Remove this or move elsewhere, only for testing
+        public void SaveData()
+        {
+            using (StreamWriter Writer = new StreamWriter("testdata.csv"))
+            {
+                for (uint i = 0; i < this.AudioBuffer.Length; i++)
+                {
+                    string Line = string.Join(',',
+                        this.AudioBuffer[i],
+                        i < this.SmallerAudioBuffers[0].Length ? this.SmallerAudioBuffers[0][i] : 0,
+                        i < this.SmallerAudioBuffers[1].Length ? this.SmallerAudioBuffers[1][i] : 0,
+                        i < this.SmallerAudioBuffers[2].Length ? this.SmallerAudioBuffers[2][i] : 0,
+                        i < this.SmallerAudioBuffers[3].Length ? this.SmallerAudioBuffers[3][i] : 0);
+                    Writer.WriteLine(Line);
+                }
+                Writer.Flush();
+            }
+        }
     }
 }
