@@ -83,8 +83,10 @@ namespace ColorChord.NET.NoteFinder
         public void CalculateFrequencies(float baseFrequency)
         {
             this.BinFrequencies = new float[this.BinCount];
-            this.BinFrequencies[0] = baseFrequency;
-            for (ushort Bin = 1; Bin < this.BinCount; Bin++) { this.BinFrequencies[Bin] = (float)(this.BinFrequencies[Bin - 1] * Math.Pow(2, (1F / this.BinsPerOctave))); }
+            for (ushort Bin = 0; Bin < this.BinCount; Bin++)
+            {
+                this.BinFrequencies[Bin] = (float)(baseFrequency * Math.Pow(2, ((float)Bin / this.BinsPerOctave)));
+            }
         }
 
         /// <summary> Fills the reference waveform tables with data needed to do DFT calculations. </summary>
