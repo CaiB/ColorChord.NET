@@ -10,22 +10,28 @@ namespace ColorChordTests
     public class ShinNoteFinderTest
     {
         [TestMethod]
-        public void BinFrequencyList()
+        [DataRow((byte)24)]
+        [DataRow((byte)192)]
+        [DataRow((byte)96)]
+        public void BinFrequencyList(byte binsPer)
         {
             const float BASE_FREQ = 55F;
+            const byte OCTAVES = 5;
             ShinNoteFinderDFT NF = new ShinNoteFinderDFT();
+            NF.OctaveCount = OCTAVES;
+            NF.BinsPerOctave = binsPer;
             NF.CalculateFrequencies(BASE_FREQ);
 
             FieldInfo BinFreq = typeof(ShinNoteFinderDFT).GetField("BinFrequencies", BindingFlags.NonPublic | BindingFlags.Instance);
             float[] Value = (float[])BinFreq.GetValue(NF);
 
             // Make sure we have the correct number of frequency bins.
-            Assert.AreEqual(NF.BinCount, Value.Length, "Bin count was incorrect");
+            Assert.AreEqual(OCTAVES * binsPer, Value.Length, "Bin count was incorrect");
 
             // Make sure the first bin is the base frequency we set earlier.
             Assert.AreEqual(BASE_FREQ, Value[0], "Base frequency was incorrectly set");
 
-            float CalcNextOctave = Value[NF.BinsPerOctave];
+            float CalcNextOctave = Value[binsPer];
 
             // Make sure the bin 1 octave up is double the base frequency.
             Assert.IsTrue(Math.Abs((BASE_FREQ * 2) - CalcNextOctave) < 0.0001F, "Higher frequencies were incorrectly calculated");
