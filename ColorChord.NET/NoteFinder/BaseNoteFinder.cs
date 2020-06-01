@@ -194,7 +194,7 @@ namespace ColorChord.NET
         public static void Start()
         {
             DFT = new ShinNoteFinderDFT();
-            //DFT.WindowSize = 4096;
+            DFT.WindowSize = 4096;
             //DFT.BinsPerOctave = 24 * 8;
             DFT.CalculateFrequencies(MinimumFrequency);
             DFT.FillReferenceTables();
@@ -232,9 +232,9 @@ namespace ColorChord.NET
 
             // This will read all buffer data from where it was called last up to [AudioBufferHeadWrite] in order to catch up.
             //DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
-            DFTBinData = DFT.Magnitudes;
+            for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] = DFT.Magnitudes[i]; }
 
-            //for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] /= 80000F; }
+            for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] /= 5000F; }
 
             // Pre-process input DFT data.
             for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
@@ -248,6 +248,7 @@ namespace ColorChord.NET
             }
 
             // Taper off the first and last octave.
+            // This is to prevent frequency content at the edges of our bin set from creating discontinuities in the folded bins.
             for (int OctaveBinIndex = 0; OctaveBinIndex < OctaveBinCount; OctaveBinIndex++)
             {
                 FrequencyBinValues[OctaveBinIndex] *= (OctaveBinIndex + 1F) / OctaveBinCount; // Taper the first octave
