@@ -74,7 +74,7 @@ namespace ColorChord.NET.Outputs.Display
             for (int i = 0; i < Data.Length; i++)
             {
                 DataFilt[i] = (DataFilt[i] * 0.2F) + (Data[i] * 0.8F);
-                float Value = DataFilt[i] / 800F;
+                float Value = Data[i] / 200F;//DataFilt[i] / 200F;
                 this.GeometryData[(i * 6 * 5) + (1 * 5) + 1] = 1F - Value;
                 this.GeometryData[(i * 6 * 5) + (2 * 5) + 1] = 1F - Value;
                 this.GeometryData[(i * 6 * 5) + (5 * 5) + 1] = 1F - Value;

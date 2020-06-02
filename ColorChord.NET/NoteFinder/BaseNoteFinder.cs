@@ -195,7 +195,8 @@ namespace ColorChord.NET
         {
             DFT = new ShinNoteFinderDFT();
             DFT.WindowSize = 4096;
-            //DFT.BinsPerOctave = 24 * 8;
+            DFT.BinsPerOctave = 24;// * 2;
+            DFT.OctaveCount = 6;
             DFT.CalculateFrequencies(MinimumFrequency);
             DFT.FillReferenceTables();
             DFT.PrepareSampleStorage();

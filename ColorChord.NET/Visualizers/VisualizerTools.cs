@@ -12,8 +12,9 @@ namespace ColorChord.NET.Visualizers
         public static uint CCtoHEX(float note, float sat, float value)
         {
             float hue;
-            note = ((note % 1.0F) * 12) - 3;
-            if (note < 0) { note += 12; }
+            //note = ((note % 1.0F) * 12) - 3;
+            //if (note < 0) { note += 12; }
+            note = (note % 1F) * 12F;
             if (note < 4)
             {
                 //Needs to be YELLOW->RED
