@@ -27,6 +27,7 @@
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircleFinish.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\SmoothRadialBright.frag" />
     <EmbeddedResource Include="sample-config.json" />
   </ItemGroup>
   <ItemGroup>
@@ -47,6 +48,9 @@
     <Compile Remove="MainForm.cs" />
     <Compile Remove="MainForm.Designer.cs" />
     <EmbeddedResource Remove="MainForm.resx" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="Outputs\Display\Shaders\SmoothRadialBright.frag" />
   </ItemGroup>
   <PropertyGroup>
     <PreBuildEvent>xcopy /f /y $(SolutionDir)ColorChordLib\Release\ColorChordLib.dll $(TargetDir)</PreBuildEvent>

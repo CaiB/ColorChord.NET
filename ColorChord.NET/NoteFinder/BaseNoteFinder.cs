@@ -69,7 +69,7 @@ namespace ColorChord.NET
         #region Configurable Constants
         /// <summary> The frequency at which the DFT output starts. </summary>
         /// <remarks> If this is changed, <see cref="SetSampleRate(int)"/> needs to be called in order to actaully apply the changes to the frequency list. </remarks>
-        private static int MinimumFrequency = 55;
+        private static float MinimumFrequency = 55;
 
         /// <summary> Determines how much the previous frame's DFT data is used in the next frame. Smooths out rapid changes from frame-to-frame, but can cause delay if too strong. </summary>
         /// <remarks> Lower values will mean less inter-frame smoothing. Range: 0.0~1.0 </remarks>
@@ -127,7 +127,7 @@ namespace ColorChord.NET
 
         /// <summary> The individual note distributions (peaks) detected this cycle. </summary>
         /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
-        private static readonly NoteDistribution[] NoteDistributions = new NoteDistribution[NoteCount];
+        public static readonly NoteDistribution[] NoteDistributions = new NoteDistribution[NoteCount];
         #endregion
 
         /// <summary> The non-folded frequency bins, used inter-frame to do smoothing, then folded to form the spectrum. </summary>
@@ -166,7 +166,7 @@ namespace ColorChord.NET
         public static void ApplyConfig(Dictionary<string, object> options)
         {
             Log.Info("Reading config for NoteFinder.");
-            MinimumFrequency = ConfigTools.CheckInt(options, "minFreq", 0, 20000, MinimumFrequency, true); // See below
+            MinimumFrequency = ConfigTools.CheckFloat(options, "minFreq", 0F, 20000F, MinimumFrequency, true); // See below
             DFTIIRMultiplier = ConfigTools.CheckFloat(options, "DFTIIR", 0F, 1F, DFTIIRMultiplier, true);
             DFTDataAmplifier = ConfigTools.CheckFloat(options, "DFTAmp", 0F, 10000F, DFTDataAmplifier, true);
             DFTSensitivitySlope = ConfigTools.CheckFloat(options, "DFTSlope", -100F, 100F, DFTSensitivitySlope, true);
@@ -232,10 +232,10 @@ namespace ColorChord.NET
             float[] DFTBinData = new float[DFTRawBinCount];
 
             // This will read all buffer data from where it was called last up to [AudioBufferHeadWrite] in order to catch up.
-            //DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
-            for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] = DFT.Magnitudes[i]; }
+            DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
+            //for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] = DFT.Magnitudes[i]; }
 
-            for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] /= 5000F; }
+            //for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] /= 5000F; }
 
             // Pre-process input DFT data.
             for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
@@ -492,7 +492,7 @@ namespace ColorChord.NET
 
         /// <summary> A note distribution, represented as a location, amplitude, and sigma, defining a normal (Gaussian) distribution. </summary>
         /// <remarks> These are created directly from DFT output, and later associate and interact with <see cref="Note"/> objects to update the current set of active notes. </remarks>
-        private struct NoteDistribution : IComparable<NoteDistribution>
+        public struct NoteDistribution : IComparable<NoteDistribution>
         {
             /// <summary> The amplitude (relative strength) of the note. </summary>
             public float Amplitude;
