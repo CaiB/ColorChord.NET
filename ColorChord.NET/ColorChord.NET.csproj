@@ -55,7 +55,7 @@
   <PropertyGroup>
 
   </PropertyGroup>
-  <Target Name="CopyOver" AfterTargets="Build">
+  <Target Name="CopyOver" AfterTargets="Build;Publish">
     <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.dll $(TargetDir)" />
     <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.so $(TargetDir)" />
     <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\ColorChordLib.dll $(TargetDir)" />

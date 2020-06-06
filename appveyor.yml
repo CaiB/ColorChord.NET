@@ -1,4 +1,4 @@
-version: 0.5-pre{build}
+version: 0.6.0.{build}
 branches:
   only:
   - master
@@ -13,15 +13,24 @@ assembly_info:
   assembly_version: '{version}'
   assembly_file_version: '{version}'
   assembly_informational_version: '{version}'
-before_build:
-- ps: nuget restore
-build:
-  verbosity: minimal
-after_build:
+dotnet_csproj:
+  patch: true
+  file: '**\*.csproj'
+  version: '{version}'
+  version_prefix: '{version}'
+  package_version: '{version}'
+  assembly_version: '{version}'
+  file_version: '{version}'
+  informational_version: '{version}'
+build_script:
 - cmd: >-
-    7z a autobuild-v%appveyor_build_version%.zip %APPVEYOR_BUILD_FOLDER%\ColorChord.NET\bin\Release\*.dll
+    nuget restore
 
-    7z a autobuild-v%appveyor_build_version%.zip %APPVEYOR_BUILD_FOLDER%\ColorChord.NET\bin\Release\*.exe
+
+    dotnet publish "%APPVEYOR_BUILD_FOLDER%\ColorChord.NET\ColorChord.NET.csproj" --output "%APPVEYOR_BUILD_FOLDER%\ColorChord.NET\PublishResult" --configuration Release --verbosity minimal
+
+
+    7z a autobuild-v%appveyor_build_version%.zip %APPVEYOR_BUILD_FOLDER%\ColorChord.NET\PublishResult\*
 artifacts:
 - path: autobuild-v*.zip
 deploy:
