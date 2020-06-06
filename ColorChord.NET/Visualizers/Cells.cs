@@ -33,19 +33,19 @@ namespace ColorChord.NET.Visualizers
         public void ApplyConfig(Dictionary<string, object> options)
         {
             Log.Info("Reading config for Cells \"" + this.Name + "\".");
-            if (!options.ContainsKey("ledCount") || !int.TryParse((string)options["ledCount"], out int LEDs) || LEDs <= 0) { Log.Error("Tried to create Linear visualizer with invalid/missing ledCount."); return; }
+            if (!options.ContainsKey("LEDCount") || !int.TryParse((string)options["LEDCount"], out int LEDs) || LEDs <= 0) { Log.Error("Tried to create Linear visualizer with invalid/missing LEDCount."); return; }
 
-            this.LEDCount = ConfigTools.CheckInt(options, "ledCount", 1, 100000, 50, true);
-            this.FramePeriod = 1000 / ConfigTools.CheckInt(options, "frameRate", 0, 1000, 60, true);
+            this.LEDCount = ConfigTools.CheckInt(options, "LEDCount", 1, 100000, 50, true);
+            this.FramePeriod = 1000 / ConfigTools.CheckInt(options, "FrameRate", 0, 1000, 60, true);
 
-            this.LEDFloor = ConfigTools.CheckFloat(options, "ledFloor", 0, 1, 0.1F, true);
-            this.LightSiding = ConfigTools.CheckFloat(options, "lightSiding", 0, 100, 1.9F, true);
-            this.SaturationAmplifier = ConfigTools.CheckFloat(options, "saturationAmplifier", 0, 100, 2F, true);
-            this.QtyAmp = ConfigTools.CheckFloat(options, "qtyAmp", 0, 100, 20, true);
-            this.SteadyBright = ConfigTools.CheckBool(options, "steadyBright", false, true);
-            this.TimeBased = ConfigTools.CheckBool(options, "timeBased", false, true);
-            this.Snakey = ConfigTools.CheckBool(options, "snakey", false, true);
-            this.Enabled = ConfigTools.CheckBool(options, "enable", true, true);
+            this.LEDFloor = ConfigTools.CheckFloat(options, "LEDFloor", 0, 1, 0.1F, true);
+            this.LightSiding = ConfigTools.CheckFloat(options, "LightSiding", 0, 100, 1.9F, true);
+            this.SaturationAmplifier = ConfigTools.CheckFloat(options, "SaturationAmplifier", 0, 100, 2F, true);
+            this.QtyAmp = ConfigTools.CheckFloat(options, "QtyAmp", 0, 100, 20, true);
+            this.SteadyBright = ConfigTools.CheckBool(options, "SteadyBright", false, true);
+            this.TimeBased = ConfigTools.CheckBool(options, "TimeBased", false, true);
+            this.Snakey = ConfigTools.CheckBool(options, "Snakey", false, true);
+            this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
             ConfigTools.WarnAboutRemainder(options, typeof(IVisualizer));
 
             this.OutputData = new byte[this.LEDCount * 3];

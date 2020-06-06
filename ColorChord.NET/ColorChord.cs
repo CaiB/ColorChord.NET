@@ -68,10 +68,10 @@ namespace ColorChord.NET
             Log.Info("Reading and applying configuration file \"" + ConfigFile + "\"...");
 
             // Audio Source
-            if (!JSON.ContainsKey("source") || !JSON["source"].HasValues) { Log.Warn("Could not find valid \"source\" definition. No audio source will be configured."); }
+            if (!JSON.ContainsKey("Source") || !JSON["Source"].HasValues) { Log.Warn("Could not find valid \"Source\" definition. No audio source will be configured."); }
             else
             {
-                IAudioSource Source = CreateObject<IAudioSource>("ColorChord.NET.Sources." + (string)JSON["source"]["type"], JSON["source"]);
+                IAudioSource Source = CreateObject<IAudioSource>("ColorChord.NET.Sources." + (string)JSON["Source"]["Type"], JSON["Source"]);
                 if (Source != null)
                 {
                     ColorChord.Source = Source;
@@ -82,33 +82,33 @@ namespace ColorChord.NET
             }
 
             // Note Finder
-            if (!JSON.ContainsKey("noteFinder")) { Log.Warn("Could not find valid \"noteFinder\" definition. All defaults will be used."); }
+            if (!JSON.ContainsKey("NoteFinder")) { Log.Warn("Could not find valid \"NoteFinder\" definition. All defaults will be used."); }
             else
             {
-                BaseNoteFinder.ApplyConfig(ToDict(JSON["noteFinder"]));
+                BaseNoteFinder.ApplyConfig(ToDict(JSON["NoteFinder"]));
             }
 
             // Visualizers
-            if (!JSON.ContainsKey("visualizers") || !JSON["visualizers"].HasValues || ((JArray)JSON["visualizers"]).Count <= 0) { Log.Warn("Could not find valid \"visualizers\" definition. No visualizers will be configured."); }
+            if (!JSON.ContainsKey("Visualizers") || !JSON["Visualizers"].HasValues || ((JArray)JSON["Visualizers"]).Count <= 0) { Log.Warn("Could not find valid \"Visualizers\" definition. No visualizers will be configured."); }
             else
             {
-                foreach (JToken Entry in (JArray)JSON["visualizers"])
+                foreach (JToken Entry in (JArray)JSON["Visualizers"])
                 {
-                    IVisualizer Vis = CreateObject<IVisualizer>("ColorChord.NET.Visualizers." + (string)Entry["type"], Entry);
+                    IVisualizer Vis = CreateObject<IVisualizer>("ColorChord.NET.Visualizers." + (string)Entry["Type"], Entry);
                     Vis.Start();
-                    VisualizerInsts.Add((string)Entry["name"], Vis);
+                    VisualizerInsts.Add((string)Entry["Name"], Vis);
                 }
             }
 
             // Outputs
-            if (!JSON.ContainsKey("outputs") || !JSON["outputs"].HasValues || ((JArray)JSON["visualizers"]).Count <= 0) { Log.Warn("Could not find valid \"outputs\" definition. No outputs will be configured."); }
+            if (!JSON.ContainsKey("Outputs") || !JSON["Outputs"].HasValues || ((JArray)JSON["Visualizers"]).Count <= 0) { Log.Warn("Could not find valid \"Outputs\" definition. No outputs will be configured."); }
             else
             {
-                foreach (JToken Entry in (JArray)JSON["outputs"])
+                foreach (JToken Entry in (JArray)JSON["Outputs"])
                 {
-                    IOutput Out = CreateObject<IOutput>("ColorChord.NET.Outputs." + (string)Entry["type"], Entry, true);
+                    IOutput Out = CreateObject<IOutput>("ColorChord.NET.Outputs." + (string)Entry["Type"], Entry, true);
                     Out.Start();
-                    OutputInsts.Add((string)Entry["name"], Out);
+                    OutputInsts.Add((string)Entry["Name"], Out);
                 }
             }
             Log.Info("Finished processing config file.");
@@ -123,7 +123,7 @@ namespace ColorChord.NET
         {
             Type ObjType = Type.GetType(fullName);
             if (!typeof(InterfaceType).IsAssignableFrom(ObjType)) { return default; } // Does not implement the right interface.
-            object Instance = ObjType == null ? null : Activator.CreateInstance(ObjType, (string)configEntry["name"]);
+            object Instance = ObjType == null ? null : Activator.CreateInstance(ObjType, (string)configEntry["Name"]);
             if (Instance != null)
             {
                 InterfaceType Instance2 = (InterfaceType)Instance;

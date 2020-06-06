@@ -1,5 +1,4 @@
 ﻿using ColorChord.NET.Outputs;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 
@@ -79,9 +78,9 @@ namespace ColorChord.NET
         {
             foreach (string Item in category.Keys)
             {
-                if (Item == "type" || Item == "name") { continue; }
-                if (interfaceType == typeof(IOutput) && Item == "visualizerName") { continue; }
-                if (interfaceType == typeof(IOutput) && Item == "modes") { continue; }
+                if (Item == "Type" || Item == "Name") { continue; }
+                if (interfaceType == typeof(IOutput) && Item == "VisualizerName") { continue; }
+                if (interfaceType == typeof(IOutput) && Item == "Modes") { continue; }
                 Log.Warn("Unknown config entry found: \"" + Item + "\". Ignoring.");
             }
         }

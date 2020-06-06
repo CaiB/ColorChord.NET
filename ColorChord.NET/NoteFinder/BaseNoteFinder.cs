@@ -166,18 +166,18 @@ namespace ColorChord.NET
         public static void ApplyConfig(Dictionary<string, object> options)
         {
             Log.Info("Reading config for NoteFinder.");
-            MinimumFrequency = ConfigTools.CheckFloat(options, "minFreq", 0F, 20000F, MinimumFrequency, true); // See below
+            MinimumFrequency = ConfigTools.CheckFloat(options, "StartFreq", 0F, 20000F, MinimumFrequency, true); // See below
             DFTIIRMultiplier = ConfigTools.CheckFloat(options, "DFTIIR", 0F, 1F, DFTIIRMultiplier, true);
-            DFTDataAmplifier = ConfigTools.CheckFloat(options, "DFTAmp", 0F, 10000F, DFTDataAmplifier, true);
+            DFTDataAmplifier = ConfigTools.CheckFloat(options, "DFTAmplify", 0F, 10000F, DFTDataAmplifier, true);
             DFTSensitivitySlope = ConfigTools.CheckFloat(options, "DFTSlope", -100F, 100F, DFTSensitivitySlope, true);
-            OctaveFilterIterations = ConfigTools.CheckInt(options, "octaveFilterIterations", 0, 10000, OctaveFilterIterations, true);
-            OctaveFilterStrength = ConfigTools.CheckFloat(options, "octaveFilterStrength", 0F, 1F, OctaveFilterStrength, true);
-            MinNoteInfluenceDistance = ConfigTools.CheckFloat(options, "noteInfluenceDist", 0F, 100F, MinNoteInfluenceDistance, true);
-            NoteAttachFrequencyIIRMultiplier = ConfigTools.CheckFloat(options, "noteAttachFreqIIR", 0F, 1F, NoteAttachFrequencyIIRMultiplier, true);
-            NoteAttachAmplitudeIIRMultiplier = ConfigTools.CheckFloat(options, "noteAttachAmpIIR", 0F, 1F, NoteAttachAmplitudeIIRMultiplier, true);
-            NoteAttachAmplitudeIIRMultiplier2 = ConfigTools.CheckFloat(options, "noteAttachAmpIIR2", 0F, 1F, NoteAttachAmplitudeIIRMultiplier2, true);
-            MinNoteCombineDistance = ConfigTools.CheckFloat(options, "noteCombineDistance", 0F, 100F, MinNoteCombineDistance, true);
-            NoteOutputChop = ConfigTools.CheckFloat(options, "noteOutputChop", 0F, 100F, NoteOutputChop, true);
+            OctaveFilterIterations = ConfigTools.CheckInt(options, "OctaveFilterIterations", 0, 10000, OctaveFilterIterations, true);
+            OctaveFilterStrength = ConfigTools.CheckFloat(options, "OctaveFilterStrength", 0F, 1F, OctaveFilterStrength, true);
+            MinNoteInfluenceDistance = ConfigTools.CheckFloat(options, "NoteInfluenceDist", 0F, 100F, MinNoteInfluenceDistance, true);
+            NoteAttachFrequencyIIRMultiplier = ConfigTools.CheckFloat(options, "NoteAttachFreqIIR", 0F, 1F, NoteAttachFrequencyIIRMultiplier, true);
+            NoteAttachAmplitudeIIRMultiplier = ConfigTools.CheckFloat(options, "NoteAttachAmpIIR", 0F, 1F, NoteAttachAmplitudeIIRMultiplier, true);
+            NoteAttachAmplitudeIIRMultiplier2 = ConfigTools.CheckFloat(options, "NoteAttachAmpIIR2", 0F, 1F, NoteAttachAmplitudeIIRMultiplier2, true);
+            MinNoteCombineDistance = ConfigTools.CheckFloat(options, "NoteCombineDistance", 0F, 100F, MinNoteCombineDistance, true);
+            NoteOutputChop = ConfigTools.CheckFloat(options, "NoteOutputChop", 0F, 100F, NoteOutputChop, true);
             ConfigTools.WarnAboutRemainder(options, typeof(BaseNoteFinder));
 
             // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().

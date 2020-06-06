@@ -37,16 +37,16 @@ namespace ColorChord.NET.Outputs
         {
             Log.Info("Reading config for PacketUDP \"" + this.Name + "\".");
 
-            if (!options.ContainsKey("visualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["visualizerName"])) { Log.Error("Tried to create PacketUDP with missing or invalid visualizer."); return; }
-            this.Source = ColorChord.VisualizerInsts[(string)options["visualizerName"]];
+            if (!options.ContainsKey("VisualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["VisualizerName"])) { Log.Error("Tried to create PacketUDP with missing or invalid visualizer."); return; }
+            this.Source = ColorChord.VisualizerInsts[(string)options["VisualizerName"]];
             this.Source.AttachOutput(this);
 
-            int Port = ConfigTools.CheckInt(options, "port", 0, 65535, 7777, true);
-            string IP = ConfigTools.CheckString(options, "ip", "127.0.0.1", true);
+            int Port = ConfigTools.CheckInt(options, "Port", 0, 65535, 7777, true);
+            string IP = ConfigTools.CheckString(options, "IP", "127.0.0.1", true);
             this.Destination = new IPEndPoint(IPAddress.Parse(IP), Port);
-            this.FrontPadding = (uint)ConfigTools.CheckInt(options, "paddingFront", 0, 1000, 0, true);
-            this.BackPadding = (uint)ConfigTools.CheckInt(options, "paddingBack", 0, 1000, 0, true);
-            this.Enabled = ConfigTools.CheckBool(options, "enable", true, true);
+            this.FrontPadding = (uint)ConfigTools.CheckInt(options, "PaddingFront", 0, 1000, 0, true);
+            this.BackPadding = (uint)ConfigTools.CheckInt(options, "PaddingBack", 0, 1000, 0, true);
+            this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
 
             ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
         }
@@ -61,7 +61,7 @@ namespace ColorChord.NET.Outputs
                 for (int i = 0; i < SourceData.Length; i++) { Output[i + this.FrontPadding] = SourceData[i]; }
             }
             else { return; }
-            this.Sender.Send(Output, Output.Length, this.Destination);
+            if (this.Enabled) { this.Sender.Send(Output, Output.Length, this.Destination); }
         }
     }
 }

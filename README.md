@@ -60,7 +60,7 @@ Device IDs are unique for each device on the system, vary between different comp
 
 (Index is not used, it is just present to make the list easier to read)
 
-# [NoteFinder](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/NoteFinder.cs)
+# [NoteFinder](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/NoteFinder/BaseNoteFinder.cs)
 There is always a single instance of the NoteFinder running. All sources and visualizers connect to the NoteFinder.
 
 The NoteFinder uses a complex, lengthy algorithm to turn sound data into note information. The options below are mostly listed in the order used.
@@ -70,28 +70,30 @@ The NoteFinder uses a complex, lengthy algorithm to turn sound data into note in
 
 | Name | cnlohr Name | Type | Default | Range | Description |
 |---|---|---|---|---|---|
-| `minFreq` | `base_hz` | `int` | 55 | 0-20000 | The minimum frequency analyzed. (in Hz) |
+| `StartFreq` | `base_hz` | `float` | 65.4064 | 0.0-20000.0 | The minimum frequency analyzed. (in Hz) :information_source: See note below. |
 | `DFTIIR` | `dft_iir` | `float` | 0.65 | 0.0~1.0 | Determines how much the previous frame's DFT data is used in the next frame. Smooths out rapid changes from frame-to-frame, but can cause delay if too strong. | 
-| `DFTAmp` | `amplify` | `float` | 2.0 | 0.0~10000.0 | Determines how much the raw DFT data is amplified before being used. |
+| `DFTAmplify` | `amplify` | `float` | 2.0 | 0.0~10000.0 | Determines how much the raw DFT data is amplified before being used. |
 | `DFTSlope` | `slope` | `float` | 0.1 | 0.0~10000.0 | The slope of the extra frequency-dependent amplification done to raw DFT data. Positive values increase sensitivity at higher frequencies. |
-| `octaveFilterIterations` | `filter_iter` | `int` | 2 | 0~10000 | How often to run the octave data filter. This smoothes out each bin with adjacent ones. | 
-| `octaveFilterStrength` | `filter_strength` | `float` | 0.5 | 0.0~1.0 | How strong the octave data filter is. Higher values mean each bin is more aggresively averaged with adjacent bins. Higher values mean less glitchy, but also less clear note peaks. |
-| `noteInfluenceDist` | `note_jumpability` | `float` | 1.8 | 0.0~100.0 | How close a note needs to be to a distribution peak in order to be merged. |
-| `noteAttachFreqIIR` | `note_attach_freq_iir` | `float` | 0.3 | 0.0~1.0 | How strongly the note merging filter affects the note frequency. Stronger filter means notes take longer to shift positions to move together. |
-| `noteAttachAmpIIR` | `note_attach_amp_iir` | `float` | 0.35 | 0.0~1.0 | How strongly the note merging filter affects the note amplitude. Stronger filter means notes take longer to merge fully in amplitude. |
-| `noteAttachAmpIIR2` | `note_attach_amp_iir2` | `float` | 0.25 | 0.0~1.0 | This filter is applied to notes between cycles in order to smooth their amplitudes over time. |
-| `noteCombineDistance` | `note_combine_distance` | `float` | 0.5 | 0.0~100.0 | How close two existing notes need to be in order to get combined into a single note. |
-| `noteOutputChop` | `note_out_chop` | `float` | 0.05 | 0.0~100.0 | Notes below this value get zeroed. Increase if low-amplitude notes are causing noise in output. |
+| `OctaveFilterIterations` | `filter_iter` | `int` | 2 | 0~10000 | How often to run the octave data filter. This smoothes out each bin with adjacent ones. | 
+| `OctaveFilterStrength` | `filter_strength` | `float` | 0.5 | 0.0~1.0 | How strong the octave data filter is. Higher values mean each bin is more aggresively averaged with adjacent bins. Higher values mean less glitchy, but also less clear note peaks. |
+| `NoteInfluenceDist` | `note_jumpability` | `float` | 1.8 | 0.0~100.0 | How close a note needs to be to a distribution peak in order to be merged. |
+| `NoteAttachFreqIIR` | `note_attach_freq_iir` | `float` | 0.3 | 0.0~1.0 | How strongly the note merging filter affects the note frequency. Stronger filter means notes take longer to shift positions to move together. |
+| `NoteAttachAmpIIR` | `note_attach_amp_iir` | `float` | 0.35 | 0.0~1.0 | How strongly the note merging filter affects the note amplitude. Stronger filter means notes take longer to merge fully in amplitude. |
+| `NoteAttachAmpIIR2` | `note_attach_amp_iir2` | `float` | 0.25 | 0.0~1.0 | This filter is applied to notes between cycles in order to smooth their amplitudes over time. |
+| `NoteCombineDistance` | `note_combine_distance` | `float` | 0.5 | 0.0~100.0 | How close two existing notes need to be in order to get combined into a single note. |
+| `NoteOutputChop` | `note_out_chop` | `float` | 0.05 | 0.0~100.0 | Notes below this value get zeroed. Increase if low-amplitude notes are causing noise in output. |
 </details>
+
+> :information_source: The default configuration of `StartFreq` is different than cnlohr's implementation. If you want behaviour to match with his default configurations, change `StartFreq` to `55.0`.
 
 # Visualizers
 
 You may add as many visualizers as you desire, even multiple of the same type. All visualizer instances must have at least these 2 string properties:
-* `type`: The name of the visualizer to use. Must match the titles below.
-* `name`: A unique identifier used to attach outputs and controllers.
+* `Type`: The name of the visualizer to use. Must match the titles below.
+* `Name`: A unique identifier used to attach outputs and controllers.
 ## [Cells](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Cells.cs)
 ![Example](Docs/Images/Output-Display-Cells.gif)
-(Output shown: `DisplayOpenGL:BlockStrip`, 30 blocks, `timeBased`=true)  
+(Output shown: `DisplayOpenGL:BlockStrip`, 30 blocks, `TimeBased`=true)  
 
 Supported data output modes: `Discrete 1D`  
 A 1D output with cells appearing and decaying in a scattered pattern.
@@ -100,16 +102,16 @@ A 1D output with cells appearing and decaying in a scattered pattern.
 
 | Name | cnlohr Name | Type | Default | Range | Description |
 |---|---|---|---|---|---|
-| `ledCount` | `leds` | `int` | 50 | 1~100000 | The number of discrete data points to output. |
-| `frameRate` | | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is outputted. |
-| `ledFloor` | `led_floor` | `float` | 0.1 | 0.0~1.0 | *The minimum intensity of an LED, before it is output as black instead. |
-| `lightSiding` | `light_siding` | `float` | 1.9 | 0.0~100.0 | *Not sure. |
-| `saturationAmplifier` | `satamp` | `float` | 2.0 | 0.0~100.0 | *Multiplier for colour saturation before conversion to RGB and output. |
-| `qtyAmp` | `qtyamp` | `float` | 20 | 0.0~100.0 | *Not sure. |
-| `steadyBright` | `seady_bright` or `steady_bright` | `bool` | false | | *Not sure. |
-| `timeBased` | `bool` | `timebased` | false | | *Whether lights get added from the left side creating a time-dependent decay pattern, or are added randomly. |
-| `snakey` | `snakey` | `bool` | false | | *Not sure. |
-| `enable` | | `bool` | true | | Whether to use this visualizer. |
+| `LEDCount` | `leds` | `int` | 50 | 1~100000 | The number of discrete data points to output. |
+| `FrameRate` | | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is outputted. |
+| `LEDFloor` | `led_floor` | `float` | 0.1 | 0.0~1.0 | *The minimum intensity of an LED, before it is output as black instead. |
+| `LightSiding` | `light_siding` | `float` | 1.9 | 0.0~100.0 | *Not sure. |
+| `SaturationAmplifier` | `satamp` | `float` | 2.0 | 0.0~100.0 | *Multiplier for colour saturation before conversion to RGB and output. |
+| `QtyAmp` | `qtyamp` | `float` | 20 | 0.0~100.0 | *Not sure. |
+| `SteadyBright` | `seady_bright` or `steady_bright` | `bool` | false | | *Not sure. |
+| `TimeBased` | `bool` | `timebased` | false | | *Whether lights get added from the left side creating a time-dependent decay pattern, or are added randomly. |
+| `Snakey` | `snakey` | `bool` | false | | *Not sure. |
+| `Enable` | | `bool` | true | | Whether to use this visualizer. |
 </details>
 
 ## [Linear](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/Linear.cs)
@@ -122,24 +124,24 @@ A 1D output with contiguous blocks of colour, size corresponding to relative not
 
 | Name | cnlohr Name | Type | Default | Range | Description |
 |---|---|---|---|---|---|
-| `ledCount` | `leds` | `int` | 50 | 1~100000 | The number of discrete data points to output. Set this to a low value like 24 if only continuous output is used to save CPU time. |
-| `lightSiding` | `light_siding` | `float` | 1.0 | 0.0~100.0 | Exponent used to convert raw note amplitudes to strength. |
-| `ledFloor` | `led_floor` | `float` | 0.1 | 0.0~1.0 | The minimum relative amplitude of a note required to consider it for output. |
-| `frameRate` | | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is output. |
-| `isCircular` | `is_loop` | `bool` | false | | Whether to treat the output as a circle, allowing wrap-around, or as a line with defined ends. :information_source: See below note. |
-| `steadyBright` | `steady_bright` | `bool` | false | | Applies inter-frame smoothing to the LED brightnesses to prevent fast flickering. |
-| `ledLimit` | `led_limit` | `float` | 1.0 | 0.0~1.0 | The maximum LED brightness. Caps all LEDs at this value, but does not affect values below this threshold. |
-| `saturationAmplifier` | `satamp` | `float` | 1.6 | 0.0~100.0 | Multiplier for colour saturation before conversion to RGB and output. |
-| `enable` | | `bool` | true | | Whether to use this visualizer. |
+| `LEDCount` | `leds` | `int` | 50 | 1~100000 | The number of discrete data points to output. Set this to a low value like 24 if only continuous output is used to save CPU time. |
+| `LightSiding` | `light_siding` | `float` | 1.0 | 0.0~100.0 | Exponent used to convert raw note amplitudes to strength. |
+| `LEDFloor` | `led_floor` | `float` | 0.1 | 0.0~1.0 | The minimum relative amplitude of a note required to consider it for output. |
+| `FrameRate` | | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is output. |
+| `IsCircular` | `is_loop` | `bool` | false | | Whether to treat the output as a circle, allowing wrap-around, or as a line with defined ends. :information_source: See below note. |
+| `SteadyBright` | `steady_bright` | `bool` | false | | Applies inter-frame smoothing to the LED brightnesses to prevent fast flickering. |
+| `LEDLimit` | `led_limit` | `float` | 1.0 | 0.0~1.0 | The maximum LED brightness. Caps all LEDs at this value, but does not affect values below this threshold. |
+| `SaturationAmplifier` | `satamp` | `float` | 1.6 | 0.0~100.0 | Multiplier for colour saturation before conversion to RGB and output. |
+| `Enable` | | `bool` | true | | Whether to use this visualizer. |
 </details>
 
-> :information_source: `"isCircular": true` in continuous mode does not match the behaviour of base ColorChord, as it uses a different, custom algorithm for positioning. However, discrete mode should match the base version. `"isCircular": false` should match base ColorChord in both continuous and discrete mode.
+> :information_source: `"IsCircular": true` in continuous mode does not match the behaviour of base ColorChord, as it uses a different, custom algorithm for positioning. However, discrete mode should match the base version. `"IsCircular": false` should match base ColorChord in both continuous and discrete mode.
 
 # Outputs
 You may add as many outputs as you desire, even multiple of the same type, and any combination of compatible outputs can be added to a single visualizer. All output instances must have at least these 3 string properties:
-* `type`: The name of the output to use. Must match the titles below.
-* `name`: A unique identifier used to attach controllers.
-* `visualizerName`: The `name` property of the visualizer instance to attach to.
+* `Type`: The name of the output to use. Must match the titles below.
+* `Name`: A unique identifier used to attach controllers.
+* `VisualizerName`: The `Name` property of the visualizer instance to attach to.
 
 ## [DisplayOpenGL](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/DisplayOpenGL.cs)
 Supported input modes: Depends on display mode.  
@@ -152,9 +154,9 @@ Behaviour depends on the display mode chosen, but uses OpenGL to render graphics
 
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
-| `windowWidth` | `int` | 1280 | 10~4000 | The width of the window, in pixels. |
-| `windowHeight` | `int` | 720 | 10~4000 | The height of the window, in pixels. |
-| `mode` | `object array` | | | The mode(s) to use. See the subsection below.
+| `WindowWidth` | `int` | 1280 | 10~4000 | The width of the window, in pixels. |
+| `WindowHeight` | `int` | 720 | 10~4000 | The height of the window, in pixels. |
+| `Mode` | `object array` | | | The mode(s) to use. See the subsection below.
 </details>
 
 <details>
@@ -191,11 +193,11 @@ Packs the data for each LED in sequence into a UDP packet, then sends it to a gi
 
 | Name | cnlohr Name | Type | Default | Range | Description |
 |---|---|---|---|---|---|
-| `ip` | `address` | `string` | 127.0.0.1 | Valid IPs | The IP to send the packets to. |
-| `port` | `port` | `int` | 7777 | 0~65535 | The port to send the packets to. |
-| `paddingFront` | `skipfirst` | `int` | 0 | 0~1000 | Blank bytes to append to the front of the packet. |
-| `paddingBack` | | `int` | 0 | 0~1000 | Blank bytes to append to the back of the packet. |
-| `enable` | | `bool` | true | | Whether to use this output. |
+| `IP` | `address` | `string` | 127.0.0.1 | Valid IPs | The IP to send the packets to. |
+| `Port` | `port` | `int` | 7777 | 0~65535 | The port to send the packets to. |
+| `PaddingFront` | `skipfirst` | `int` | 0 | 0~1000 | Blank bytes to append to the front of the packet. |
+| `PaddingBack` | | `int` | 0 | 0~1000 | Blank bytes to append to the back of the packet. |
+| `Enable` | | `bool` | true | | Whether to use this output. |
 </details>
 
 > Packets have 65,535 byte size limit. This means no more than 21,835 RGB LEDs can be output at once.

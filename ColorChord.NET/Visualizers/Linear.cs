@@ -69,17 +69,17 @@ namespace ColorChord.NET.Visualizers
         public void ApplyConfig(Dictionary<string, object> options)
         {
             Log.Info("Reading config for Linear \"" + this.Name + "\".");
-            if (!options.ContainsKey("ledCount") || !int.TryParse((string)options["ledCount"], out int LEDs) || LEDs <= 0) { Log.Error("Tried to create Linear visualizer with invalid/missing ledCount."); return; }
+            if (!options.ContainsKey("LEDCount") || !int.TryParse((string)options["LEDCount"], out int LEDs) || LEDs <= 0) { Log.Error("Tried to create Linear visualizer with invalid/missing LEDCount."); return; }
 
-            this.LEDCount = ConfigTools.CheckInt(options, "ledCount", 1, 100000, 50, true);
-            this.LightSiding = ConfigTools.CheckFloat(options, "lightSiding", 0, 100, 1, true);
-            this.LEDFloor = ConfigTools.CheckFloat(options, "ledFloor", 0, 1, 0.1F, true);
-            this.FramePeriod = 1000 / ConfigTools.CheckInt(options, "frameRate", 0, 1000, 60, true);
-            this.IsCircular = ConfigTools.CheckBool(options, "isCircular", false, true);
-            this.SteadyBright = ConfigTools.CheckBool(options, "steadyBright", false, true);
-            this.LEDLimit = ConfigTools.CheckFloat(options, "ledLimit", 0, 1, 1, true);
-            this.SaturationAmplifier = ConfigTools.CheckFloat(options, "saturationAmplifier", 0, 100, 1.6F, true);
-            this.Enabled = ConfigTools.CheckBool(options, "enable", true, true);
+            this.LEDCount = ConfigTools.CheckInt(options, "LEDCount", 1, 100000, 50, true);
+            this.LightSiding = ConfigTools.CheckFloat(options, "LightSiding", 0, 100, 1, true);
+            this.LEDFloor = ConfigTools.CheckFloat(options, "LEDFloor", 0, 1, 0.1F, true);
+            this.FramePeriod = 1000 / ConfigTools.CheckInt(options, "FrameRate", 0, 1000, 60, true);
+            this.IsCircular = ConfigTools.CheckBool(options, "IsCircular", false, true);
+            this.SteadyBright = ConfigTools.CheckBool(options, "SteadyBright", false, true);
+            this.LEDLimit = ConfigTools.CheckFloat(options, "LEDLimit", 0, 1, 1, true);
+            this.SaturationAmplifier = ConfigTools.CheckFloat(options, "SaturationAmplifier", 0, 100, 1.6F, true);
+            this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
             ConfigTools.WarnAboutRemainder(options, typeof(IVisualizer));
         }
 

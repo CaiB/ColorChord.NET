@@ -45,21 +45,21 @@ namespace ColorChord.NET.Outputs
         public void ApplyConfig(Dictionary<string, object> options)
         {
             Log.Info("Reading config for DisplayOpenGL \"" + this.Name + "\".");
-            if (!options.ContainsKey("visualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["visualizerName"])) { Log.Error("Tried to create DisplayOpenGL with missing or invalid visualizer."); return; }
-            this.Source = ColorChord.VisualizerInsts[(string)options["visualizerName"]];
+            if (!options.ContainsKey("VisualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["VisualizerName"])) { Log.Error("Tried to create DisplayOpenGL with missing or invalid visualizer."); return; }
+            this.Source = ColorChord.VisualizerInsts[(string)options["VisualizerName"]];
             this.Source.AttachOutput(this);
 
-            this.WindowWidth = ConfigTools.CheckInt(options, "windowWidth", 10, 4000, 1280, true);
-            this.WindowHeight = ConfigTools.CheckInt(options, "windowHeight", 10, 4000, 720, true);
+            this.WindowWidth = ConfigTools.CheckInt(options, "WindowWidth", 10, 4000, 1280, true);
+            this.WindowHeight = ConfigTools.CheckInt(options, "WindowHeight", 10, 4000, 720, true);
 
-            if (options.ContainsKey("modes")) // Make sure that everything else is configured before creating the modes!
+            if (options.ContainsKey("Modes")) // Make sure that everything else is configured before creating the modes!
             {
-                Dictionary<string, object>[] ModeList = (Dictionary<string, object>[])options["modes"];
+                Dictionary<string, object>[] ModeList = (Dictionary<string, object>[])options["Modes"];
                 for (int i = 0; i < 1/*ModeList.Length*/; i++) // TODO: Add support for multiple modes.
                 {
-                    if (!ModeList[i].ContainsKey("type")) { Log.Error("Mode at index " + i + " is missing \"type\" specification."); continue; }
-                    this.Display = CreateMode("ColorChord.NET.Outputs.Display." + ModeList[i]["type"], ModeList[i]);
-                    if (this.Display == null) { Log.Error("Failed to create display of type \"" + ModeList[i]["type"] + "\" under \"" + this.Name + "\"."); }
+                    if (!ModeList[i].ContainsKey("type")) { Log.Error("Mode at index " + i + " is missing \"Type\" specification."); continue; }
+                    this.Display = CreateMode("ColorChord.NET.Outputs.Display." + ModeList[i]["Type"], ModeList[i]);
+                    if (this.Display == null) { Log.Error("Failed to create display of type \"" + ModeList[i]["Type"] + "\" under \"" + this.Name + "\"."); }
 
                     // We already loaded, we want to make sure our display does as well.
                     if (this.Loaded) { this.Display?.Load(); }
