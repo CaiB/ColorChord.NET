@@ -39,7 +39,11 @@
 #define DFTIIR 6
 #endif
 
+#ifdef WINDOWS
 #define DllExport __declspec( dllexport )
+#else
+#define DllExport extern
+#endif
 
 //Everything the integer one buys, except it only calculates 2 octaves worth of
 //notes per audio frame.
