@@ -70,7 +70,7 @@ namespace ColorChord.NET.Outputs.Display
                 GL.Uniform1(this.LocationSigma, this.PeakWidth);
             }
 
-            ConfigTools.WarnAboutRemainder(options, typeof(IVisualizer));
+            ConfigTools.WarnAboutRemainder(options, typeof(IDisplayMode));
         }
 
         public void Dispatch() { }

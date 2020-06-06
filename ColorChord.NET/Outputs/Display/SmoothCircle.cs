@@ -205,7 +205,7 @@ namespace ColorChord.NET.Outputs.Display
             Log.Info("Reading config for SmoothCircle.");// + this.Name + "\".");
             this.IsInfinity = ConfigTools.CheckBool(options, "IsInfinity", false, true);
 
-            ConfigTools.WarnAboutRemainder(options, typeof(IVisualizer));
+            ConfigTools.WarnAboutRemainder(options, typeof(IDisplayMode));
         }
 
         public void Load()
