@@ -53,12 +53,12 @@
     <None Remove="Outputs\Display\Shaders\SmoothRadialBright.frag" />
   </ItemGroup>
   <PropertyGroup>
-    
+
   </PropertyGroup>
-  <Target Name="CopyOver" AfterTargets="Publish">
-    <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.dll $(PublishDir)" />
-    <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.so $(PublishDir)" />
-    <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\ColorChordLib.dll $(PublishDir)" />
-    <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\ColorChordLib.so $(PublishDir)" />
+  <Target Name="CopyOver" AfterTargets="Build">
+    <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.dll $(TargetDir)" />
+    <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.so $(TargetDir)" />
+    <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\ColorChordLib.dll $(TargetDir)" />
+    <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\ColorChordLib.so $(TargetDir)" />
   </Target>
 </Project>
