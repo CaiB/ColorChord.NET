@@ -1,61 +1,61 @@
 {
-    "source":
+    "Source":
     {
-        "type": "WASAPILoopback",
+        "Type": "WASAPILoopback",
         "useInput": false,
         "device": "default",
         "printDeviceInfo": true
     },
-    "noteFinder":
+    "NoteFinder":
     {
         
     },
-    "visualizers":
+    "Visualizers":
     [
         {
-            "type": "Linear",
-            "name": "SampleLinear",
-            "ledCount": 50,
-            "isCircular": true,
-            "frameRate": 60,
-            "lightSiding": 1.0,
-            "steadyBright": false,
-            "ledFloor": 0.1,
-            "ledLimit": 1.0,
-            "saturationAmplifier": 1.6,
-            "enable": true
+            "Type": "Linear",
+            "Name": "SampleLinear",
+            "LEDCount": 50,
+            "IsCircular": true,
+            "FrameRate": 60,
+            "LightSiding": 1.0,
+            "SteadyBright": false,
+            "LEDFloor": 0.1,
+            "LEDLimit": 1.0,
+            "SaturationAmplifier": 1.6,
+            "Enable": true
         }
     ],
-    "outputs":
+    "Outputs":
     [
         {
-            "type": "PacketUDP",
-            "name": "SampleUDP",
-            "visualizerName": "SampleLinear",
-            "ip": "127.0.0.1",
-            "port": 7777,
-            "paddingFront": 0,
-            "paddingBack": 0,
-            "enable": false
+            "Type": "PacketUDP",
+            "Name": "SampleUDP",
+            "VisualizerName": "SampleLinear",
+            "IP": "127.0.0.1",
+            "Port": 7777,
+            "PaddingFront": 0,
+            "PaddingBack": 0,
+            "Enable": false
         },
         {
-            "type": "DisplayOpenGL",
-            "name": "SampleDisplay",
-            "visualizerName": "SampleLinear",
-            "modes":
+            "Type": "DisplayOpenGL",
+            "Name": "SampleDisplay",
+            "VisualizerName": "SampleLinear",
+            "Modes":
             [
                 {
-                    "type": "SmoothCircle",
+                    "Type": "SmoothCircle",
                     "IsInfinity": true,
-                    "enable": true
+                    "Enable": true
                 }
             ],
-            "windowWidth": 600,
-            "windowHeight": 600,
-            "enable": true
+            "WindowWidth": 600,
+            "WindowHeight": 600,
+            "Enable": true
         }
     ],
-    "controllers":
+    "Controllers":
     [
 
     ]

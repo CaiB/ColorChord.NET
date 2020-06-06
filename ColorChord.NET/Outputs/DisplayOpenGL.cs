@@ -57,7 +57,7 @@ namespace ColorChord.NET.Outputs
                 Dictionary<string, object>[] ModeList = (Dictionary<string, object>[])options["Modes"];
                 for (int i = 0; i < 1/*ModeList.Length*/; i++) // TODO: Add support for multiple modes.
                 {
-                    if (!ModeList[i].ContainsKey("type")) { Log.Error("Mode at index " + i + " is missing \"Type\" specification."); continue; }
+                    if (!ModeList[i].ContainsKey("Type")) { Log.Error("Mode at index " + i + " is missing \"Type\" specification."); continue; }
                     this.Display = CreateMode("ColorChord.NET.Outputs.Display." + ModeList[i]["Type"], ModeList[i]);
                     if (this.Display == null) { Log.Error("Failed to create display of type \"" + ModeList[i]["Type"] + "\" under \"" + this.Name + "\"."); }
 
