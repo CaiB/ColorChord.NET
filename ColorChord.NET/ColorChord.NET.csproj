@@ -53,6 +53,9 @@
     <None Remove="Outputs\Display\Shaders\SmoothRadialBright.frag" />
   </ItemGroup>
   <PropertyGroup>
-    <PreBuildEvent>xcopy /f /y $(SolutionDir)ColorChordLib\Release\ColorChordLib.dll $(TargetDir)</PreBuildEvent>
+    <PreBuildEvent>xcopy /f /y $(SolutionDir)Libraries\CNFA.dll $(TargetDir)
+xcopy /f /y $(SolutionDir)Libraries\CNFA.so $(TargetDir)
+xcopy /f /y $(SolutionDir)Libraries\ColorChordLib.dll $(TargetDir)
+xcopy /f /y $(SolutionDir)Libraries\ColorChordLib.so $(TargetDir)</PreBuildEvent>
   </PropertyGroup>
 </Project>
