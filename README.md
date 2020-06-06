@@ -42,7 +42,7 @@ _* indicates an uncertain description. I don't fully understand the methodology 
 
 # Sources
 **Only one source can be defined at once currently.**
-### [WASAPILoopback](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Sources/WASAPILoopback.cs)
+## [WASAPILoopback](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Sources/WASAPILoopback.cs)
 Gets data out of the Windows Audio Session API. Supports input and output devices (e.g. microphones or the system speaker output, etc)
 <details>
 <summary>View Configuration Table</summary>
@@ -59,6 +59,23 @@ Device IDs are unique for each device on the system, vary between different comp
 > [`Index`] "`Device Name`" = "`Device ID`"
 
 (Index is not used, it is just present to make the list easier to read)
+
+## [CNFABinding](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Sources/CNFABinding.cs)
+Uses [cnlohr's CNFA](https://github.com/cnlohr/cnfa) to get audio data from a variety of drivers. For Linux, PulseAudio is recommended. For Windows, WASAPI is recommended, but you'll probably want to use the WASAPI module above instead of the one through CNFA. This is currently the only method to get audio on non-Windows systems.
+
+<details>
+<summary>View Configuration Table</summary>
+
+| Name | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `Driver` | `string` | `"AUTO"` | `"AUTO"`, `"ALSA"`, `"ANDROID"`, `"NULL"`, `"PULSE"`, `"WASAPI"`, `"WIN"` | Determines which CNFA driver module will be used. If `"AUTO"` is specified, it will attempt to find the best driver for your system. |
+| `SampleRate` | `int` | 48000 | 8000~384000 | Suggests a sample rate to the driver. |
+| `ChannelCount` | `int` | 2 | 1~20 | Suggests a channel count to the driver. |
+| `BufferSize` | `int` | 480 | 1~10000 | Suggests a buffer size to the driver. |
+| `device` | `string` | `"default"` | Valid devices/keywords | The recording device to use. This depends on the driver. Please check CNFA documentation for the driver you want to use to determine what should be used here. |
+| `DeviceOutput` | `string` | `"default"` | Valid devices/keywords | The output device to use. This device is not actually used, as ColorChord.NET does not play audio. |
+
+</details>
 
 # [NoteFinder](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/NoteFinder/BaseNoteFinder.cs)
 There is always a single instance of the NoteFinder running. All sources and visualizers connect to the NoteFinder.
