@@ -184,22 +184,22 @@ namespace ColorChord.NET
             SetSampleRate(SampleRate);
 
             //DFT = new ShinNoteFinderDFT();
-            DFT.SampleRate = (uint)SampleRate;
-            DFT.CalculateFrequencies(MinimumFrequency);
-            DFT.FillReferenceTables();
-            DFT.PrepareSampleStorage();
+            //DFT.SampleRate = (uint)SampleRate;
+            //DFT.CalculateFrequencies(MinimumFrequency);
+            //DFT.FillReferenceTables();
+            //DFT.PrepareSampleStorage();
         }
 
         /// <summary> Starts the processing thread. </summary>
         public static void Start()
         {
-            DFT = new ShinNoteFinderDFT();
+            /*DFT = new ShinNoteFinderDFT();
             DFT.WindowSize = 4096;
             DFT.BinsPerOctave = 24;// * 2;
             DFT.OctaveCount = 6;
             DFT.CalculateFrequencies(MinimumFrequency);
             DFT.FillReferenceTables();
-            DFT.PrepareSampleStorage();
+            DFT.PrepareSampleStorage();*/
 
             KeepGoing = true;
             ProcessThread = new Thread(DoProcessing);

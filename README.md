@@ -162,7 +162,7 @@ Behaviour depends on the display mode chosen, but uses OpenGL to render graphics
 <details>
 <summary>Display Modes</summary>
 
-Every display mode is required to have a `"type"` configured, matching one of the headings below.
+Every display mode is required to have a `Type` configured, matching one of the headings below.
 
 ### [BlockStrip](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/BlockStrip.cs)
 ![Example](Docs/Images/Output-Display-LinearBlock.gif)
@@ -177,11 +177,19 @@ Number of blocks displayed adjusts to match the attached visualizer.
 Supported input modes: `Continuous 1D`  
 > No additional configuration is available.
 
-### [SmoothCircle](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/SmoothCircle.cs)
+### [SmoothCircle](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/SmoothCircle.cs) ("Infinity Circle")
 Supported input modes: `Continuous 1D`
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
 | `IsInfinity` | `bool` | false | | `false` just renders the ring, `true` also renders a decaying persistence effect, appearing to go off to infinity. |
+
+### [SmoothRadialFilled](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/SmoothRadialFilled.cs) ("Circle Beamer")
+Supported input modes: Any/None
+| Name | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `BaseBrightness` | `float` | 0.0 | 0.0~1.0 | How bright colours should be if there is no note at that location. Values greater than 0.0 show a ghost of the colour wheel at all times.
+| `PeakWidth` | `float` | 0.5 | 0.0~10.0 | How wide peaks should be. |
+| `BrightAmp` | `float` | 1.0 | 0.0~100.0 | How much brightness should be amplified. If peak width is increased, you may want to increase this as well, and vice versa. |
 </details>
 
 ## [PacketUDP](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/PacketUDP.cs)

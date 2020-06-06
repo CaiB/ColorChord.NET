@@ -1,7 +1,6 @@
 ﻿#version 330 core
 
 #define BIN_QTY 12
-#define SIGMA 0.6
 #define SQRT2PI 2.506628253
 
 out vec4 FragColor;
@@ -9,6 +8,9 @@ out vec4 FragColor;
 uniform float Amplitudes[BIN_QTY];
 uniform float Means[BIN_QTY];
 uniform vec2 Resolution;
+
+uniform float Sigma;
+uniform float BaseBright;
 
 vec3 HSVToRGB(vec3 c)
 {
@@ -39,21 +41,10 @@ void main()
         float x = Means[i] - (Angle * BIN_QTY);
         x += BIN_QTY * (1 - step(BIN_QTY / -2.0, x));
         x -= BIN_QTY * step(BIN_QTY / 2.0, x);
-        Value += (Amplitudes[i] * 1.0) / (SIGMA * SQRT2PI) * exp(-(x * x) / (2 * SIGMA * SIGMA));
+        Value += Amplitudes[i] / (Sigma * SQRT2PI) * exp(-(x * x) / (2 * Sigma * Sigma));
     }
 
     float OnePixelDist = 2.0 / Resolution.x;
 
-    //vec3 Colour = vec3(0.1);
-
-    /*for(int i = 0; i < (NOTE_QTY - 1); i++)
-    {
-        Colour = mix(Colour, vec3(Colours[(i*3)], Colours[(i*3)+1], Colours[(i*3)+2]), step(Starts[i], Angle) - step(Starts[i+1], Angle));
-    }
-
-    
-    float RegionMult = 1.0 - smoothstep(OUTSIDE, OUTSIDE + OnePixelDist, Radius);
-    Colour *= RegionMult;
-    FragColor = vec4(Colour, smoothstep(INSIDE - OnePixelDist, INSIDE, Radius)); // Black outside, transparent inside*/
-    FragColor = vec4(AngleToRGB(Angle, (0.0 + (Value * 1.0)) * (1 - smoothstep(0.98, 0.98 + OnePixelDist, Radius))), 1.0);
+    FragColor = vec4(AngleToRGB(Angle, (BaseBright + (Value * (1.0 - BaseBright))) * (1 - smoothstep(0.98, 0.98 + OnePixelDist, Radius))), 1.0);
 }

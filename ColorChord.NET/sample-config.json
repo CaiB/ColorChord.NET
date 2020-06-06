@@ -45,14 +45,14 @@
             "Modes":
             [
                 {
-                    "Type": "SmoothCircle",
-                    "IsInfinity": true,
-                    "Enable": true
+                    "Type": "SmoothRadialFilled",
+                    "BaseBrightness": 0.0,
+                    "PeakWidth": 0.35,
+                    "BrightnessAmp": 1.5
                 }
             ],
             "WindowWidth": 600,
-            "WindowHeight": 600,
-            "Enable": true
+            "WindowHeight": 600
         }
     ],
     "Controllers":

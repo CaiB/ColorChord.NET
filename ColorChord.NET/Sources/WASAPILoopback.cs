@@ -242,7 +242,7 @@ namespace ColorChord.NET.Sources
                         ReadyData[Frame] = Sample / this.MixFormat.nChannels;
                         //BaseNoteFinder.DFT.AddSample(ReadyData[Frame]);
                     }
-                    BaseNoteFinder.DFT.AddSamples(ReadyData);
+                    //BaseNoteFinder.DFT.AddSamples(ReadyData);
                     BaseNoteFinder.LastDataAdd = DateTime.UtcNow;
                 }
 
