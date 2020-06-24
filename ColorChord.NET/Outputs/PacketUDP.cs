@@ -33,8 +33,8 @@ namespace ColorChord.NET.Outputs
         /// <remarks> Length = <see cref="LEDLength"/>. </remarks>
         public byte[] LEDValueMapping { get; private set; }
 
-        /// <summary> Whether the output has a specific channel that requires processing colours differently. </summary>
-        public bool UsesChannelY, UsesChannelW;
+        /// <summary> Whether the output has a yellow channel that requires processing colours differently. </summary>
+        public bool UsesChannelY;
 
         /// <summary> Whether this sender instance is enabled (can send packets). </summary>
         public bool Enabled { get; set; }
@@ -68,14 +68,13 @@ namespace ColorChord.NET.Outputs
         }
 
         /// <summary> Sets the pattern length and content based on the given pattern descriptor string. </summary>
-        /// <param name="pattern"> Valid characters are 'R', 'G', 'B', 'Y', 'W'. Other characters cause an exception. </param>
+        /// <param name="pattern"> Valid characters are 'R', 'G', 'B', 'Y'. Other characters cause an exception. </param>
         private void ReadLEDPattern(string pattern)
         {
             this.LEDLength = (byte)pattern.Length;
             pattern = pattern.ToUpper();
 
             this.UsesChannelY = false;
-            this.UsesChannelW = false;
 
             this.LEDValueMapping = new byte[this.LEDLength];
             for (byte i = 0; i < this.LEDValueMapping.Length; i++)
@@ -86,8 +85,7 @@ namespace ColorChord.NET.Outputs
                     case 'G': this.LEDValueMapping[i] = (byte)Channel.Green; continue;
                     case 'B': this.LEDValueMapping[i] = (byte)Channel.Blue; continue;
                     case 'Y': this.LEDValueMapping[i] = (byte)Channel.Yellow; this.UsesChannelY = true; continue;
-                    case 'W': this.LEDValueMapping[i] = (byte)Channel.White; this.UsesChannelW = true; continue;
-                    default: throw new FormatException("Invalid character in UDP format string found, '" + pattern[i] + "'. Valid characters are R, G, B, Y, W.");
+                    default: throw new FormatException("Invalid character in UDP format string found, '" + pattern[i] + "'. Valid characters are R, G, B, Y.");
                 }
             }
         }
@@ -99,8 +97,8 @@ namespace ColorChord.NET.Outputs
             {
                 Output = new byte[(Source1D.GetCountDiscrete() * this.LEDLength) + this.FrontPadding + this.BackPadding];
                 uint[] SourceData = Source1D.GetDataDiscrete(); // The raw data from the visualizer.
-                byte[] LEDData = null; // The values re-formatted to [R,G,B,Y,W][R,G,B,Y,W]...
-                const byte STRIDE = 5;
+                byte[] LEDData = null; // The values re-formatted to [R,G,B,Y][R,G,B,Y]...
+                const byte STRIDE = 4;
 
                 LEDData = new byte[Source1D.GetCountDiscrete() * STRIDE];
 
@@ -125,21 +123,6 @@ namespace ColorChord.NET.Outputs
                         LEDData[(LED * STRIDE) + (byte)Channel.Red] = (Red - Yellow) > 0 ? (byte)(Red - Yellow) : (byte)0;
                         LEDData[(LED * STRIDE) + (byte)Channel.Green] = (Green - Yellow) > 0 ? (byte)(Green - Yellow) : (byte)0;
                     }
-                    else if (this.UsesChannelW) // Add W
-                    {
-                        // TODO: Figure out how to do math on RGBYW systems.
-                        // Currently assumes that Y is not on at the same time.
-                        byte White = 255;
-
-                        if (LEDData[(LED * STRIDE) + (byte)Channel.Red] < White) { White = LEDData[(LED * STRIDE) + (byte)Channel.Red]; } // White = Lowest of R, G, B.
-                        if (LEDData[(LED * STRIDE) + (byte)Channel.Green] < White) { White = LEDData[(LED * STRIDE) + (byte)Channel.Green]; }
-                        if (LEDData[(LED * STRIDE) + (byte)Channel.Blue] < White) { White = LEDData[(LED * STRIDE) + (byte)Channel.Blue]; }
-
-                        LEDData[(LED * STRIDE) + (byte)Channel.White] = White;
-                        LEDData[(LED * STRIDE) + (byte)Channel.Red] -= White;
-                        LEDData[(LED * STRIDE) + (byte)Channel.Green] -= White;
-                        LEDData[(LED * STRIDE) + (byte)Channel.Blue] -= White;
-                    }
 
                     // Copy data to output as needed.
                     for (int b = 0; b < this.LEDLength; b++)
@@ -159,8 +142,7 @@ namespace ColorChord.NET.Outputs
             Red = 0,
             Green = 1,
             Blue = 2,
-            Yellow = 3,
-            White = 4
+            Yellow = 3
         }
     }
 }
