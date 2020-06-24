@@ -2,6 +2,7 @@
 using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Net;
 using System.Net.Sockets;
 
@@ -21,6 +22,19 @@ namespace ColorChord.NET.Outputs
 
         /// <summary> Number of empty bytes to leave at the end of the packet. </summary>
         public uint BackPadding { get; set; }
+
+        /// <summary> The data to place into the padding bytes specified by <see cref="FrontPadding"/> and <see cref="BackPadding"/>. </summary>
+        public byte PaddingContent { get; set; }
+        
+        /// <summary> How many bytes a single LED takes up in the packet. </summary>
+        public byte LEDLength { get; private set; }
+
+        /// <summary> A mapping from the individual LED's content index to values in <see cref="Channel"/>. </summary>
+        /// <remarks> Length = <see cref="LEDLength"/>. </remarks>
+        public byte[] LEDValueMapping { get; private set; }
+
+        /// <summary> Whether the output has a specific channel that requires processing colours differently. </summary>
+        public bool UsesChannelY, UsesChannelW;
 
         /// <summary> Whether this sender instance is enabled (can send packets). </summary>
         public bool Enabled { get; set; }
@@ -46,22 +60,107 @@ namespace ColorChord.NET.Outputs
             this.Destination = new IPEndPoint(IPAddress.Parse(IP), Port);
             this.FrontPadding = (uint)ConfigTools.CheckInt(options, "PaddingFront", 0, 1000, 0, true);
             this.BackPadding = (uint)ConfigTools.CheckInt(options, "PaddingBack", 0, 1000, 0, true);
+            this.PaddingContent = (byte)ConfigTools.CheckInt(options, "PaddingContent", 0x00, 0xFF, 0x00, true);
             this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
+            ReadLEDPattern(ConfigTools.CheckString(options, "LEDPattern", "RGB", true));
 
             ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
+        }
+
+        /// <summary> Sets the pattern length and content based on the given pattern descriptor string. </summary>
+        /// <param name="pattern"> Valid characters are 'R', 'G', 'B', 'Y', 'W'. Other characters cause an exception. </param>
+        private void ReadLEDPattern(string pattern)
+        {
+            this.LEDLength = (byte)pattern.Length;
+            pattern = pattern.ToUpper();
+
+            this.UsesChannelY = false;
+            this.UsesChannelW = false;
+
+            this.LEDValueMapping = new byte[this.LEDLength];
+            for (byte i = 0; i < this.LEDValueMapping.Length; i++)
+            {
+                switch(pattern[i])
+                {
+                    case 'R': this.LEDValueMapping[i] = (byte)Channel.Red; continue;
+                    case 'G': this.LEDValueMapping[i] = (byte)Channel.Green; continue;
+                    case 'B': this.LEDValueMapping[i] = (byte)Channel.Blue; continue;
+                    case 'Y': this.LEDValueMapping[i] = (byte)Channel.Yellow; this.UsesChannelY = true; continue;
+                    case 'W': this.LEDValueMapping[i] = (byte)Channel.White; this.UsesChannelW = true; continue;
+                    default: throw new FormatException("Invalid character in UDP format string found, '" + pattern[i] + "'. Valid characters are R, G, B, Y, W.");
+                }
+            }
         }
 
         public void Dispatch()
         {
             byte[] Output;
-            if (this.Source is IDiscrete1D Source1D)
+            if (this.Source is IDiscrete1D Source1D && this.Enabled)
             {
-                Output = new byte[(Source1D.GetCountDiscrete() * 3) + this.FrontPadding + this.BackPadding];
-                byte[] SourceData = Source1D.GetDataDiscrete();
-                for (int i = 0; i < SourceData.Length; i++) { Output[i + this.FrontPadding] = SourceData[i]; }
+                Output = new byte[(Source1D.GetCountDiscrete() * this.LEDLength) + this.FrontPadding + this.BackPadding];
+                uint[] SourceData = Source1D.GetDataDiscrete(); // The raw data from the visualizer.
+                byte[] LEDData = null; // The values re-formatted to [R,G,B,Y,W][R,G,B,Y,W]...
+                const byte STRIDE = 5;
+
+                LEDData = new byte[Source1D.GetCountDiscrete() * STRIDE];
+
+                int i;
+                for (i = 0; i < this.FrontPadding; i++) { Output[i] = this.PaddingContent; } // Front padding
+                for (int LED = 0; LED < Source1D.GetCountDiscrete(); LED++) // LED Data
+                {
+                    // Copy RGB
+                    LEDData[(LED * STRIDE) + (byte)Channel.Red] = (byte)((SourceData[LED] >> 16) & 0xFF);
+                    LEDData[(LED * STRIDE) + (byte)Channel.Green] = (byte)((SourceData[LED] >> 8) & 0xFF);
+                    LEDData[(LED * STRIDE) + (byte)Channel.Blue] = (byte)(SourceData[LED] & 0xFF);
+
+                    // Calculate other channels if needed
+                    if (this.UsesChannelY) // Add Y
+                    {
+                        byte Red = LEDData[(LED * STRIDE) + (byte)Channel.Red];
+                        byte Green = LEDData[(LED * STRIDE) + (byte)Channel.Green];
+
+                        byte Yellow = Red / 2 > Green ? Green : (byte)(Red / 2); // Yellow = Lower of the two: (Red / 2), Green
+
+                        LEDData[(LED * STRIDE) + (byte)Channel.Yellow] = Yellow;
+                        LEDData[(LED * STRIDE) + (byte)Channel.Red] = (Red - Yellow) > 0 ? (byte)(Red - Yellow) : (byte)0;
+                        LEDData[(LED * STRIDE) + (byte)Channel.Green] = (Green - Yellow) > 0 ? (byte)(Green - Yellow) : (byte)0;
+                    }
+                    else if (this.UsesChannelW) // Add W
+                    {
+                        // TODO: Figure out how to do math on RGBYW systems.
+                        // Currently assumes that Y is not on at the same time.
+                        byte White = 255;
+
+                        if (LEDData[(LED * STRIDE) + (byte)Channel.Red] < White) { White = LEDData[(LED * STRIDE) + (byte)Channel.Red]; } // White = Lowest of R, G, B.
+                        if (LEDData[(LED * STRIDE) + (byte)Channel.Green] < White) { White = LEDData[(LED * STRIDE) + (byte)Channel.Green]; }
+                        if (LEDData[(LED * STRIDE) + (byte)Channel.Blue] < White) { White = LEDData[(LED * STRIDE) + (byte)Channel.Blue]; }
+
+                        LEDData[(LED * STRIDE) + (byte)Channel.White] = White;
+                        LEDData[(LED * STRIDE) + (byte)Channel.Red] -= White;
+                        LEDData[(LED * STRIDE) + (byte)Channel.Green] -= White;
+                        LEDData[(LED * STRIDE) + (byte)Channel.Blue] -= White;
+                    }
+
+                    // Copy data to output as needed.
+                    for (int b = 0; b < this.LEDLength; b++)
+                    {
+                        Output[i] = LEDData[(LED * STRIDE) + this.LEDValueMapping[b]];
+                        i++;
+                    }
+                }
+                for (; i < Output.Length; i++) { Output[i] = this.PaddingContent; } // Back padding
             }
             else { return; }
-            if (this.Enabled) { this.Sender.Send(Output, Output.Length, this.Destination); }
+            this.Sender.Send(Output, Output.Length, this.Destination);
+        }
+
+        private enum Channel : byte
+        {
+            Red = 0,
+            Green = 1,
+            Blue = 2,
+            Yellow = 3,
+            White = 4
         }
     }
 }

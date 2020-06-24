@@ -51,7 +51,7 @@ namespace ColorChord.NET.Visualizers
         public float SaturationAmplifier { get; set; }
 
         private readonly List<IOutput> Outputs = new List<IOutput>();
-        public byte[] OutputDataDiscrete;
+        public uint[] OutputDataDiscrete;
         public ContinuousDataUnit[] OutputDataContinuous;
         public int OutputCountContinuous;
         public float OutputAdvanceContinuous;
@@ -86,7 +86,7 @@ namespace ColorChord.NET.Visualizers
         /// <summary> Used to update internal structures when the number of LEDs changes. </summary>
         private void UpdateSize()
         {
-            this.OutputDataDiscrete = new byte[this.LEDCount * 3];
+            this.OutputDataDiscrete = new uint[this.LEDCount];
             LastLEDColours = new float[this.LEDCount];
             LastLEDPositionsFiltered = new float[this.LEDCount];
             LastLEDSaturations = new float[this.LEDCount];
@@ -123,7 +123,7 @@ namespace ColorChord.NET.Visualizers
         }
 
         public int GetCountDiscrete() => this.LEDCount;
-        public byte[] GetDataDiscrete() => this.OutputDataDiscrete;
+        public uint[] GetDataDiscrete() => this.OutputDataDiscrete;
 
         public int GetCountContinuous() => this.OutputCountContinuous;
         public ContinuousDataUnit[] GetDataContinuous() => this.OutputDataContinuous;
@@ -301,9 +301,11 @@ namespace ColorChord.NET.Visualizers
 
                 uint Colour = VisualizerTools.CCtoHEX(LastLEDColours[LEDIndex], 1.0F, OutSaturation);
 
-                this.OutputDataDiscrete[(LEDIndex * 3) + 0] = (byte)((Colour >> 16) & 0xff);
-                this.OutputDataDiscrete[(LEDIndex * 3) + 1] = (byte)((Colour >> 8) & 0xff);
-                this.OutputDataDiscrete[(LEDIndex * 3) + 2] = (byte)((Colour) & 0xff);
+                this.OutputDataDiscrete[LEDIndex] = Colour;
+
+                //this.OutputDataDiscrete[(LEDIndex * 3) + 0] = (byte)((Colour >> 16) & 0xff);
+                //this.OutputDataDiscrete[(LEDIndex * 3) + 1] = (byte)((Colour >> 8) & 0xff);
+                //this.OutputDataDiscrete[(LEDIndex * 3) + 2] = (byte)((Colour) & 0xff);
             }
 
             if (this.IsCircular)

@@ -11,7 +11,7 @@ namespace ColorChord.NET.Visualizers.Formats
     public interface IDiscrete1D : IVisualizerFormat
     {
         int GetCountDiscrete();
-        byte[] GetDataDiscrete();
+        uint[] GetDataDiscrete();
     }
 
     /// <summary> Used by visualizers to indicate that they output a 2D constant-size array of individual colour data points, like a screen. </summary>

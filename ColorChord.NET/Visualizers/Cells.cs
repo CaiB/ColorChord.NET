@@ -16,7 +16,7 @@ namespace ColorChord.NET.Visualizers
         public int FramePeriod = 1000 / 90;
 
         private readonly List<IOutput> Outputs = new List<IOutput>();
-        public byte[] OutputData;
+        public uint[] OutputData;
         private bool KeepGoing = true;
         private Thread ProcessThread;
 
@@ -48,7 +48,7 @@ namespace ColorChord.NET.Visualizers
             this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
             ConfigTools.WarnAboutRemainder(options, typeof(IVisualizer));
 
-            this.OutputData = new byte[this.LEDCount * 3];
+            this.OutputData = new uint[this.LEDCount];
 
             this.led_note_attached = new int[this.LEDCount];
             this.time_of_change = new double[this.LEDCount];
@@ -87,7 +87,7 @@ namespace ColorChord.NET.Visualizers
         }
 
         public int GetCountDiscrete() => this.LEDCount;
-        public byte[] GetDataDiscrete() => this.OutputData;
+        public uint[] GetDataDiscrete() => this.OutputData;
 
         #region ColorChord Magic
         private int[] led_note_attached;
@@ -228,9 +228,7 @@ namespace ColorChord.NET.Visualizers
                 int ia = this.led_note_attached[i];
                 if (ia == -1)
                 {
-                    this.OutputData[i * 3 + 0] = 0;
-                    this.OutputData[i * 3 + 1] = 0;
-                    this.OutputData[i * 3 + 2] = 0;
+                    this.OutputData[i] = 0;
                     continue;
                 }
                 float sat = binvals[ia] * this.SaturationAmplifier;
@@ -240,9 +238,7 @@ namespace ColorChord.NET.Visualizers
                 if (sendsat > 1) sendsat = 1;
                 uint r = VisualizerTools.CCtoHEX(binpos[ia], 1.0F, sendsat);
 
-                this.OutputData[i * 3 + 0] = (byte)((r >> 16) & 0xff);
-                this.OutputData[i * 3 + 1] = (byte)((r >> 8) & 0xff);
-                this.OutputData[i * 3 + 2] = (byte)((r) & 0xff);
+                this.OutputData[i] = r;
             }
         }
 

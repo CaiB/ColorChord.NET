@@ -73,19 +73,19 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> Called by the visualizer when new data is available. </summary>
         public void Dispatch()
         {
-            byte[] Data = this.DataSource.GetDataDiscrete();
-            if (Data.Length / 3 != this.BlockCount) // The number of blocks has changed!
+            uint[] Data = this.DataSource.GetDataDiscrete();
+            if (Data.Length != this.BlockCount) // The number of blocks has changed!
             {
-                this.BlockCount = Data.Length / 3;
+                this.BlockCount = Data.Length;
                 GenerateGeometry();
             }
             for (int i = 0; i < this.BlockCount; i++) // Every block
             {
                 for (byte v = 0; v < 6; v++) // Every vertex in every block
                 {
-                    this.GeometryData[(i * 6 * 5) + (v * 5) + 2] = Data[(i * 3) + 0] / 255F; // R
-                    this.GeometryData[(i * 6 * 5) + (v * 5) + 3] = Data[(i * 3) + 1] / 255F; // G
-                    this.GeometryData[(i * 6 * 5) + (v * 5) + 4] = Data[(i * 3) + 2] / 255F; // B
+                    this.GeometryData[(i * 6 * 5) + (v * 5) + 2] = (byte)((Data[i] >> 16) & 0xFF) / 255F; // R
+                    this.GeometryData[(i * 6 * 5) + (v * 5) + 3] = (byte)((Data[i] >> 8) & 0xFF) / 255F; // G
+                    this.GeometryData[(i * 6 * 5) + (v * 5) + 4] = (byte)(Data[i] & 0xFF) / 255F; // B
                 }
             }
             this.NewData = true;
