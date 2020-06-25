@@ -84,10 +84,17 @@ namespace ColorChord.NET.Visualizers
                 for (int i = 0; i < LEDCount; i++)
                 {
                     uint LEDValue = 0;
+
+                    if (this.HasYellowChannel) // If Y is present, add to R and G first.
+                    {
+                        byte Yellow = PacketData[(i * Stride) + 3];
+                        PacketData[(i * Stride) + 0] += Yellow;
+                        PacketData[(i * Stride) + 1] += Yellow;
+                    }
+
                     LEDValue |= (uint)(PacketData[(i * Stride) + 0] << 16); // R
                     LEDValue |= (uint)(PacketData[(i * Stride) + 1] << 8); // G
                     LEDValue |= (uint)(PacketData[(i * Stride) + 2]); // B
-                    // TODO: Handle Yellow channel if present.
 
                     this.Data[i] = LEDValue;
                 }
