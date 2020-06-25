@@ -154,6 +154,18 @@ A 1D output with contiguous blocks of colour, size corresponding to relative not
 
 > :information_source: `"IsCircular": true` in continuous mode does not match the behaviour of base ColorChord, as it uses a different, custom algorithm for positioning. However, discrete mode should match the base version. `"IsCircular": false` should match base ColorChord in both continuous and discrete mode.
 
+## [UDPReceiver1D](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/UDPReceiver.cs)
+Supported data output modes: `Discrete 1D`  
+Takes in UDP packets, and outputs them as if the data were locally calculated. Does not actually use the sources or NoteFinder in this instance. Rate and size is determined by input packets. This is mainly only meant for debugging purposes, but if you end up using it, let me know.  
+<details>
+<summary>View Configuration Table</summary>
+
+| Name | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `HasYellowChannel` | `bool` | `false` | | Whether to interpret packets as RGB (false) or RGBY (true). |
+| `Port` | `int` | 7777 | 0~65535 | The port to listen on for UDP packets. |
+</details>
+
 # Outputs
 You may add as many outputs as you desire, even multiple of the same type, and any combination of compatible outputs can be added to a single visualizer. All output instances must have at least these 3 string properties:
 * `Type`: The name of the output to use. Must match the titles below.
@@ -222,6 +234,8 @@ Packs the data for each LED in sequence into a UDP packet, then sends it to a gi
 | `Port` | `port` | `int` | 7777 | 0~65535 | The port to send the packets to. |
 | `PaddingFront` | `skipfirst` | `int` | 0 | 0~1000 | Blank bytes to append to the front of the packet. |
 | `PaddingBack` | | `int` | 0 | 0~1000 | Blank bytes to append to the back of the packet. |
+| `PaddingContent` | `firstval` | `int` | 0 | 0~255 | What data to put in the blank bytes at the start and end, if present. |
+| `LEDPattern` | | `string` | `RGB` | Any valid pattern | The order in which to send data for each LED. Any combination of characters `R`, `G`, `B`, `Y` is valid, in any order, including repetition. Number of characters determines how many bits each LED takes up in the packet. |
 | `Enable` | | `bool` | true | | Whether to use this output. |
 </details>
 
