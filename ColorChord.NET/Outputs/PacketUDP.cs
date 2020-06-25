@@ -56,6 +56,7 @@ namespace ColorChord.NET.Outputs
             this.Source.AttachOutput(this);
 
             int Port = ConfigTools.CheckInt(options, "Port", 0, 65535, 7777, true);
+            if (Port < 1024) { Log.Warn("It is not recommended to use ports below 1024, as they are reserved. UDP sender is operating on port " + Port + "."); }
             string IP = ConfigTools.CheckString(options, "IP", "127.0.0.1", true);
             this.Destination = new IPEndPoint(IPAddress.Parse(IP), Port);
             this.FrontPadding = (uint)ConfigTools.CheckInt(options, "PaddingFront", 0, 1000, 0, true);
