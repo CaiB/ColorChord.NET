@@ -29,6 +29,7 @@ namespace ColorChord.NET.Outputs.Display
 
         private float[] VertexData;
         private ushort TubePosition = 0;
+        private bool IsForward = true;
 
         private bool SetupDone = false;
         private bool NewData;
@@ -163,7 +164,8 @@ namespace ColorChord.NET.Outputs.Display
                 byte[] NewData = new byte[TubeResolution * 4];
                 Array.Copy(this.TextureData, 4 * TubeResolution * this.TubePosition, NewData, 0, 4 * TubeResolution);
                 GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.TubePosition, TubeResolution, 1, PixelFormat.Rgba, PixelType.UnsignedByte, NewData);
-                this.TubePosition = (ushort)((this.TubePosition + 1) % TUBE_LENGTH);
+                this.TubePosition = (ushort)((this.TubePosition + (this.IsForward ? 1 : -1)) % TUBE_LENGTH);
+                if(this.TubePosition == 0 || this.TubePosition == (TUBE_LENGTH - 1)) { this.IsForward = !this.IsForward; }
                 this.NewData = false;
             }
 
