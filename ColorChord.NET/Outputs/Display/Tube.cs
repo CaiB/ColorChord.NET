@@ -21,15 +21,20 @@ namespace ColorChord.NET.Outputs.Display
 
         private byte[] TextureData;
         private int LocationTexture;
+        private uint NewLines = 0;
 
         private Matrix4 Projection;
         private int LocationProjection;
 
+        private Matrix4 TubeTransform = Matrix4.Identity;
+        private int LocationTransform;
+
         private int VertexBufferHandle, VertexArrayHandle;
 
         private float[] VertexData;
+
         private ushort TubePosition = 0;
-        private bool IsForward = true;
+        private int LocationDepthOffset;
 
         private bool SetupDone = false;
         private bool NewData;
@@ -57,13 +62,15 @@ namespace ColorChord.NET.Outputs.Display
         public void Dispatch()
         {
             if (!this.SetupDone) { return; }
+            if (this.NewLines == TUBE_LENGTH) { return; }
 
             for (int seg = 0; seg < TubeResolution; seg++)
             {
-                this.TextureData[(this.TubePosition * (4 * TubeResolution)) + (seg * 4) + 0] = (byte)(this.DataSource.GetDataDiscrete()[seg] >> 16);
-                this.TextureData[(this.TubePosition * (4 * TubeResolution)) + (seg * 4) + 1] = (byte)(this.DataSource.GetDataDiscrete()[seg] >> 8);
-                this.TextureData[(this.TubePosition * (4 * TubeResolution)) + (seg * 4) + 2] = (byte)(this.DataSource.GetDataDiscrete()[seg]);
+                this.TextureData[(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 0] = (byte)(this.DataSource.GetDataDiscrete()[seg] >> 16);
+                this.TextureData[(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 1] = (byte)(this.DataSource.GetDataDiscrete()[seg] >> 8);
+                this.TextureData[(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 2] = (byte)(this.DataSource.GetDataDiscrete()[seg]);
             }
+            this.NewLines++;
             this.NewData = true;
         }
 
@@ -97,16 +104,6 @@ namespace ColorChord.NET.Outputs.Display
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, this.LocationTexture);
 
-            for (int lvl = 0; lvl < TUBE_LENGTH; lvl++)
-            {
-                for(int seg = 0; seg < TubeResolution; seg++)
-                {
-                    this.TextureData[(lvl * (3 * TubeResolution)) + (seg * 3) + 0] = 255;
-                    this.TextureData[(lvl * (3 * TubeResolution)) + (seg * 3) + 1] = (byte)(255 - (lvl * 10));
-                    this.TextureData[(lvl * (3 * TubeResolution)) + (seg * 3) + 2] = 0;
-                }
-            }
-
             GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, TubeResolution, TUBE_LENGTH, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
@@ -118,6 +115,11 @@ namespace ColorChord.NET.Outputs.Display
             this.LocationProjection = this.TubeShader.GetUniformLocation("projection");
             GL.UniformMatrix4(this.LocationProjection, true, ref this.Projection);
 
+            this.LocationDepthOffset = this.TubeShader.GetUniformLocation("depthOffset");
+
+            this.LocationTransform = this.TubeShader.GetUniformLocation("transform");
+            GL.UniformMatrix4(this.LocationTransform, true, ref this.TubeTransform);
+
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
 
@@ -125,20 +127,23 @@ namespace ColorChord.NET.Outputs.Display
             {
                 for(int seg = 0; seg < TubeResolution; seg++)
                 {
+                    // Turn on the commented out lines for crazy effects :)
+                    //float SegStartX = (float)(Math.Cos(Math.PI * 2 * seg / TubeResolution) * (1 - ((float)i / TUBE_LENGTH)) * (1 - Math.Abs(Math.Sin(Frame / 10F)) * 0.2));
                     float SegStartX = (float)Math.Cos(Math.PI * 2 * seg / TubeResolution);
                     float SegStartY = (float)Math.Sin(Math.PI * 2 * seg / TubeResolution);
                     float SegEndX = (float)Math.Cos(Math.PI * 2 * (seg + 1) / TubeResolution);
+                    //float SegEndY = (float)(Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution) * (1 - ((float)(i + 1) / TUBE_LENGTH)) * (1 - Math.Abs(Math.Cos(Frame / 10F)) * 0.2));
                     float SegEndY = (float)Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution);
                     float FrontZ = -1 - (float)i / TUBE_LENGTH;
-                    float BackZ = -1 - (float)(i + 1) / TUBE_LENGTH;
+                    float BackZ = -1 - (float)(i + /*(i * 2)*/ 1) / TUBE_LENGTH;
 
-                    AddPoint(SegStartX, SegStartY, FrontZ, i, seg);
-                    AddPoint(SegStartX, SegStartY, BackZ, i, seg);
-                    AddPoint(SegEndX, SegEndY, FrontZ, i, seg);
+                    AddPoint(SegStartX, SegStartY, FrontZ, i, seg); // Out right
+                    AddPoint(SegStartX, SegStartY, BackZ, i, seg); // In right 
+                    AddPoint(SegEndX, SegEndY, FrontZ, i, seg); // Out left
 
-                    AddPoint(SegEndX, SegEndY, FrontZ, i, seg);
-                    AddPoint(SegStartX, SegStartY, BackZ, i, seg);
-                    AddPoint(SegEndX, SegEndY, BackZ, i, seg);
+                    AddPoint(SegEndX, SegEndY, FrontZ, i, seg); // Out left
+                    AddPoint(SegStartX, SegStartY, BackZ, i, seg); // In right
+                    AddPoint(SegEndX, SegEndY, BackZ, i, seg); // In left
                 }
             }
 
@@ -153,6 +158,9 @@ namespace ColorChord.NET.Outputs.Display
             this.SetupDone = true;
         }
 
+        private Random Random = new Random();
+        private int Frame = 0;
+
         public void Render()
         {
             if (!this.SetupDone) { return; }
@@ -160,14 +168,19 @@ namespace ColorChord.NET.Outputs.Display
 
             if(this.NewData)
             {
-                GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, TubeResolution, TUBE_LENGTH, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
-                byte[] NewData = new byte[TubeResolution * 4];
-                Array.Copy(this.TextureData, 4 * TubeResolution * this.TubePosition, NewData, 0, 4 * TubeResolution);
-                GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.TubePosition, TubeResolution, 1, PixelFormat.Rgba, PixelType.UnsignedByte, NewData);
-                this.TubePosition = (ushort)((this.TubePosition + (this.IsForward ? 1 : -1)) % TUBE_LENGTH);
-                if(this.TubePosition == 0 || this.TubePosition == (TUBE_LENGTH - 1)) { this.IsForward = !this.IsForward; }
+                GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.TubePosition, TubeResolution, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
+                this.TubePosition = (ushort)((this.TubePosition + this.NewLines) % TUBE_LENGTH);
                 this.NewData = false;
+                this.NewLines = 0;
+                GL.Uniform1(this.LocationDepthOffset, (float)this.TubePosition / TUBE_LENGTH);
+                //Matrix4.CreateTranslation((float)((this.Random.NextDouble() - 0.5) / 10), (float)((this.Random.NextDouble() - 0.5) / 10), 0, out this.TubeTransform);
+                //this.TubeTransform = Matrix4.CreateRotationZ(Frame / 30F);
+                Matrix4 Rot = Matrix4.CreateRotationZ(Frame / 60F);
+                Matrix4.CreateTranslation((float)(Math.Sin(Frame / 50F) / 3F), (float)(-Math.Sin(Frame / 100F) / 3F), 0, out this.TubeTransform);
+                this.TubeTransform = Rot * this.TubeTransform;
+                GL.UniformMatrix4(this.LocationTransform, true, ref this.TubeTransform);
             }
+            Frame++;
 
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.DrawArrays(PrimitiveType.Triangles, 0, this.VertexData.Length / 3);
@@ -177,6 +190,9 @@ namespace ColorChord.NET.Outputs.Display
         {
             if (!this.SetupDone) { return; }
 
+            this.TubeShader.Use();
+            this.Projection = Matrix4.CreatePerspectiveFieldOfView((float)(Math.PI / 2), (float)this.HostWindow.Width / this.HostWindow.Height, 0.01F, 10F);
+            GL.UniformMatrix4(this.LocationProjection, true, ref this.Projection);
         }
 
         public bool SupportsFormat(IVisualizerFormat format) => format is IDiscrete1D;
