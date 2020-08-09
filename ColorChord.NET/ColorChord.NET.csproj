@@ -28,6 +28,12 @@
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircleFinish.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothRadialBright.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\tube3d.frag">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Outputs\Display\Shaders\tube3d.vert">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </EmbeddedResource>
     <EmbeddedResource Include="sample-config.json" />
   </ItemGroup>
   <ItemGroup>
@@ -51,6 +57,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Remove="Outputs\Display\Shaders\SmoothRadialBright.frag" />
+    <None Remove="Outputs\Display\Shaders\tube3d.frag" />
+    <None Remove="Outputs\Display\Shaders\tube3d.vert" />
   </ItemGroup>
   <PropertyGroup>
 
