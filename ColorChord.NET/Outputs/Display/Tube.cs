@@ -2,6 +2,7 @@
 using ColorChord.NET.Visualizers.Formats;
 using OpenTK;
 using OpenTK.Graphics.OpenGL4;
+using OpenTK.Input;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -49,6 +50,7 @@ namespace ColorChord.NET.Outputs.Display
             this.HostWindow = parent;
             this.DataSource = (IDiscrete1D)visualizer;
             this.TubeResolution = this.DataSource.GetCountDiscrete();
+            this.HostWindow.MouseMove += MouseMove;
         }
 
         public void Close()
@@ -135,15 +137,18 @@ namespace ColorChord.NET.Outputs.Display
                     //float SegEndY = (float)(Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution) * (1 - ((float)(i + 1) / TUBE_LENGTH)) * (1 - Math.Abs(Math.Cos(Frame / 10F)) * 0.2));
                     float SegEndY = (float)Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution);
                     float FrontZ = -1 - (float)i / TUBE_LENGTH;
-                    float BackZ = -1 - (float)(i + /*(i * 2)*/ 1) / TUBE_LENGTH;
+                    float BackZ = -1 - (float)(i + 1 /*(i * 2)*/) / TUBE_LENGTH;
 
-                    AddPoint(SegStartX, SegStartY, FrontZ, i, seg); // Out right
-                    AddPoint(SegStartX, SegStartY, BackZ, i, seg); // In right 
-                    AddPoint(SegEndX, SegEndY, FrontZ, i, seg); // Out left
+                    float OutMult = 1 - (i / (TUBE_LENGTH * 1.02F));
+                    float InMult = 1 - ((i + 1) / (TUBE_LENGTH * 1.02F));
 
-                    AddPoint(SegEndX, SegEndY, FrontZ, i, seg); // Out left
-                    AddPoint(SegStartX, SegStartY, BackZ, i, seg); // In right
-                    AddPoint(SegEndX, SegEndY, BackZ, i, seg); // In left
+                    AddPoint(SegStartX * OutMult, SegStartY * OutMult, FrontZ, i, seg); // Out right
+                    AddPoint(SegStartX * InMult, SegStartY * InMult, BackZ, i, seg); // In right 
+                    AddPoint(SegEndX * OutMult, SegEndY * OutMult, FrontZ, i, seg); // Out left
+
+                    AddPoint(SegEndX * OutMult, SegEndY * OutMult, FrontZ, i, seg); // Out left
+                    AddPoint(SegStartX * InMult, SegStartY * InMult, BackZ, i, seg); // In right
+                    AddPoint(SegEndX * InMult, SegEndY * InMult, BackZ, i, seg); // In left
                 }
             }
 
@@ -172,18 +177,23 @@ namespace ColorChord.NET.Outputs.Display
                 this.TubePosition = (ushort)((this.TubePosition + this.NewLines) % TUBE_LENGTH);
                 this.NewData = false;
                 this.NewLines = 0;
-                GL.Uniform1(this.LocationDepthOffset, (float)this.TubePosition / TUBE_LENGTH);
+                GL.Uniform1(this.LocationDepthOffset, (float)(this.TubePosition) / TUBE_LENGTH);
                 //Matrix4.CreateTranslation((float)((this.Random.NextDouble() - 0.5) / 10), (float)((this.Random.NextDouble() - 0.5) / 10), 0, out this.TubeTransform);
                 //this.TubeTransform = Matrix4.CreateRotationZ(Frame / 30F);
                 Matrix4 Rot = Matrix4.CreateRotationZ(Frame / 60F);
-                Matrix4.CreateTranslation((float)(Math.Sin(Frame / 50F) / 3F), (float)(-Math.Sin(Frame / 100F) / 3F), 0, out this.TubeTransform);
-                this.TubeTransform = Rot * this.TubeTransform;
-                GL.UniformMatrix4(this.LocationTransform, true, ref this.TubeTransform);
+                //Matrix4.CreateTranslation((float)(Math.Sin(Frame / 50F) / 3F), (float)(-Math.Sin(Frame / 100F) / 3F), 0, out this.TubeTransform);
+                Matrix4 Combined = Rot * this.TubeTransform;
+                GL.UniformMatrix4(this.LocationTransform, true, ref Combined);
             }
             Frame++;
 
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.DrawArrays(PrimitiveType.Triangles, 0, this.VertexData.Length / 3);
+        }
+
+        public void MouseMove(object sender, MouseMoveEventArgs evt)
+        {
+            Matrix4.CreateTranslation((evt.Position.X * 2F / this.HostWindow.Width) - 1, (evt.Position.Y * -2F / this.HostWindow.Height) + 1, 0, out this.TubeTransform);
         }
 
         public void Resize(int width, int height)
