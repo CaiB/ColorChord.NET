@@ -29,10 +29,10 @@
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircleFinish.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothRadialBright.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\tube3d.frag">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
     <EmbeddedResource Include="Outputs\Display\Shaders\tube3d.vert">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
     <EmbeddedResource Include="sample-config.json" />
   </ItemGroup>

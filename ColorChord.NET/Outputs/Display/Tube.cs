@@ -178,11 +178,11 @@ namespace ColorChord.NET.Outputs.Display
                 this.NewData = false;
                 this.NewLines = 0;
                 GL.Uniform1(this.LocationDepthOffset, (float)(this.TubePosition) / TUBE_LENGTH);
-                //Matrix4.CreateTranslation((float)((this.Random.NextDouble() - 0.5) / 10), (float)((this.Random.NextDouble() - 0.5) / 10), 0, out this.TubeTransform);
-                //this.TubeTransform = Matrix4.CreateRotationZ(Frame / 30F);
-                Matrix4 Rot = Matrix4.CreateRotationZ(Frame / 60F);
-                //Matrix4.CreateTranslation((float)(Math.Sin(Frame / 50F) / 3F), (float)(-Math.Sin(Frame / 100F) / 3F), 0, out this.TubeTransform);
-                Matrix4 Combined = Rot * this.TubeTransform;
+                Matrix4.CreateTranslation((float)((this.Random.NextDouble() - 0.5) / 10), (float)((this.Random.NextDouble() - 0.5) / 10), 0, out this.TubeTransform);
+                this.TubeTransform = Matrix4.CreateRotationZ(Frame / 30F);
+                Matrix4 Rot = Matrix4.CreateRotationZ(Frame / 60F) * Matrix4.CreateRotationX((float)(Math.Sin(Frame / 100F) / 3F)) * Matrix4.CreateRotationY((float)(Math.Sin(Frame / 50F) / 5F));
+                //Matrix4.CreateTranslation((float)(Math.Sin(Frame / 100F) / 3F), (float)(-Math.Sin(Frame / 50F) / 5F), 0, out this.TubeTransform);
+                Matrix4 Combined = Rot;// * this.TubeTransform;
                 GL.UniformMatrix4(this.LocationTransform, true, ref Combined);
             }
             Frame++;
@@ -193,7 +193,7 @@ namespace ColorChord.NET.Outputs.Display
 
         public void MouseMove(object sender, MouseMoveEventArgs evt)
         {
-            Matrix4.CreateTranslation((evt.Position.X * 2F / this.HostWindow.Width) - 1, (evt.Position.Y * -2F / this.HostWindow.Height) + 1, 0, out this.TubeTransform);
+            //Matrix4.CreateTranslation((evt.Position.X * 2F / this.HostWindow.Width) - 1, (evt.Position.Y * -2F / this.HostWindow.Height) + 1, 0, out this.TubeTransform);
         }
 
         public void Resize(int width, int height)
