@@ -101,7 +101,7 @@ namespace ColorChord.NET.Outputs
                 byte[] LEDData = null; // The values re-formatted to [R,G,B,Y][R,G,B,Y]...
                 const byte STRIDE = 4;
 
-                LEDData = new byte[Source1D.GetCountDiscrete() * STRIDE];
+                LEDData = new byte[Source1D.GetCountDiscrete() * STRIDE]; // TODO: We don't need to store this
 
                 int i;
                 for (i = 0; i < this.FrontPadding; i++) { Output[i] = this.PaddingContent; } // Front padding
