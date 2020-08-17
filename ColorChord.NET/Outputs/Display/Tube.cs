@@ -11,8 +11,9 @@ namespace ColorChord.NET.Outputs.Display
 {
     public class Tube : IDisplayMode
     {
-        private const int TUBE_LENGTH = 50;
+        private const int TUBE_LENGTH = 200;
         private int TubeResolution = 8;
+        private const byte DATA_PER_VERTEX = 6;
 
         private DisplayOpenGL HostWindow;
 
@@ -79,17 +80,18 @@ namespace ColorChord.NET.Outputs.Display
         public void Load()
         {
             this.TextureData = new byte[TUBE_LENGTH * TubeResolution * 4];
-            this.VertexData = new float[TUBE_LENGTH * TubeResolution * 6 * 5];
+            this.VertexData = new float[TUBE_LENGTH * TubeResolution * 6 * DATA_PER_VERTEX];
 
             int DataIndex = 0;
 
-            void AddPoint(float x, float y, float z, int depth, int segment)
+            void AddPoint(float x, float y, float z, int depth, int segment, bool isLeft)
             {
                 this.VertexData[DataIndex++] = x;
                 this.VertexData[DataIndex++] = y;
                 this.VertexData[DataIndex++] = z;
                 this.VertexData[DataIndex++] = (float)segment / TubeResolution + (0.5F / TubeResolution);
                 this.VertexData[DataIndex++] = (float)depth / TUBE_LENGTH + (0.5F / TUBE_LENGTH);
+                this.VertexData[DataIndex++] = isLeft ? 0F : 1F;
 
                 //Console.WriteLine("{0:F3}, {1:F3}, {2:F3}", x, y, z);
             }
@@ -142,23 +144,25 @@ namespace ColorChord.NET.Outputs.Display
                     float OutMult = 1 - (i / (TUBE_LENGTH * 1.02F));
                     float InMult = 1 - ((i + 1) / (TUBE_LENGTH * 1.02F));
 
-                    AddPoint(SegStartX * OutMult, SegStartY * OutMult, FrontZ, i, seg); // Out right
-                    AddPoint(SegStartX * InMult, SegStartY * InMult, BackZ, i, seg); // In right 
-                    AddPoint(SegEndX * OutMult, SegEndY * OutMult, FrontZ, i, seg); // Out left
+                    AddPoint(SegStartX * OutMult, SegStartY * OutMult, FrontZ, i, seg, false); // Out right
+                    AddPoint(SegStartX * InMult, SegStartY * InMult, BackZ, i, seg, false); // In right 
+                    AddPoint(SegEndX * OutMult, SegEndY * OutMult, FrontZ, i, seg, true); // Out left
 
-                    AddPoint(SegEndX * OutMult, SegEndY * OutMult, FrontZ, i, seg); // Out left
-                    AddPoint(SegStartX * InMult, SegStartY * InMult, BackZ, i, seg); // In right
-                    AddPoint(SegEndX * InMult, SegEndY * InMult, BackZ, i, seg); // In left
+                    AddPoint(SegEndX * OutMult, SegEndY * OutMult, FrontZ, i, seg, true); // Out left
+                    AddPoint(SegStartX * InMult, SegStartY * InMult, BackZ, i, seg, false); // In right
+                    AddPoint(SegEndX * InMult, SegEndY * InMult, BackZ, i, seg, true); // In left
                 }
             }
 
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferHandle);
             GL.BufferData(BufferTarget.ArrayBuffer, VertexData.Length * sizeof(float), VertexData, BufferUsageHint.DynamicDraw);
-            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 5 * sizeof(float), 0);
+            GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, DATA_PER_VERTEX * sizeof(float), 0);
             GL.EnableVertexAttribArray(0);
-            GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, 5 * sizeof(float), 3 * sizeof(float));
+            GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, DATA_PER_VERTEX * sizeof(float), 3 * sizeof(float));
             GL.EnableVertexAttribArray(1);
+            GL.VertexAttribPointer(2, 1, VertexAttribPointerType.Float, false, DATA_PER_VERTEX * sizeof(float), 5 * sizeof(float));
+            GL.EnableVertexAttribArray(2);
 
             this.SetupDone = true;
         }
