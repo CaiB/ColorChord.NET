@@ -1,4 +1,4 @@
-﻿using ColorChord.NET.Visualizers;
+using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
 using OpenTK;
 using OpenTK.Graphics.OpenGL4;
@@ -79,14 +79,14 @@ namespace ColorChord.NET.Outputs.Display
             this.TextureData = new byte[this.Spokes * this.RadiusResolution * 4];
 
             int DataIndex = 0;
-            void AddPoint(float x, float y, float z, int spoke, int seg)
+            void AddPoint(Vector3 point, int spoke, int seg, bool isStart)
             {
-                this.VertexData[DataIndex++] = x;
-                this.VertexData[DataIndex++] = y;
-                this.VertexData[DataIndex++] = z;
+                this.VertexData[DataIndex++] = point.X;
+                this.VertexData[DataIndex++] = point.Y;
+                this.VertexData[DataIndex++] = point.Z;
                 this.VertexData[DataIndex++] = ((float)seg / this.RadiusResolution) + (0.5F / this.RadiusResolution);
                 this.VertexData[DataIndex++] = ((float)spoke / this.Spokes) + (0.5F / this.Spokes);
-                this.VertexData[DataIndex++] = 0;// isLeft ? 0F : 1F;
+                this.VertexData[DataIndex++] = isStart ? 0F : 1F;
             }
 
             GL.ClearColor(0.0F, 0.0F, 0.0F, 1.0F);
@@ -114,6 +114,12 @@ namespace ColorChord.NET.Outputs.Display
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
 
+            Matrix3 rot = Matrix3.CreateRotationX((float) Math.PI * -0.4f);
+            rot = Matrix3.Identity;
+
+            Vector3 zOffset = Vector3.UnitZ * -1f;
+            // zOffset = Vector3.UnitZ * -1;
+
             // Generate geometry
             for(int Spoke = 0; Spoke < this.Spokes; Spoke++)
             {
@@ -130,14 +136,14 @@ namespace ColorChord.NET.Outputs.Display
                     float EndX = (float)Math.Cos(RotEnd);
                     float EndY = (float)Math.Sin(RotEnd);
 
-                    const float Z = -1;
-                    AddPoint(StartX * RadIn, StartY * RadIn, Z, Spoke, Seg); // In bottom
-                    AddPoint(StartX * RadOut, StartY * RadOut, Z, Spoke, Seg); // Out bottom
-                    AddPoint(EndX * RadOut, EndY * RadOut, Z, Spoke, Seg); // Out top
+                    const float Z = 0f;
+                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * rot) + zOffset, Spoke, Seg, true); // In bottom
+                    AddPoint((new Vector3(StartX * RadOut, StartY * RadOut, Z) * rot) + zOffset, Spoke, Seg, true); // Out bottom
+                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * rot) + zOffset, Spoke, Seg, false); // Out top
 
-                    AddPoint(StartX * RadIn, StartY * RadIn, Z, Spoke, Seg); // In bottom
-                    AddPoint(EndX * RadOut, EndY * RadOut, Z, Spoke, Seg); // Out top
-                    AddPoint(EndX * RadIn, EndY * RadIn, Z, Spoke, Seg); // In top
+                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * rot) + zOffset, Spoke, Seg, true); // In bottom
+                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * rot) + zOffset, Spoke, Seg, false); // Out top
+                    AddPoint((new Vector3(EndX * RadIn, EndY * RadIn, Z) * rot) + zOffset, Spoke, Seg, false); // In top
                 }
             }
 
