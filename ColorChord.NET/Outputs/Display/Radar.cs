@@ -3,12 +3,13 @@ using ColorChord.NET.Visualizers.Formats;
 using OpenTK;
 using OpenTK.Graphics.OpenGL4;
 using System;
+using System.Collections.Generic;
 
 namespace ColorChord.NET.Outputs.Display
 {
-    public class Radar : IDisplayMode
+    public class Radar : IDisplayMode, IConfigurable
     {
-        private const int SPOKES = 150;
+        private int Spokes = 150;
 
         private int RadiusResolution = 8;
 
@@ -64,10 +65,18 @@ namespace ColorChord.NET.Outputs.Display
             this.RadiusResolution = this.DataSource.GetCountDiscrete();
         }
 
+        public void ApplyConfig(Dictionary<string, object> options)
+        {
+            Log.Info("Reading config for Radar.");
+            this.Spokes = ConfigTools.CheckInt(options, "Spokes", 1, 10000, 100, true);
+
+            ConfigTools.WarnAboutRemainder(options, typeof(IDisplayMode));
+        }
+
         public void Load()
         {
-            this.VertexData = new float[SPOKES * this.RadiusResolution * 6 * DATA_PER_VERTEX];
-            this.TextureData = new byte[SPOKES * this.RadiusResolution * 4];
+            this.VertexData = new float[this.Spokes * this.RadiusResolution * 6 * DATA_PER_VERTEX];
+            this.TextureData = new byte[this.Spokes * this.RadiusResolution * 4];
 
             int DataIndex = 0;
             void AddPoint(float x, float y, float z, int spoke, int seg)
@@ -76,7 +85,7 @@ namespace ColorChord.NET.Outputs.Display
                 this.VertexData[DataIndex++] = y;
                 this.VertexData[DataIndex++] = z;
                 this.VertexData[DataIndex++] = ((float)seg / this.RadiusResolution) + (0.5F / this.RadiusResolution);
-                this.VertexData[DataIndex++] = ((float)spoke / SPOKES) + (0.5F / SPOKES);
+                this.VertexData[DataIndex++] = ((float)spoke / this.Spokes) + (0.5F / this.Spokes);
                 this.VertexData[DataIndex++] = 0;// isLeft ? 0F : 1F;
             }
 
@@ -92,7 +101,7 @@ namespace ColorChord.NET.Outputs.Display
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, this.LocationTexture);
 
-            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.RadiusResolution, SPOKES, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.RadiusResolution, this.Spokes, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
@@ -106,12 +115,12 @@ namespace ColorChord.NET.Outputs.Display
             this.VertexArrayHandle = GL.GenVertexArray();
 
             // Generate geometry
-            for(int Spoke = 0; Spoke < SPOKES; Spoke++)
+            for(int Spoke = 0; Spoke < this.Spokes; Spoke++)
             {
                 for(int Seg = 0; Seg < RadiusResolution; Seg++)
                 {
-                    double RotStart = Math.PI * 2 * Spoke / SPOKES;
-                    double RotEnd = Math.PI * 2 * (Spoke + 1) / SPOKES;
+                    double RotStart = Math.PI * 2 * Spoke / this.Spokes;
+                    double RotEnd = Math.PI * 2 * (Spoke + 1) / this.Spokes;
 
                     float RadIn = (float)Seg / RadiusResolution;
                     float RadOut = (float)(Seg + 1) / RadiusResolution;
@@ -148,7 +157,7 @@ namespace ColorChord.NET.Outputs.Display
         public void Dispatch()
         {
             if (!this.SetupDone) { return; }
-            if (this.NewLines == SPOKES) { return; }
+            if (this.NewLines == this.Spokes) { return; }
 
             for (int Seg = 0; Seg < this.RadiusResolution; Seg++)
             {
@@ -171,7 +180,7 @@ namespace ColorChord.NET.Outputs.Display
             if (this.NewData)
             {
                 GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
-                this.RenderIndex = (ushort)((this.RenderIndex + this.NewLines) % SPOKES);
+                this.RenderIndex = (ushort)((this.RenderIndex + this.NewLines) % this.Spokes);
                 this.NewData = false;
                 this.NewLines = 0;
                 //GL.Uniform1(this.LocationDepthOffset, (float)(this.RenderIndex) / TUBE_LENGTH);
@@ -199,5 +208,6 @@ namespace ColorChord.NET.Outputs.Display
         }
 
         public bool SupportsFormat(IVisualizerFormat format) => format is IDiscrete1D;
+
     }
 }
