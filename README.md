@@ -166,6 +166,20 @@ Takes in UDP packets, and outputs them as if the data were locally calculated. D
 | `Port` | `int` | 7777 | 0~65535 | The port to listen on for UDP packets. |
 </details>
 
+## [MemoryMapReceiver](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Visualizers/MemoryMapReceiver.cs)
+Supported data output modes: `Discrete1D`  
+Reads from an existing memory-mapped file using an existing mutex. Intended for testing only, or as a reference implementation, but it should work OK.
+
+<details>
+<summary>View Configuration Table</summary>
+
+| Name | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `MapName` | `string` | None | Valid memory map name | The name of the memory-mapped file to read data from. The `MemoryMap` output will create a file by name `ColorChord.NET-<OutputName>` where `<OutputName>` is the `Name` configuration parameter on the Output instance. |
+| `MutexName` | `string` | None | Valid mutex name | The name of the mutex to interface with. The `MemoryMap` output will create a mutex by name `ColorChord.NET-Mutex-<OutputName>` where `<OutputName>` is the `Name` configuration parameter on the Output instance. |
+| `FrameRate` | `int` | 60 | 0~1000 | The number of data frames to attempt to calculate per second. Determines how fast the data is output. |
+</details>
+
 # Outputs
 You may add as many outputs as you desire, even multiple of the same type, and any combination of compatible outputs can be added to a single visualizer. All output instances must have at least these 3 string properties:
 * `Type`: The name of the output to use. Must match the titles below.
@@ -240,6 +254,26 @@ Packs the data for each LED in sequence into a UDP packet, then sends it to a gi
 </details>
 
 > Packets have 65,535 byte size limit. This means no more than 21,835 RGB LEDs can be output at once.
+
+## [MemoryMap](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/MemoryMap.cs)
+Supported input modes: `Discrete 1D`  
+Creates a non-persistent, memory-mapped file (only in RAM, not on disk), then writes the LED count and data into the file at every frame. Useful if you want unrelated processes to be able to read the data. See notes below.
+
+This is a Windows equivalent to the SHM output of cnlohr's ColorChord.
+
+> No additional configuration is available.
+
+The name of the memory-mapped file will be `ColorChord.NET-<Name>`, and the created mutex will be named `ColorChord.NET-Mutex-<Name>`, where `<Name>` is the instance name from the configuration.
+
+Notes:
+> - Number of reading processes is not limited  
+> - Timing/frame rate synchronization is not provided  
+> - Reading processes should also lock the provided Mutex during data reads
+
+Data format is:
+```
+[uint32 LEDCount]  {[uint8 R] [uint8 G] [uint8 B]} x LEDCount
+```
 
 # Controllers
 Not yet implemented.
