@@ -56,6 +56,7 @@ namespace ColorChord.NET.Outputs
 
             IDiscrete1D Source1D = (IDiscrete1D)this.Source;
             this.MapWriter.Seek(0, SeekOrigin.Begin); // Go to the beginning of the region.
+            this.MapWriter.Write((uint)Source1D.GetCountDiscrete());
 
             for(int LED = 0; LED < Source1D.GetCountDiscrete(); LED++)
             {
@@ -64,6 +65,7 @@ namespace ColorChord.NET.Outputs
                 this.MapWriter.Write((byte)(LEDData >> 8)); // G
                 this.MapWriter.Write((byte)LEDData); // B
             }
+            this.MapWriter.Flush();
 
             this.MapMutex.ReleaseMutex();
         }
