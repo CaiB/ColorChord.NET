@@ -2,6 +2,7 @@
 layout (location = 0) in vec3 aPosition;
 layout (location = 1) in vec2 aTextureLoc;
 layout (location = 2) in float aSegmentSide;
+layout (location = 3) in vec3 aNormal;
 
 out vec4 vertexColour;
 
@@ -35,6 +36,7 @@ void main()
     float cutOff = 0.07;
     vertexColour = TexOut * (1.0 - step(cutOff, hueDifference)) + FromTex * step(cutOff, hueDifference);
 
-    float zOffset = step(cutOff, hueDifference) * 0;
-    gl_Position = vec4(aPosition + (vec3(0,1,0) * hueDifference * 0.5 * zOffset), 1.0) * projection;
+    float alphaValue = FromTex.a * (1.0 - step(0.5, aSegmentSide)) + FromTexLast.a * step(0.5, aSegmentSide);
+    vec3 zOffset = (aNormal * alphaValue) / 10;
+    gl_Position = vec4(aPosition + zOffset, 1.0) * projection;
 }
