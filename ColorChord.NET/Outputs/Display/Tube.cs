@@ -4,47 +4,77 @@ using OpenTK;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Input;
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace ColorChord.NET.Outputs.Display
 {
     public class Tube : IDisplayMode
     {
+        /// <summary> The number of rings in the tube. </summary>
         private const int TUBE_LENGTH = 200;
+
+        /// <summary> How long the tube is, in graphics units. </summary>
         private const float TUBE_LENGTH_UNITS = 4F;
+
+        /// <summary> How many segments per ring there are, this is overridden by the source's LEDCount. </summary>
         private int TubeResolution = 8;
+
+        /// <summary> How many floats comprise one vertex of data sent to the GPU. </summary>
         private const byte DATA_PER_VERTEX = 9;
 
+        /// <summary> The window we are running in. </summary>
         private DisplayOpenGL HostWindow;
 
+        /// <summary> Where we are getting the colour data from. </summary>
         private IDiscrete1D DataSource;
 
+        /// <summary> Shader for rending the tube. </summary>
         private Shader TubeShader;
 
+        /// <summary> Storeage for new colour data to be uploaded to the GPU. </summary>
         private byte[] TextureData;
+
+        /// <summary> The ID of the texture to store colour data in. </summary>
         private int LocationTexture;
+
+        /// <summary> How many new lines of texture are available to be sent to the GPU. </summary>
         private uint NewLines = 0;
 
+        /// <summary> Perspective projection </summary>
         private Matrix4 Projection;
         private int LocationProjection;
 
+        /// <summary> Rotation and position of the tube. </summary>
         private Matrix4 TubeTransform = Matrix4.Identity;
-        private Vector3 LocationAdjust;
+
+        /// <summary> Location of the transform matrix uniform (for storing <see cref="TubeTransform"/>). </summary>
         private int LocationTransform;
 
-        private Matrix4 View = Matrix4.CreateRotationY((float)Math.PI / 12);// Matrix4.Identity;
+        /// <summary> For translating the tube in space. Used to move the tube around the view. </summary>
+        private Vector3 TubePosition;
+
+        /// <summary> Used to rotate the tube around the view. </summary>
+        private Matrix4 View = Matrix4.CreateRotationY((float)Math.PI / 12);
+
+        /// <summary> Location of the view matrix uniform (for storing <see cref="View"/>). </summary>
         private int LocationView;
 
+        /// <summary> Location for storing the vertex data. </summary>
         private int VertexBufferHandle, VertexArrayHandle;
 
+        /// <summary> The vertex data to make the basic tube shape. </summary>
         private float[] VertexData;
 
-        private ushort TubePosition = 0;
+        /// <summary> Where in the texture data the front of the tube is currently located. </summary>
+        private ushort TubeRenderIndex = 0;
+
+        /// <summary> Location of the depth offset uniform (for storing <see cref="TubeRenderIndex"/>). </summary>
         private int LocationDepthOffset;
 
+        /// <summary> WHether we are ready to send data & render frames. </summary>
         private bool SetupDone = false;
-        private bool NewData;
+
+        /// <summary> Whether there is new data to be uploaded to the texture. </summary>
+        private bool NewData = false;
 
         public Tube(DisplayOpenGL parent, IVisualizer visualizer)
         {
@@ -55,8 +85,7 @@ namespace ColorChord.NET.Outputs.Display
             }
             this.HostWindow = parent;
             this.DataSource = (IDiscrete1D)visualizer;
-            this.TubeResolution = this.DataSource.GetCountDiscrete();
-            this.HostWindow.MouseMove += MouseMove;
+            this.TubeResolution = this.DataSource.GetCountDiscrete(); // TODO: Handle this changing
             this.HostWindow.UpdateFrame += UpdateFrame;
         }
 
@@ -164,14 +193,14 @@ namespace ColorChord.NET.Outputs.Display
                 for(int seg = 0; seg < TubeResolution; seg++)
                 {
                     // Turn on the commented out lines for crazy effects :)
-                    float SegStartX = (float)(Math.Cos(Math.PI * 2 * seg / TubeResolution) * (1 - ((float)i / TUBE_LENGTH)) * (1 - Math.Abs(Math.Sin(Frame / 10F)) * 0.2));
-                    //float SegStartX = (float)Math.Cos(Math.PI * 2 * seg / TubeResolution);
+                    //float SegStartX = (float)(Math.Cos(Math.PI * 2 * seg / TubeResolution) * (1 - ((float)i / TUBE_LENGTH)) * (1 - Math.Abs(Math.Sin(Frame / 10F)) * 0.2));
+                    float SegStartX = (float)Math.Cos(Math.PI * 2 * seg / TubeResolution);
                     float SegStartY = (float)Math.Sin(Math.PI * 2 * seg / TubeResolution);
                     float SegEndX = (float)Math.Cos(Math.PI * 2 * (seg + 1) / TubeResolution);
-                    float SegEndY = (float)(Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution) * (1 - ((float)(i + 1) / TUBE_LENGTH)) * (1 - Math.Abs(Math.Cos(Frame / 10F)) * 0.2));
-                    //float SegEndY = (float)Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution);
-                    float FrontZ = (i == 0) ? 0 : -1 - (float)i * TUBE_LENGTH_UNITS / TUBE_LENGTH;
-                    float BackZ = -1 - (float)(i + 1 /*(i * 2)*/)* TUBE_LENGTH_UNITS / TUBE_LENGTH;
+                    //float SegEndY = (float)(Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution) * (1 - ((float)(i + 1) / TUBE_LENGTH)) * (1 - Math.Abs(Math.Cos(Frame / 10F)) * 0.2));
+                    float SegEndY = (float)Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution);
+                    float FrontZ = (i == 0) ? 0 : -1 - i * TUBE_LENGTH_UNITS / TUBE_LENGTH;
+                    float BackZ = -1 - (i + 1) * TUBE_LENGTH_UNITS / TUBE_LENGTH;
 
                     // Radius multipliers to make cone
                     float OutMult = 1 - (i / (TUBE_LENGTH * 2.02F));
@@ -181,7 +210,6 @@ namespace ColorChord.NET.Outputs.Display
                         new Vector3((SegEndX * InMult) - (SegEndX * OutMult), (SegEndY * InMult) - (SegEndY * OutMult), BackZ - FrontZ),
                         new Vector3((SegStartX * OutMult) - (SegEndX * OutMult), (SegStartY * OutMult) - (SegEndY * OutMult), 0));
                     Normal.Normalize();
-                    //if (seg == 0) { Console.WriteLine(string.Format("{0} is {1:F4}, {2:F4}, {3:F4}", i, Normal.X, Normal.Y, Normal.Z)); }
 
                     AddPoint(SegStartX * OutMult, SegStartY * OutMult, FrontZ, i, seg, false, Normal); // Out right
                     AddPoint(SegStartX * InMult, SegStartY * InMult, BackZ, i, seg, false, Normal); // In right 
@@ -219,17 +247,14 @@ namespace ColorChord.NET.Outputs.Display
 
             if(this.NewData)
             {
-                GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.TubePosition, TubeResolution, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
-                this.TubePosition = (ushort)((this.TubePosition + this.NewLines) % TUBE_LENGTH);
+                GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.TubeRenderIndex, TubeResolution, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
+                this.TubeRenderIndex = (ushort)((this.TubeRenderIndex + this.NewLines) % TUBE_LENGTH);
                 this.NewData = false;
                 this.NewLines = 0;
-                GL.Uniform1(this.LocationDepthOffset, (float)(this.TubePosition) / TUBE_LENGTH);
-                //Matrix4.CreateTranslation((float)((this.Random.NextDouble() - 0.5) / 10), (float)((this.Random.NextDouble() - 0.5) / 10), 0, out this.TubeTransform);
-                //this.TubeTransform = Matrix4.CreateTranslation(0, 0, 0.8F);// * Matrix4.CreateRotationZ(Frame / 30F);
-                Matrix4 Rot = Matrix4.CreateRotationZ(Frame / 60F) * Matrix4.CreateRotationX((float)(Math.Sin(Frame / 50F) / 5F)) * Matrix4.CreateRotationY((float)(Math.Sin(Frame / 100F) / 3F));
-                //Matrix4.CreateTranslation((float)(Math.Sin(Frame / 100F) / 3F), (float)(-Math.Sin(Frame / 50F) / 5F), 0, out this.TubeTransform);
-                //this.TubeTransform = Rot;// * this.TubeTransform;
-                this.TubeTransform = Matrix4.CreateTranslation(this.LocationAdjust);
+                GL.Uniform1(this.LocationDepthOffset, (float)(this.TubeRenderIndex) / TUBE_LENGTH);
+
+                Matrix4 InfinityMovement = Matrix4.CreateRotationZ(Frame / 60F) * Matrix4.CreateRotationX((float)(Math.Sin(Frame / 50F) / 5F)) * Matrix4.CreateRotationY((float)(Math.Sin(Frame / 100F) / 3F));
+                this.TubeTransform = InfinityMovement * Matrix4.CreateTranslation(this.TubePosition);
                 GL.UniformMatrix4(this.LocationTransform, true, ref this.TubeTransform);
             }
             Frame++;
@@ -250,17 +275,12 @@ namespace ColorChord.NET.Outputs.Display
             if (Keys.IsKeyDown(Key.Left)) { this.View *= Matrix4.CreateRotationY(-MOVE_QTY); }
             if (Keys.IsKeyDown(Key.Right)) { this.View *= Matrix4.CreateRotationY(MOVE_QTY); }
 
-            if (Keys.IsKeyDown(Key.W)) { this.LocationAdjust.Z += MOVE_QTY; }
-            if (Keys.IsKeyDown(Key.S)) { this.LocationAdjust.Z -= MOVE_QTY; }
-            if (Keys.IsKeyDown(Key.A)) { this.LocationAdjust.X += MOVE_QTY; }
-            if (Keys.IsKeyDown(Key.D)) { this.LocationAdjust.X -= MOVE_QTY; }
-            if (Keys.IsKeyDown(Key.Space)) { this.LocationAdjust.Y += MOVE_QTY; }
-            if (Keys.IsKeyDown(Key.ShiftLeft)) { this.LocationAdjust.Y -= MOVE_QTY; }
-        }
-
-        public void MouseMove(object sender, MouseMoveEventArgs evt)
-        {
-            //Matrix4.CreateTranslation((evt.Position.X * 2F / this.HostWindow.Width) - 1, (evt.Position.Y * -2F / this.HostWindow.Height) + 1, 0, out this.TubeTransform);
+            if (Keys.IsKeyDown(Key.W)) { this.TubePosition.Z += MOVE_QTY; }
+            if (Keys.IsKeyDown(Key.S)) { this.TubePosition.Z -= MOVE_QTY; }
+            if (Keys.IsKeyDown(Key.A)) { this.TubePosition.X += MOVE_QTY; }
+            if (Keys.IsKeyDown(Key.D)) { this.TubePosition.X -= MOVE_QTY; }
+            if (Keys.IsKeyDown(Key.Space)) { this.TubePosition.Y += MOVE_QTY; }
+            if (Keys.IsKeyDown(Key.ShiftLeft)) { this.TubePosition.Y -= MOVE_QTY; }
         }
 
         public void Resize(int width, int height)
