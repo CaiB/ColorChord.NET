@@ -2,10 +2,12 @@
 layout (location = 0) in vec3 aPosition;
 layout (location = 1) in vec2 aTextureLoc;
 layout (location = 2) in float aSegmentSide;
+layout (location = 3) in vec3 aNormal;
 
 out vec4 vertexColour;
 
 uniform mat4 projection;
+uniform mat4 view;
 uniform sampler2D tex;
 uniform float depthOffset;
 uniform mat4 transform;
@@ -13,8 +15,6 @@ uniform mat4 transform;
 void main()
 {
 	ivec2 TexSize = textureSize(tex, 0);
-
-    gl_Position = vec4(aPosition, 1.0) * transform * projection;
 
 	float TexY = mod(1.0 - (aTextureLoc.y - depthOffset), 1.0);
 	vec4 FromTex = texture(tex, vec2(aTextureLoc.x, TexY));
@@ -26,8 +26,9 @@ void main()
 
 	vec4 TexOut = RightMix * (1.0 - step(0.5, aSegmentSide)) + LeftMix * step(0.5, aSegmentSide);
 
-	vertexColour = vec4(TexOut.xyz * (2.5 + aPosition.z), 1.0);
+	vertexColour = vec4(TexOut.xyz, 1.0);
 
+	gl_Position = (vec4(aPosition + (aNormal * FromTex.a / -5.0), 1.0)) * transform * view * projection;
 
 	//vec4(1.0, 1.0, aPosition.z + 2.0, 1.0);
 }

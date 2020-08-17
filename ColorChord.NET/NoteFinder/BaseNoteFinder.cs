@@ -128,6 +128,10 @@ namespace ColorChord.NET
         /// <summary> The individual note distributions (peaks) detected this cycle. </summary>
         /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
         public static readonly NoteDistribution[] NoteDistributions = new NoteDistribution[NoteCount];
+
+        public static float LastLowFreqSum = 0;
+
+        public static int LastLowFreqCount = 0;
         #endregion
 
         /// <summary> The non-folded frequency bins, used inter-frame to do smoothing, then folded to form the spectrum. </summary>
@@ -236,6 +240,12 @@ namespace ColorChord.NET
             //for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] = DFT.Magnitudes[i]; }
 
             //for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] /= 5000F; }
+
+            for(int BinInd = 0; BinInd < 24; BinInd++)
+            {
+                LastLowFreqSum += DFTBinData[BinInd];
+            }
+            LastLowFreqCount++;
 
             // Pre-process input DFT data.
             for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
