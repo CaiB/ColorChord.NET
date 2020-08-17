@@ -30,7 +30,7 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> Shader for rending the tube. </summary>
         private Shader TubeShader;
 
-        /// <summary> Storeage for new colour data to be uploaded to the GPU. </summary>
+        /// <summary> Storage for new colour data to be uploaded to the GPU. </summary>
         private byte[] TextureData;
 
         /// <summary> The ID of the texture to store colour data in. </summary>
@@ -70,7 +70,7 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> Location of the depth offset uniform (for storing <see cref="TubeRenderIndex"/>). </summary>
         private int LocationDepthOffset;
 
-        /// <summary> WHether we are ready to send data & render frames. </summary>
+        /// <summary> Whether we are ready to send data & render frames. </summary>
         private bool SetupDone = false;
 
         /// <summary> Whether there is new data to be uploaded to the texture. </summary>
@@ -78,7 +78,7 @@ namespace ColorChord.NET.Outputs.Display
 
         public Tube(DisplayOpenGL parent, IVisualizer visualizer)
         {
-            if (!(visualizer is IContinuous1D))
+            if (!(visualizer is IDiscrete1D))
             {
                 Log.Error("Tube cannot use the provided visualizer, as it does not output 1D discrete data.");
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IDiscrete1D.");
