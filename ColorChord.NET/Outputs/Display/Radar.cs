@@ -4,6 +4,7 @@ using OpenTK;
 using OpenTK.Graphics.OpenGL4;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace ColorChord.NET.Outputs.Display
 {
@@ -173,11 +174,14 @@ namespace ColorChord.NET.Outputs.Display
 
         private float HistoricalLFData;
         private float CurrentFLData;
+        private Mutex mutex = new Mutex();
 
         public void Dispatch()
         {
             if (!this.SetupDone) { return; }
             if (this.NewLines == this.Spokes) { return; }
+
+            mutex.WaitOne();
 
             // Get newest low-frequency data, and reset the accumulator.
             float LowFreqData = BaseNoteFinder.LastLowFreqSum / (1 + BaseNoteFinder.LastLowFreqCount);
@@ -207,6 +211,8 @@ namespace ColorChord.NET.Outputs.Display
             }
             this.NewLines++;
             this.NewData = true;
+            // Console.WriteLine("new data ready");
+            mutex.ReleaseMutex();
         }
 
         public void Render()
@@ -218,11 +224,27 @@ namespace ColorChord.NET.Outputs.Display
 
             if (this.NewData)
             {
-                GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
+                mutex.WaitOne();
+                if (this.RenderIndex + this.NewLines > this.Spokes)
+                {
+                    int linesBeforeWrap = this.Spokes - this.RenderIndex;
+                    int linesAfterWrap = (int) (this.NewLines - linesBeforeWrap);
+                    byte[] textureDataAfterWrap = new byte[linesAfterWrap * this.RadiusResolution * 4];
+                    Array.Copy(this.TextureData, linesBeforeWrap * this.RadiusResolution * 4, textureDataAfterWrap, 0, linesAfterWrap * this.RadiusResolution * 4);
+                    // write texture before wrap
+                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, linesBeforeWrap, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
+                    // write texture after wrap
+                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, this.RadiusResolution, linesAfterWrap, PixelFormat.Rgba, PixelType.UnsignedByte, textureDataAfterWrap);
+                }
+                else
+                {
+                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
+                }
                 this.RenderIndex = (ushort)((this.RenderIndex + this.NewLines) % this.Spokes);
                 this.NewData = false;
                 this.NewLines = 0;
                 //GL.Uniform1(this.LocationDepthOffset, (float)(this.RenderIndex) / this.Spokes);
+                mutex.ReleaseMutex();
             }
 
             GL.BindVertexArray(this.VertexArrayHandle);
