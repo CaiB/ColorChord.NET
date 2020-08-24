@@ -22,6 +22,8 @@
     </None>
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.vert" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\Radar.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\Radar.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.frag" />
@@ -56,6 +58,8 @@
     <EmbeddedResource Remove="MainForm.resx" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="Outputs\Display\Shaders\Radar.frag" />
+    <None Remove="Outputs\Display\Shaders\Radar.vert" />
     <None Remove="Outputs\Display\Shaders\SmoothRadialBright.frag" />
     <None Remove="Outputs\Display\Shaders\tube3d.frag" />
     <None Remove="Outputs\Display\Shaders\tube3d.vert" />
