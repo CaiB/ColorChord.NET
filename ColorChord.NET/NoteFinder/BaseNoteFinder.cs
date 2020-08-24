@@ -302,7 +302,8 @@ namespace ColorChord.NET
                 float ValueHere = OctaveBinValues[BinIndex];
                 float ValueRight = OctaveBinValues[IndexRight];
 
-                if (ValueLeft > ValueHere || ValueRight > ValueHere) { continue; } // Adjacent bins are higher, this is not a peak.
+                // TODO: THIS NEXT LINE DIFFERS FROM THE BASE VERSION TO FIX AN OUT-OF-BOUNDS CRASH.
+                if (ValueLeft >= ValueHere || ValueRight > ValueHere) { continue; } // Adjacent bins are higher, this is not a peak.
                 if (ValueLeft == ValueHere && ValueRight == ValueHere) { continue; } // Adjacent bins are both equal, this is a plateau (e.g. all 0).
 
                 // TODO: This isn't 100% certain.
