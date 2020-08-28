@@ -233,6 +233,23 @@ Supported input modes: Any/None
 | `BaseBrightness` | `float` | 0.0 | 0.0~1.0 | How bright colours should be if there is no note at that location. Values greater than 0.0 show a ghost of the colour wheel at all times.
 | `PeakWidth` | `float` | 0.5 | 0.0~10.0 | How wide peaks should be. |
 | `BrightAmp` | `float` | 1.0 | 0.0~100.0 | How much brightness should be amplified. If peak width is increased, you may want to increase this as well, and vice versa. |
+
+### [Tube](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/Tube.cs)
+Supported input modes: `Discrete 1D`  
+> No additional configuration is available.
+
+You can move around with the W, A, S, D, Shift, Space keys. You can look around using the arrow keys. This is still extremely janky.
+
+Circle resolution is determined by the resolution of the attached visualizer.
+
+### [Radar](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/Display/Radar.cs)
+Supported input modes: `Discrete 1D`  
+| Name | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `Spokes ` | `int` | 100 | 1~10000 | How many spokes (history length / radial lines) there are. Higher shows more history. |
+
+Spoke resolution (segments) is determined by the resolution of the attached visualizer.
+
 </details>
 
 ## [PacketUDP](https://github.com/CaiB/ColorChord.NET/blob/master/ColorChord.NET/Outputs/PacketUDP.cs)
