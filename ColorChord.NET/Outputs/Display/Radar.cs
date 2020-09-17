@@ -174,14 +174,11 @@ namespace ColorChord.NET.Outputs.Display
 
         private float HistoricalLFData;
         private float CurrentFLData;
-        private Mutex mutex = new Mutex();
 
         public void Dispatch()
         {
             if (!this.SetupDone) { return; }
             if (this.NewLines == this.Spokes) { return; }
-
-            mutex.WaitOne();
 
             // Get newest low-frequency data, and reset the accumulator.
             float LowFreqData = BaseNoteFinder.LastLowFreqSum / (1 + BaseNoteFinder.LastLowFreqCount);
@@ -202,17 +199,19 @@ namespace ColorChord.NET.Outputs.Display
             // Some non-linearity to make the beats more apparent
             LowFreqData = (float)Math.Pow(LowFreqData, 5);
 
-            for (int Seg = 0; Seg < this.RadiusResolution; Seg++)
+            lock (this.TextureData)
             {
-                this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 0] = (byte)(this.DataSource.GetDataDiscrete()[Seg] >> 16); // R
-                this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 1] = (byte)(this.DataSource.GetDataDiscrete()[Seg] >> 8); // G
-                this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 2] = (byte)(this.DataSource.GetDataDiscrete()[Seg]); // B
-                this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 3] = (byte)(LowFreqData * 20); // A
+
+                for (int Seg = 0; Seg < this.RadiusResolution; Seg++)
+                {
+                    this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 0] = (byte)(this.DataSource.GetDataDiscrete()[Seg] >> 16); // R
+                    this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 1] = (byte)(this.DataSource.GetDataDiscrete()[Seg] >> 8); // G
+                    this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 2] = (byte)(this.DataSource.GetDataDiscrete()[Seg]); // B
+                    this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 3] = (byte)(LowFreqData * 20); // A
+                }
+                this.NewLines++;
+                this.NewData = true;
             }
-            this.NewLines++;
-            this.NewData = true;
-            // Console.WriteLine("new data ready");
-            mutex.ReleaseMutex();
         }
 
         public void Render()
@@ -224,27 +223,23 @@ namespace ColorChord.NET.Outputs.Display
 
             if (this.NewData)
             {
-                mutex.WaitOne();
-                if (this.RenderIndex + this.NewLines > this.Spokes)
+                lock (this.TextureData)
                 {
-                    int linesBeforeWrap = this.Spokes - this.RenderIndex;
-                    int linesAfterWrap = (int) (this.NewLines - linesBeforeWrap);
-                    byte[] textureDataAfterWrap = new byte[linesAfterWrap * this.RadiusResolution * 4];
-                    Array.Copy(this.TextureData, linesBeforeWrap * this.RadiusResolution * 4, textureDataAfterWrap, 0, linesAfterWrap * this.RadiusResolution * 4);
-                    // write texture before wrap
-                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, linesBeforeWrap, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
-                    // write texture after wrap
-                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, this.RadiusResolution, linesAfterWrap, PixelFormat.Rgba, PixelType.UnsignedByte, textureDataAfterWrap);
+                    if (this.RenderIndex + this.NewLines > this.Spokes) // We have more data than remaining space. Split the data into 2, and write to the end & beginning of the texture.
+                    {
+                        int LinesBeforeWrap = this.Spokes - this.RenderIndex;
+                        int LinesAfterWrap = (int)(this.NewLines - LinesBeforeWrap);
+                        byte[] TextureDataAfterWrap = new byte[LinesAfterWrap * this.RadiusResolution * 4];
+                        Array.Copy(this.TextureData, LinesBeforeWrap * this.RadiusResolution * 4, TextureDataAfterWrap, 0, LinesAfterWrap * this.RadiusResolution * 4);
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, LinesBeforeWrap, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData); // Before (at end of texture)
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, this.RadiusResolution, LinesAfterWrap, PixelFormat.Rgba, PixelType.UnsignedByte, TextureDataAfterWrap); // After (at start of texture)
+                    }
+                    else { GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData); }
+                    this.RenderIndex = (ushort)((this.RenderIndex + this.NewLines) % this.Spokes);
+                    this.NewData = false;
+                    this.NewLines = 0;
+                    //GL.Uniform1(this.LocationDepthOffset, (float)(this.RenderIndex) / this.Spokes);
                 }
-                else
-                {
-                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
-                }
-                this.RenderIndex = (ushort)((this.RenderIndex + this.NewLines) % this.Spokes);
-                this.NewData = false;
-                this.NewLines = 0;
-                //GL.Uniform1(this.LocationDepthOffset, (float)(this.RenderIndex) / this.Spokes);
-                mutex.ReleaseMutex();
             }
 
             GL.BindVertexArray(this.VertexArrayHandle);
