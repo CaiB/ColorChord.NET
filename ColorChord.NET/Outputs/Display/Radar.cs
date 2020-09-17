@@ -10,9 +10,15 @@ namespace ColorChord.NET.Outputs.Display
 {
     public class Radar : IDisplayMode, IConfigurable
     {
+        /// <summary> How many spokes comprise one radar rotation. More means longer history. </summary>
         private int Spokes = 150;
 
+        /// <summary> How many pieces comprise one spoke. Equal to the visualizer's data count. </summary>
         private int RadiusResolution = 8;
+        // TODO: Handle this changing during runtime.
+
+        /// <summary> Whether to tilt the view and show spikes for beats. </summary>
+        private bool Use3DView = false;
 
         /// <summary> How many floats comprise one vertex of data sent to the GPU. </summary>
         private const byte DATA_PER_VERTEX = 9;
@@ -70,6 +76,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             Log.Info("Reading config for Radar.");
             this.Spokes = ConfigTools.CheckInt(options, "Spokes", 1, 10000, 100, true);
+            this.Use3DView = ConfigTools.CheckBool(options, "Is3D", false, true);
 
             ConfigTools.WarnAboutRemainder(options, typeof(IDisplayMode));
         }
@@ -118,13 +125,10 @@ namespace ColorChord.NET.Outputs.Display
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
 
-            // Matrix3 rot = Matrix3.CreateRotationX((float) Math.PI * -0.3f); // for inspection of distortion
-            Matrix3 rot = Matrix3.Identity; // no op rotation
-
-            // Vector3 offset = Vector3.UnitZ * -1f + Vector3.UnitY * 0.3f;
-            Vector3 offset = Vector3.UnitZ * -1;
-
-            Vector3 normal = new Vector3(0, 2, 0);
+            Matrix3 ViewRotation = this.Use3DView ? Matrix3.CreateRotationX((float)Math.PI * -0.3F) : Matrix3.Identity;
+            Vector3 ViewOffset = this.Use3DView ? ((Vector3.UnitZ * -1.3F) + (Vector3.UnitY * 0.3F)) : (Vector3.UnitZ * -1);
+            
+            Vector3 NormalVec = new Vector3(0, 2, 0);
 
             // Generate geometry
             for(int Spoke = 0; Spoke < this.Spokes; Spoke++)
@@ -144,16 +148,16 @@ namespace ColorChord.NET.Outputs.Display
                     const float Z = 0f;
 
                     // RadIn/RadOut is in range [0..1] premade for linear interpolation
-                    Vector3 innerNormal = normal * RadIn;
-                    Vector3 outerNormal = normal * RadOut;
+                    Vector3 InnerNormal = NormalVec * RadIn;
+                    Vector3 OuterNormal = NormalVec * RadOut;
 
-                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * rot) + offset, Spoke, Seg, true, innerNormal); // In bottom
-                    AddPoint((new Vector3(StartX * RadOut, StartY * RadOut, Z) * rot) + offset, Spoke, Seg, true, outerNormal); // Out bottom
-                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * rot) + offset, Spoke, Seg, false, outerNormal); // Out top
+                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * ViewRotation) + ViewOffset, Spoke, Seg, true, InnerNormal); // In bottom
+                    AddPoint((new Vector3(StartX * RadOut, StartY * RadOut, Z) * ViewRotation) + ViewOffset, Spoke, Seg, true, OuterNormal); // Out bottom
+                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * ViewRotation) + ViewOffset, Spoke, Seg, false, OuterNormal); // Out top
 
-                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * rot) + offset, Spoke, Seg, true, innerNormal); // In bottom
-                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * rot) + offset, Spoke, Seg, false, outerNormal); // Out top
-                    AddPoint((new Vector3(EndX * RadIn, EndY * RadIn, Z) * rot) + offset, Spoke, Seg, false, innerNormal); // In top
+                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * ViewRotation) + ViewOffset, Spoke, Seg, true, InnerNormal); // In bottom
+                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * ViewRotation) + ViewOffset, Spoke, Seg, false, OuterNormal); // Out top
+                    AddPoint((new Vector3(EndX * RadIn, EndY * RadIn, Z) * ViewRotation) + ViewOffset, Spoke, Seg, false, InnerNormal); // In top
                 }
             }
 
@@ -180,6 +184,8 @@ namespace ColorChord.NET.Outputs.Display
             if (!this.SetupDone) { return; }
             if (this.NewLines == this.Spokes) { return; }
 
+            // TODO: MOVE THIS OUT INTO COMMON-USE OBJECT (Visualizer?)
+
             // Get newest low-frequency data, and reset the accumulator.
             float LowFreqData = BaseNoteFinder.LastLowFreqSum / (1 + BaseNoteFinder.LastLowFreqCount);
             BaseNoteFinder.LastLowFreqSum = 0;
@@ -201,7 +207,6 @@ namespace ColorChord.NET.Outputs.Display
 
             lock (this.TextureData)
             {
-
                 for (int Seg = 0; Seg < this.RadiusResolution; Seg++)
                 {
                     this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 0] = (byte)(this.DataSource.GetDataDiscrete()[Seg] >> 16); // R
