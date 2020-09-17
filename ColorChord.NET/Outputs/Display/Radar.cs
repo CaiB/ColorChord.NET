@@ -101,6 +101,7 @@ namespace ColorChord.NET.Outputs.Display
             }
 
             GL.ClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+            GL.Enable(EnableCap.DepthTest);
 
             this.Shader = new Shader("Radar.vert", "Radar.frag");
             this.Shader.Use();
