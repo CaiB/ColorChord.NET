@@ -28,15 +28,15 @@ void main()
     vec4 FromTex = texture(tex, vec2(aTextureLoc.x, TexY));
     vec4 FromTexLast = texture(tex, vec2(aTextureLoc.x, mod(TexY - (1.0 / TexSize.y), 1.0)));
     
-    vec3 hsvFirst = rgb2hsv(FromTex.rgb);
-    vec3 hsvLast = rgb2hsv(FromTexLast.rgb);
-    float hueDifference = abs(max(hsvFirst.x - hsvLast.x, hsvLast.x - hsvFirst.x));
+    vec3 HSVFirst = rgb2hsv(FromTex.rgb);
+    vec3 HSVLast = rgb2hsv(FromTexLast.rgb);
+    float HueDifference = abs(max(HSVFirst.x - HSVLast.x, HSVLast.x - HSVFirst.x));
     
     vec4 TexOut = FromTex * (1.0 - step(0.5, aSegmentSide)) + FromTexLast * step(0.5, aSegmentSide);
-    float cutOff = 0.07;
-    vertexColour = TexOut * (1.0 - step(cutOff, hueDifference)) + FromTex * step(cutOff, hueDifference);
+    float SmoothingCutoff = 0.07;
+    vertexColour = TexOut * (1.0 - step(SmoothingCutoff, HueDifference)) + FromTex * step(SmoothingCutoff, HueDifference);
 
-    float alphaValue = FromTex.a * (1.0 - step(0.5, aSegmentSide)) + FromTexLast.a * step(0.5, aSegmentSide);
-    vec3 zOffset = (aNormal * alphaValue) / 10;
-    gl_Position = vec4(aPosition + zOffset, 1.0) * projection;
+    float AlphaVal = FromTex.a * (1.0 - step(0.5, aSegmentSide)) + FromTexLast.a * step(0.5, aSegmentSide);
+    vec3 HeightOffset = (aNormal * AlphaVal) / 10;
+    gl_Position = vec4(aPosition + HeightOffset, 1.0) * projection;
 }

@@ -4,7 +4,6 @@ using OpenTK;
 using OpenTK.Graphics.OpenGL4;
 using System;
 using System.Collections.Generic;
-using System.Threading;
 
 namespace ColorChord.NET.Outputs.Display
 {
@@ -146,7 +145,7 @@ namespace ColorChord.NET.Outputs.Display
                     float StartY = (float)Math.Sin(RotStart);
                     float EndX = (float)Math.Cos(RotEnd);
                     float EndY = (float)Math.Sin(RotEnd);
-                    const float Z = 0f;
+                    const float Z = 0F;
 
                     // RadIn/RadOut is in range [0..1] premade for linear interpolation
                     Vector3 InnerNormal = NormalVec * RadIn;
