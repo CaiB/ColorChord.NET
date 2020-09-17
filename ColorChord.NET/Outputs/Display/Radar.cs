@@ -1,9 +1,10 @@
-﻿using ColorChord.NET.Visualizers;
+using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
 using OpenTK;
 using OpenTK.Graphics.OpenGL4;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace ColorChord.NET.Outputs.Display
 {
@@ -14,7 +15,7 @@ namespace ColorChord.NET.Outputs.Display
         private int RadiusResolution = 8;
 
         /// <summary> How many floats comprise one vertex of data sent to the GPU. </summary>
-        private const byte DATA_PER_VERTEX = 6;
+        private const byte DATA_PER_VERTEX = 9;
 
         /// <summary> The window we are running in. </summary>
         private readonly DisplayOpenGL HostWindow;
@@ -79,14 +80,17 @@ namespace ColorChord.NET.Outputs.Display
             this.TextureData = new byte[this.Spokes * this.RadiusResolution * 4];
 
             int DataIndex = 0;
-            void AddPoint(float x, float y, float z, int spoke, int seg)
+            void AddPoint(Vector3 point, int spoke, int seg, bool isStart, Vector3 normal)
             {
-                this.VertexData[DataIndex++] = x;
-                this.VertexData[DataIndex++] = y;
-                this.VertexData[DataIndex++] = z;
+                this.VertexData[DataIndex++] = point.X;
+                this.VertexData[DataIndex++] = point.Y;
+                this.VertexData[DataIndex++] = point.Z;
                 this.VertexData[DataIndex++] = ((float)seg / this.RadiusResolution) + (0.5F / this.RadiusResolution);
                 this.VertexData[DataIndex++] = ((float)spoke / this.Spokes) + (0.5F / this.Spokes);
-                this.VertexData[DataIndex++] = 0;// isLeft ? 0F : 1F;
+                this.VertexData[DataIndex++] = isStart ? 0F : 1F;
+                this.VertexData[DataIndex++] = normal.X;
+                this.VertexData[DataIndex++] = normal.Y;
+                this.VertexData[DataIndex++] = normal.Z;
             }
 
             GL.ClearColor(0.0F, 0.0F, 0.0F, 1.0F);
@@ -114,6 +118,14 @@ namespace ColorChord.NET.Outputs.Display
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
 
+            // Matrix3 rot = Matrix3.CreateRotationX((float) Math.PI * -0.3f); // for inspection of distortion
+            Matrix3 rot = Matrix3.Identity; // no op rotation
+
+            // Vector3 offset = Vector3.UnitZ * -1f + Vector3.UnitY * 0.3f;
+            Vector3 offset = Vector3.UnitZ * -1;
+
+            Vector3 normal = new Vector3(0, 2, 0);
+
             // Generate geometry
             for(int Spoke = 0; Spoke < this.Spokes; Spoke++)
             {
@@ -129,15 +141,19 @@ namespace ColorChord.NET.Outputs.Display
                     float StartY = (float)Math.Sin(RotStart);
                     float EndX = (float)Math.Cos(RotEnd);
                     float EndY = (float)Math.Sin(RotEnd);
+                    const float Z = 0f;
 
-                    const float Z = -1;
-                    AddPoint(StartX * RadIn, StartY * RadIn, Z, Spoke, Seg); // In bottom
-                    AddPoint(StartX * RadOut, StartY * RadOut, Z, Spoke, Seg); // Out bottom
-                    AddPoint(EndX * RadOut, EndY * RadOut, Z, Spoke, Seg); // Out top
+                    // RadIn/RadOut is in range [0..1] premade for linear interpolation
+                    Vector3 innerNormal = normal * RadIn;
+                    Vector3 outerNormal = normal * RadOut;
 
-                    AddPoint(StartX * RadIn, StartY * RadIn, Z, Spoke, Seg); // In bottom
-                    AddPoint(EndX * RadOut, EndY * RadOut, Z, Spoke, Seg); // Out top
-                    AddPoint(EndX * RadIn, EndY * RadIn, Z, Spoke, Seg); // In top
+                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * rot) + offset, Spoke, Seg, true, innerNormal); // In bottom
+                    AddPoint((new Vector3(StartX * RadOut, StartY * RadOut, Z) * rot) + offset, Spoke, Seg, true, outerNormal); // Out bottom
+                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * rot) + offset, Spoke, Seg, false, outerNormal); // Out top
+
+                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * rot) + offset, Spoke, Seg, true, innerNormal); // In bottom
+                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * rot) + offset, Spoke, Seg, false, outerNormal); // Out top
+                    AddPoint((new Vector3(EndX * RadIn, EndY * RadIn, Z) * rot) + offset, Spoke, Seg, false, innerNormal); // In top
                 }
             }
 
@@ -150,24 +166,53 @@ namespace ColorChord.NET.Outputs.Display
             GL.EnableVertexAttribArray(1);
             GL.VertexAttribPointer(2, 1, VertexAttribPointerType.Float, false, DATA_PER_VERTEX * sizeof(float), 5 * sizeof(float));
             GL.EnableVertexAttribArray(2);
+            GL.VertexAttribPointer(3, 3, VertexAttribPointerType.Float, false, DATA_PER_VERTEX * sizeof(float), 6 * sizeof(float));
+            GL.EnableVertexAttribArray(3);
 
             this.SetupDone = true;
         }
+
+        private float HistoricalLFData;
+        private float CurrentFLData;
+        private Mutex mutex = new Mutex();
 
         public void Dispatch()
         {
             if (!this.SetupDone) { return; }
             if (this.NewLines == this.Spokes) { return; }
 
+            mutex.WaitOne();
+
+            // Get newest low-frequency data, and reset the accumulator.
+            float LowFreqData = BaseNoteFinder.LastLowFreqSum / (1 + BaseNoteFinder.LastLowFreqCount);
+            BaseNoteFinder.LastLowFreqSum = 0;
+            BaseNoteFinder.LastLowFreqCount = 0;
+
+            // Strong IIR for keeping an average of the low-frequency content to compare against for finding the beats
+            const float IIR_HIST = 0.9F;
+            this.HistoricalLFData = (IIR_HIST * this.HistoricalLFData) + ((1F - IIR_HIST) * LowFreqData);
+
+            // The current low-frequency content, filtered lightly, then normalized against the recent average quantity.
+            const float IIR_REAL = 0.2F;
+            LowFreqData /= this.HistoricalLFData; // Normalize? Maybe
+
+            this.CurrentFLData = (IIR_REAL * CurrentFLData) + ((1F - IIR_REAL) * LowFreqData);
+            LowFreqData = this.CurrentFLData;
+
+            // Some non-linearity to make the beats more apparent
+            LowFreqData = (float)Math.Pow(LowFreqData, 5);
+
             for (int Seg = 0; Seg < this.RadiusResolution; Seg++)
             {
                 this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 0] = (byte)(this.DataSource.GetDataDiscrete()[Seg] >> 16); // R
                 this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 1] = (byte)(this.DataSource.GetDataDiscrete()[Seg] >> 8); // G
                 this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 2] = (byte)(this.DataSource.GetDataDiscrete()[Seg]); // B
-                //this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 3] = (byte)(0 * 20); // A
+                this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 3] = (byte)(LowFreqData * 20); // A
             }
             this.NewLines++;
             this.NewData = true;
+            // Console.WriteLine("new data ready");
+            mutex.ReleaseMutex();
         }
 
         public void Render()
@@ -179,11 +224,27 @@ namespace ColorChord.NET.Outputs.Display
 
             if (this.NewData)
             {
-                GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
+                mutex.WaitOne();
+                if (this.RenderIndex + this.NewLines > this.Spokes)
+                {
+                    int linesBeforeWrap = this.Spokes - this.RenderIndex;
+                    int linesAfterWrap = (int) (this.NewLines - linesBeforeWrap);
+                    byte[] textureDataAfterWrap = new byte[linesAfterWrap * this.RadiusResolution * 4];
+                    Array.Copy(this.TextureData, linesBeforeWrap * this.RadiusResolution * 4, textureDataAfterWrap, 0, linesAfterWrap * this.RadiusResolution * 4);
+                    // write texture before wrap
+                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, linesBeforeWrap, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
+                    // write texture after wrap
+                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, this.RadiusResolution, linesAfterWrap, PixelFormat.Rgba, PixelType.UnsignedByte, textureDataAfterWrap);
+                }
+                else
+                {
+                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.RenderIndex, this.RadiusResolution, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
+                }
                 this.RenderIndex = (ushort)((this.RenderIndex + this.NewLines) % this.Spokes);
                 this.NewData = false;
                 this.NewLines = 0;
-                //GL.Uniform1(this.LocationDepthOffset, (float)(this.RenderIndex) / TUBE_LENGTH);
+                //GL.Uniform1(this.LocationDepthOffset, (float)(this.RenderIndex) / this.Spokes);
+                mutex.ReleaseMutex();
             }
 
             GL.BindVertexArray(this.VertexArrayHandle);
