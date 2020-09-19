@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <OutputType>Exe</OutputType>
@@ -30,17 +30,20 @@
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircleFinish.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothRadialBright.frag" />
-    <EmbeddedResource Include="Outputs\Display\Shaders\tube3d.frag">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Outputs\Display\Shaders\tube3d.vert">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </EmbeddedResource>
+    <EmbeddedResource Include="Outputs\Display\Shaders\tube3d.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\tube3d.vert" />
     <EmbeddedResource Include="sample-config.json" />
+    <None Include="bin\Debug\netcoreapp3.1\config.json" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Colochord2-Logo.ico" />
     <Content Include="ColorChordLib.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\Libraries\ColorChordLib.so">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\Libraries\CNFA.so">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
