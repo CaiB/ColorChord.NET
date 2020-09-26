@@ -247,6 +247,7 @@ Supported input modes: `Discrete 1D`
 | Name | Type | Default | Range | Description |
 |---|---|---|---|---|
 | `Spokes ` | `int` | 100 | 1~10000 | How many spokes (history length / radial lines) there are. Higher shows more history. |
+| `Is3D` | `bool` | `false` | | Whether to show a height-variable, tilted-view version with beats causing vertical deflection of the surface. |
 
 Spoke resolution (segments) is determined by the resolution of the attached visualizer.
 

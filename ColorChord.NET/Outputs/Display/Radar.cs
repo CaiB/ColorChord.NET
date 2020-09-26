@@ -212,7 +212,7 @@ namespace ColorChord.NET.Outputs.Display
                     this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 0] = (byte)(this.DataSource.GetDataDiscrete()[Seg] >> 16); // R
                     this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 1] = (byte)(this.DataSource.GetDataDiscrete()[Seg] >> 8); // G
                     this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 2] = (byte)(this.DataSource.GetDataDiscrete()[Seg]); // B
-                    this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 3] = (byte)(LowFreqData * 20); // A
+                    this.TextureData[(this.NewLines * (4 * this.RadiusResolution)) + (Seg * 4) + 3] = this.Use3DView ? (byte)(LowFreqData * 20) : (byte)0; // A
                 }
                 this.NewLines++;
                 this.NewData = true;
