@@ -27,11 +27,11 @@ void main()
     float TexY = mod(1.0 - (aTextureLoc.y - 0.0), 1.0);
     vec4 FromTex = texture(tex, vec2(aTextureLoc.x, TexY));
     vec4 FromTexLast = texture(tex, vec2(aTextureLoc.x, mod(TexY - (1.0 / TexSize.y), 1.0)));
-    
+
     vec3 HSVFirst = rgb2hsv(FromTex.rgb);
     vec3 HSVLast = rgb2hsv(FromTexLast.rgb);
     float HueDifference = abs(max(HSVFirst.x - HSVLast.x, HSVLast.x - HSVFirst.x));
-    
+
     vec4 TexOut = FromTex * (1.0 - step(0.5, aSegmentSide)) + FromTexLast * step(0.5, aSegmentSide);
     float SmoothingCutoff = 0.07;
     vertexColour = TexOut * (1.0 - step(SmoothingCutoff, HueDifference)) + FromTex * step(SmoothingCutoff, HueDifference);
@@ -40,3 +40,4 @@ void main()
     vec3 HeightOffset = (aNormal * AlphaVal) / 10;
     gl_Position = vec4(aPosition + HeightOffset, 1.0) * projection;
 }
+// remove this comment and it breaks on linux, WTF? - nikky
