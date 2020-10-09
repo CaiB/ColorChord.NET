@@ -120,10 +120,10 @@ namespace ColorChord.NET.Outputs.Display
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
 
-            Matrix3 ViewRotation = this.Use3DView ? Matrix3.CreateRotationX(MathF.PI * -0.3F) : Matrix3.Identity;
+            Matrix3 ViewRotation = /*this.Use3DView ? Matrix3.CreateRotationX((float)Math.PI * -0.3F) :*/ Matrix3.Identity;
             Vector3 ViewOffset = this.Use3DView ? ((Vector3.UnitZ * -1.3F) + (Vector3.UnitY * 0.3F)) : (Vector3.UnitZ * -1);
             
-            Vector3 NormalVec = new Vector3(0, 2, 0);
+            Vector3 NormalVec = new Vector3(0, 1.2f, 0);
 
             // Generate geometry
             for(int Spoke = 0; Spoke < this.Spokes; Spoke++)
@@ -142,17 +142,20 @@ namespace ColorChord.NET.Outputs.Display
                     float EndY = (float)Math.Sin(RotEnd);
                     const float Z = 0F;
 
+                    Vector3 startNormal = new Vector3( (StartX * RadIn) - (StartX * RadOut),  (StartY * RadIn) - (StartY * RadOut), Z) * RadiusResolution;
+                    Vector3 endNormal = new Vector3((EndX * RadIn) - (EndX * RadOut), (EndY * RadIn) - (EndY * RadOut), Z) * RadiusResolution;
+
                     // RadIn/RadOut is in range [0..1] premade for linear interpolation
                     Vector3 InnerNormal = NormalVec * RadIn;
                     Vector3 OuterNormal = NormalVec * RadOut;
 
-                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * ViewRotation) + ViewOffset, Spoke, Seg, true, InnerNormal); // In bottom
-                    AddPoint((new Vector3(StartX * RadOut, StartY * RadOut, Z) * ViewRotation) + ViewOffset, Spoke, Seg, true, OuterNormal); // Out bottom
-                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * ViewRotation) + ViewOffset, Spoke, Seg, false, OuterNormal); // Out top
+                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * ViewRotation) + ViewOffset, Spoke, Seg, true, startNormal * RadIn); // In bottom
+                    AddPoint((new Vector3(StartX * RadOut, StartY * RadOut, Z) * ViewRotation) + ViewOffset, Spoke, Seg, true, startNormal * RadOut); // Out bottom
+                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * ViewRotation) + ViewOffset, Spoke, Seg, false, endNormal * RadOut); // Out top
 
-                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * ViewRotation) + ViewOffset, Spoke, Seg, true, InnerNormal); // In bottom
-                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * ViewRotation) + ViewOffset, Spoke, Seg, false, OuterNormal); // Out top
-                    AddPoint((new Vector3(EndX * RadIn, EndY * RadIn, Z) * ViewRotation) + ViewOffset, Spoke, Seg, false, InnerNormal); // In top
+                    AddPoint((new Vector3(StartX * RadIn, StartY * RadIn, Z) * ViewRotation) + ViewOffset, Spoke, Seg, true, startNormal * RadIn); // In bottom
+                    AddPoint((new Vector3(EndX * RadOut, EndY * RadOut, Z) * ViewRotation) + ViewOffset, Spoke, Seg, false, endNormal * RadOut); // Out top
+                    AddPoint((new Vector3(EndX * RadIn, EndY * RadIn, Z) * ViewRotation) + ViewOffset, Spoke, Seg, false, endNormal * RadIn); // In top
                 }
             }
 
