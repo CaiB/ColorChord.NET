@@ -212,7 +212,7 @@ namespace ColorChord.NET.Outputs
             uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
 
             int LEDsPerPacket = 1490 / this.LEDLength; // 1490 is the maximum number of data bytes allowed by TPM2.net
-            if (this.MaxPacketLength > 0) { LEDsPerPacket = (this.MaxPacketLength - 7) / this.LEDLength; }
+            if (this.MaxPacketLength > 0) { LEDsPerPacket = this.MaxPacketLength / this.LEDLength; }
 
             if (LEDCount < LEDsPerPacket) { LEDsPerPacket = LEDCount; } // Only 1 packet needed.
             byte PacketQty = (byte)Math.Ceiling((decimal)LEDCount / LEDsPerPacket); // How many packets we'll need to send
@@ -227,7 +227,7 @@ namespace ColorChord.NET.Outputs
             int LEDIndex = 0; // The overall LED index (not reset per packet)
             for(int PacketNum = 0; PacketNum < PacketQty; PacketNum++)
             {
-                Output[4] = PacketQty;
+                Output[4] = (byte)(PacketNum + 1); // TODO: This makes no sense, why is the first packet 1?
 
                 int DataIndex = 6;
                 for(int LED = 0; LED < LEDsPerPacket && LEDIndex < LEDCount; LED++)
@@ -267,8 +267,8 @@ namespace ColorChord.NET.Outputs
                 }
 
                 Output[DataIndex++] = 0x36; // Packet end byte
-                Output[2] = (byte)((DataIndex >> 8) & 0xFF); // Packet length
-                Output[3] = (byte)((DataIndex) & 0xFF); // Packet length
+                Output[2] = (byte)(((DataIndex - 7) >> 8) & 0xFF); // Packet length
+                Output[3] = (byte)((DataIndex - 7) & 0xFF); // Packet length
 
                 this.Sender.Send(Output, DataIndex, this.Destination);
             }
