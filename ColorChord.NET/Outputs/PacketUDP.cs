@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 
 namespace ColorChord.NET.Outputs
 {
@@ -36,6 +37,12 @@ namespace ColorChord.NET.Outputs
         /// <summary> Whether the output has a yellow channel that requires processing colours differently. </summary>
         public bool UsesChannelY;
 
+        /// <summary> What format to send the packets in. </summary>
+        public SendMode Mode { get; private set; }
+
+        /// <summary> The max length of individual packets for protocols that support splitting. </summary>
+        public int MaxPacketLength { get; private set; }
+
         /// <summary> Whether this sender instance is enabled (can send packets). </summary>
         public bool Enabled { get; set; }
 
@@ -55,17 +62,31 @@ namespace ColorChord.NET.Outputs
             this.Source = ColorChord.VisualizerInsts[(string)options["VisualizerName"]];
             this.Source.AttachOutput(this);
 
-            int Port = ConfigTools.CheckInt(options, "Port", 0, 65535, 7777, true);
+            ReadProtocol(ConfigTools.CheckString(options, "Protocol", "Raw", true));
+            int Port = ConfigTools.CheckInt(options, "Port", 0, 65535, GetDefaultPort(this.Mode), true);
             if (Port < 1024) { Log.Warn("It is not recommended to use ports below 1024, as they are reserved. UDP sender is operating on port " + Port + "."); }
             string IP = ConfigTools.CheckString(options, "IP", "127.0.0.1", true);
             this.Destination = new IPEndPoint(IPAddress.Parse(IP), Port);
             this.FrontPadding = (uint)ConfigTools.CheckInt(options, "PaddingFront", 0, 1000, 0, true);
             this.BackPadding = (uint)ConfigTools.CheckInt(options, "PaddingBack", 0, 1000, 0, true);
             this.PaddingContent = (byte)ConfigTools.CheckInt(options, "PaddingContent", 0x00, 0xFF, 0x00, true);
+            this.MaxPacketLength = (int)ConfigTools.CheckInt(options, "MaxPacketLength", -1, 65535, -1, true);
             this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
             ReadLEDPattern(ConfigTools.CheckString(options, "LEDPattern", "RGB", true));
 
             ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
+        }
+
+        /// <summary> Gets the default port for the given protocol. </summary>
+        /// <param name="mode"> The protocol being used for sending. </param>
+        private static ushort GetDefaultPort(SendMode mode)
+        {
+            return mode switch
+            {
+                SendMode.RAW => 7777,
+                SendMode.TPM2NET => 65506,
+                _ => 7777,
+            };
         }
 
         /// <summary> Sets the pattern length and content based on the given pattern descriptor string. </summary>
@@ -91,51 +112,166 @@ namespace ColorChord.NET.Outputs
             }
         }
 
+        /// <summary> Sets the current protocol mode in <see cref="Mode"/> from the given config entry. </summary>
+        /// <param name="protocolName"> The name of the protocol, case-insensitive. </param>
+        private void ReadProtocol(string protocolName)
+        {
+            this.Mode = (protocolName.ToLowerInvariant()) switch
+            {
+                "raw" => SendMode.RAW,
+                "tpm2.net" => SendMode.TPM2NET,
+                _ => throw new Exception("Invalid protocol specified for UDP sender: \"" + protocolName + "\""),
+            };
+        }
+
+        /// <summary> Sends the newest data from the visualizer to our recipient. </summary>
         public void Dispatch()
         {
-            byte[] Output;
-            if (this.Source is IDiscrete1D Source1D && this.Enabled)
+            if (!this.Enabled) { return; }
+            switch(this.Mode)
             {
-                Output = new byte[(Source1D.GetCountDiscrete() * this.LEDLength) + this.FrontPadding + this.BackPadding];
-                uint[] SourceData = Source1D.GetDataDiscrete(); // The raw data from the visualizer.
-                byte[] LEDData = null; // The values re-formatted to [R,G,B,Y][R,G,B,Y]...
-                const byte STRIDE = 4;
+                case SendMode.RAW: SendRaw(); break;
+                case SendMode.TPM2NET: SendTPM2Net(); break;
+                default: break;
+            }
+        }
 
-                LEDData = new byte[Source1D.GetCountDiscrete() * STRIDE]; // TODO: We don't need to store this
+        /// <summary>
+        /// Sends raw data packet.
+        /// Start: <see cref="FrontPadding"/> bytes filled with <see cref="PaddingContent"/>.
+        /// Data: Data for each LED in sequence, in order specified by "LEDPattern" in config.
+        /// End: <see cref="BackPadding"/> bytes filled with <see cref="PaddingContent"/>.
+        /// Packets can be up to 65535 bytes long, but will get fragmented if over network's MTU (usually around 1400-1500B).
+        /// </summary>
+        private void SendRaw()
+        {
+            if (!(this.Source is IDiscrete1D Src)) { return; }
 
-                int i;
-                for (i = 0; i < this.FrontPadding; i++) { Output[i] = this.PaddingContent; } // Front padding
-                for (int LED = 0; LED < Source1D.GetCountDiscrete(); LED++) // LED Data
+            byte[] Output = new byte[(Src.GetCountDiscrete() * this.LEDLength) + this.FrontPadding + this.BackPadding];
+            uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
+
+            int Index;
+
+            // Front Padding
+            for (Index = 0; Index < this.FrontPadding; Index++) { Output[Index] = this.PaddingContent; }
+
+            // Data Content
+            for (int LED = 0; LED < Src.GetCountDiscrete(); LED++)
+            {
+                // Extract RGB
+                byte Red = (byte)((SourceData[LED] >> 16) & 0xFF);
+                byte Green = (byte)((SourceData[LED] >> 8) & 0xFF);
+                byte Blue = (byte)(SourceData[LED] & 0xFF);
+
+                // Calculate other channels if needed
+                byte Yellow = 0;
+                if (this.UsesChannelY) // Calculate Yellow
                 {
-                    // Copy RGB
-                    LEDData[(LED * STRIDE) + (byte)Channel.Red] = (byte)((SourceData[LED] >> 16) & 0xFF);
-                    LEDData[(LED * STRIDE) + (byte)Channel.Green] = (byte)((SourceData[LED] >> 8) & 0xFF);
-                    LEDData[(LED * STRIDE) + (byte)Channel.Blue] = (byte)(SourceData[LED] & 0xFF);
+                    // Lower of the two: (Red / 2), Green
+                    Yellow = Red / 2 > Green ? Green : (byte)(Red / 2);
+
+                    Red = (Red - Yellow) > 0 ? (byte)(Red - Yellow) : (byte)0;
+                    Green = (Green - Yellow) > 0 ? (byte)(Green - Yellow) : (byte)0;
+                }
+
+                // Copy each component to the output in the order specified in config.
+                for (int Component = 0; Component < this.LEDLength; Component++)
+                {
+                    byte Insert = ((Channel)this.LEDValueMapping[Component]) switch
+                    {
+                        Channel.Red => Red,
+                        Channel.Green => Green,
+                        Channel.Blue => Blue,
+                        Channel.Yellow => Yellow,
+                        _ => 0,
+                    };
+
+                    Output[Index] = Insert;
+                    Index++;
+                }
+            }
+
+            // Back Padding
+            for (; Index < Output.Length; Index++) { Output[Index] = this.PaddingContent; }
+
+            this.Sender.Send(Output, Output.Length, this.Destination);
+        }
+
+        /// <summary>
+        /// Sends data in TPM2.net format. See documentation: https://gist.github.com/jblang/89e24e2655be6c463c56
+        /// Start: Header and packet number info
+        /// Data: Data for each LED in sequence, in order specified by "LEDPattern" in config.
+        /// End: 0x36
+        /// Packets are divided to fit within <see cref="MaxPacketLength"/> bytes, and numbered accordingly.
+        /// </summary>
+        private void SendTPM2Net()
+        {
+            if (!(this.Source is IDiscrete1D Src)) { return; }
+
+            int LEDCount = Src.GetCountDiscrete();
+            uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
+
+            int LEDsPerPacket = 1490 / this.LEDLength; // 1490 is the maximum number of data bytes allowed by TPM2.net
+            if (this.MaxPacketLength > 0) { LEDsPerPacket = (this.MaxPacketLength - 7) / this.LEDLength; }
+
+            if (LEDCount < LEDsPerPacket) { LEDsPerPacket = LEDCount; } // Only 1 packet needed.
+            byte PacketQty = (byte)Math.Ceiling((decimal)LEDCount / LEDsPerPacket); // How many packets we'll need to send
+
+            byte[] Output = new byte[(LEDsPerPacket * this.LEDLength) + 7]; // 6B header + data + 1B end.
+
+            // Packet header
+            Output[0] = 0x9C; // Specifies TPM2.net
+            Output[1] = 0xDA; // Data frame
+            Output[5] = PacketQty; // Number of packets for this frame
+
+            int LEDIndex = 0; // The overall LED index (not reset per packet)
+            for(int PacketNum = 0; PacketNum < PacketQty; PacketNum++)
+            {
+                Output[4] = PacketQty;
+
+                int DataIndex = 6;
+                for(int LED = 0; LED < LEDsPerPacket && LEDIndex < LEDCount; LED++)
+                {
+                    // Extract RGB
+                    byte Red = (byte)((SourceData[LEDIndex] >> 16) & 0xFF);
+                    byte Green = (byte)((SourceData[LEDIndex] >> 8) & 0xFF);
+                    byte Blue = (byte)(SourceData[LEDIndex] & 0xFF);
 
                     // Calculate other channels if needed
-                    if (this.UsesChannelY) // Add Y
+                    byte Yellow = 0;
+                    if (this.UsesChannelY) // Calculate Yellow
                     {
-                        byte Red = LEDData[(LED * STRIDE) + (byte)Channel.Red];
-                        byte Green = LEDData[(LED * STRIDE) + (byte)Channel.Green];
+                        // Lower of the two: (Red / 2), Green
+                        Yellow = Red / 2 > Green ? Green : (byte)(Red / 2);
 
-                        byte Yellow = Red / 2 > Green ? Green : (byte)(Red / 2); // Yellow = Lower of the two: (Red / 2), Green
-
-                        LEDData[(LED * STRIDE) + (byte)Channel.Yellow] = Yellow;
-                        LEDData[(LED * STRIDE) + (byte)Channel.Red] = (Red - Yellow) > 0 ? (byte)(Red - Yellow) : (byte)0;
-                        LEDData[(LED * STRIDE) + (byte)Channel.Green] = (Green - Yellow) > 0 ? (byte)(Green - Yellow) : (byte)0;
+                        Red = (Red - Yellow) > 0 ? (byte)(Red - Yellow) : (byte)0;
+                        Green = (Green - Yellow) > 0 ? (byte)(Green - Yellow) : (byte)0;
                     }
 
-                    // Copy data to output as needed.
-                    for (int b = 0; b < this.LEDLength; b++)
+                    // Copy each component to the output in the order specified in config.
+                    for (int Component = 0; Component < this.LEDLength; Component++)
                     {
-                        Output[i] = LEDData[(LED * STRIDE) + this.LEDValueMapping[b]];
-                        i++;
+                        byte Insert = ((Channel)this.LEDValueMapping[Component]) switch
+                        {
+                            Channel.Red => Red,
+                            Channel.Green => Green,
+                            Channel.Blue => Blue,
+                            Channel.Yellow => Yellow,
+                            _ => 0,
+                        };
+
+                        Output[DataIndex] = Insert;
+                        DataIndex++;
                     }
+                    LEDIndex++;
                 }
-                for (; i < Output.Length; i++) { Output[i] = this.PaddingContent; } // Back padding
+
+                Output[DataIndex++] = 0x36; // Packet end byte
+                Output[2] = (byte)((DataIndex >> 8) & 0xFF); // Packet length
+                Output[3] = (byte)((DataIndex) & 0xFF); // Packet length
+
+                this.Sender.Send(Output, DataIndex, this.Destination);
             }
-            else { return; }
-            this.Sender.Send(Output, Output.Length, this.Destination);
         }
 
         private enum Channel : byte
@@ -144,6 +280,12 @@ namespace ColorChord.NET.Outputs
             Green = 1,
             Blue = 2,
             Yellow = 3
+        }
+
+        public enum SendMode
+        {
+            RAW,
+            TPM2NET
         }
     }
 }
