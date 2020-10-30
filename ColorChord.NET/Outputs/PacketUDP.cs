@@ -43,6 +43,9 @@ namespace ColorChord.NET.Outputs
         /// <summary> The max length of individual packets for protocols that support splitting. </summary>
         public int MaxPacketLength { get; private set; }
 
+        /// <summary> For protocols that support variable-length packets, determind whether all packets are the same size, remainder filled with <see cref="PaddingContent"/>. </summary>
+        public bool UseConstantPacketLength { get; private set; }
+
         /// <summary> Whether this sender instance is enabled (can send packets). </summary>
         public bool Enabled { get; set; }
 
@@ -70,7 +73,8 @@ namespace ColorChord.NET.Outputs
             this.FrontPadding = (uint)ConfigTools.CheckInt(options, "PaddingFront", 0, 1000, 0, true);
             this.BackPadding = (uint)ConfigTools.CheckInt(options, "PaddingBack", 0, 1000, 0, true);
             this.PaddingContent = (byte)ConfigTools.CheckInt(options, "PaddingContent", 0x00, 0xFF, 0x00, true);
-            this.MaxPacketLength = (int)ConfigTools.CheckInt(options, "MaxPacketLength", -1, 65535, -1, true);
+            this.MaxPacketLength = ConfigTools.CheckInt(options, "MaxPacketLength", -1, 65535, -1, true);
+            this.UseConstantPacketLength = ConfigTools.CheckBool(options, "ConstantPacketLength", false, true);
             this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
             ReadLEDPattern(ConfigTools.CheckString(options, "LEDPattern", "RGB", true));
 
@@ -263,8 +267,12 @@ namespace ColorChord.NET.Outputs
                         Output[DataIndex] = Insert;
                         DataIndex++;
                     }
+
                     LEDIndex++;
                 }
+
+                // If we have empty space, and we should pad the remainder to match sizes. Fills remainder of last packet in constant-length mode.
+                while (DataIndex < (Output.Length - 1) && this.UseConstantPacketLength) { Output[DataIndex++] = this.PaddingContent; }
 
                 Output[DataIndex++] = 0x36; // Packet end byte
                 Output[2] = (byte)(((DataIndex - 7) >> 8) & 0xFF); // Packet length

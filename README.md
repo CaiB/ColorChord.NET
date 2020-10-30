@@ -258,7 +258,7 @@ Supported input modes: `Discrete 1D`
 Number of LEDs sent adjusts to match the attached visualizer.  
 Packs the data for each LED in sequence into a UDP packet, then sends it to a given IP.
 <details>
-<summary>View Configuration Table</summary>
+<summary>View Configuration Table: Common to all protocols</summary>
 
 | Name | cnlohr Name | Type | Default | Range | Description |
 |---|---|---|---|---|---|
@@ -266,22 +266,35 @@ Packs the data for each LED in sequence into a UDP packet, then sends it to a gi
 | `IP` | `address` | `string` | 127.0.0.1 | Valid IPs | The IP to send the packets to. |
 | `Port` | `port` | `int` | Depends on `Protocol` | 0~65535 | The port to send the packets to. |
 | `LEDPattern` | | `string` | `RGB` | Any valid pattern | The order in which to send data for each LED. Any combination of characters `R`, `G`, `B`, `Y` is valid, in any order, including repetition. Number of characters determines how many bits each LED takes up in the packet. |
-| `PaddingFront` | `skipfirst` | `int` | 0 | 0~1000 | Blank bytes to append to the front of the packet. |
-| `PaddingBack` | | `int` | 0 | 0~1000 | Blank bytes to append to the back of the packet. |
-| `PaddingContent` | `firstval` | `int` | 0 | 0~255 | What data to put in the blank bytes at the start and end, if present. |
-| `MaxPacketLength` | | `int` | -1 | -1~65535 | The maximum size of packets before splitting (only supported by some protocols). -1 means use protocol specified limits. |
 | `Enable` | | `bool` | true | | Whether to use this output. |
 </details>
 
+See below sections for your protocol to see additional config options.
+
+| Protocol | Description|
+|---|---|
+| Raw | Outputs the LED data without any headers or packet splitting. Used by cnlohr's ColorChord and most basic receivers. |
+| TPM2.net | Outputs data packets as per the `TPM2.net` spec, [see here](https://gist.github.com/jblang/89e24e2655be6c463c56), and [TPM2 info in German](https://www.ledstyles.de/index.php?thread/18969-tpm2-protokoll-zur-matrix-lichtsteuerung/). Usable with [WLED](https://github.com/Aircoookie/WLED). |
+
 <details>
-<summary>View Protocol List</summary>
+<summary>Protocol: Raw</summary>
 
-All protocols support these config options: `IP`, `Port`, `LEDPattern`, `Enable`.  
+| Name | cnlohr Name | Type | Default | Range | Description |
+|---|---|---|---|---|---|
+| `PaddingFront` | `skipfirst` | `int` | 0 | 0~1000 | Padding bytes to append to the front of the packet. |
+| `PaddingBack` | | `int` | 0 | 0~1000 | Padding bytes to append to the back of the packet. |
+| `PaddingContent` | `firstval` | `int` | 0 | 0~255 | What data to put in the padding bytes at the start and end, if present. |
 
-| Name | Additional supported config options | Comments |
-|---|---|---|
-| `"Raw"` | `PaddingFront`, `PaddingBack`, `PaddingContent` | Outputs the LED data without any headers or packet splitting. Used by cnlohr's ColorChord and most basic receivers. |
-| `"TPM2.net"` | `MaxPacketLength` | Outputs data packets as per the `TPM2.net` spec, [see here](https://gist.github.com/jblang/89e24e2655be6c463c56), and [TPM2 info in German](https://www.ledstyles.de/index.php?thread/18969-tpm2-protokoll-zur-matrix-lichtsteuerung/). |
+</details>
+
+<details>
+<summary>Protocol: TPM2.net</summary>
+
+| Name | cnlohr Name | Type | Default | Range | Description |
+|---|---|---|---|---|---|
+| `PaddingContent` | `firstval` | `int` | 0 | 0~255 | What data to put in the padding bytes at the start and end, if present. |
+| `MaxPacketLength` | | `int` | -1 | -1~65535 | The maximum size of packets before splitting. -1 means use protocol specified limit (1490). |
+| `ConstantPacketLength` | | `bool` | `false` | | Whether to make all packets the same size, filling blank space with `PaddingContent`. |
 </details>
 
 > Packets have 65,535 byte size limit. This means no more than 21,835 RGB LEDs can be output at once.
