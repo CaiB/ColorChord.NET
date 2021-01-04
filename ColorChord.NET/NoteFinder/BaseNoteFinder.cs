@@ -165,7 +165,7 @@ namespace ColorChord.NET
             if (period < ShortestPeriod) { ShortestPeriod = period; }
         }
 
-        public static ShinNoteFinderDFT DFT;
+        public static ShinNoteFinderDFT DFT; // Experimental new DFT, not currently used.
 
         public static void ApplyConfig(Dictionary<string, object> options)
         {
@@ -186,25 +186,11 @@ namespace ColorChord.NET
 
             // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
             SetSampleRate(SampleRate);
-
-            //DFT = new ShinNoteFinderDFT();
-            //DFT.SampleRate = (uint)SampleRate;
-            //DFT.CalculateFrequencies(MinimumFrequency);
-            //DFT.FillReferenceTables();
-            //DFT.PrepareSampleStorage();
         }
 
         /// <summary> Starts the processing thread. </summary>
         public static void Start()
         {
-            /*DFT = new ShinNoteFinderDFT();
-            DFT.WindowSize = 4096;
-            DFT.BinsPerOctave = 24;// * 2;
-            DFT.OctaveCount = 6;
-            DFT.CalculateFrequencies(MinimumFrequency);
-            DFT.FillReferenceTables();
-            DFT.PrepareSampleStorage();*/
-
             KeepGoing = true;
             ProcessThread = new Thread(DoProcessing);
             ProcessThread.Start();
@@ -224,7 +210,7 @@ namespace ColorChord.NET
             while (KeepGoing)
             {
                 Timer.Restart();
-                Cycle();
+                if (LastDataAdd.AddSeconds(5) < DateTime.UtcNow) { Cycle(); }
                 int WaitTime = (int)(ShortestPeriod - Timer.ElapsedMilliseconds);
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
             }
@@ -237,9 +223,6 @@ namespace ColorChord.NET
 
             // This will read all buffer data from where it was called last up to [AudioBufferHeadWrite] in order to catch up.
             DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
-            //for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] = DFT.Magnitudes[i]; }
-
-            //for (int i = 0; i < DFTRawBinCount; i++) { DFTBinData[i] /= 5000F; }
 
             for(int BinInd = 0; BinInd < 24; BinInd++)
             {
@@ -312,11 +295,10 @@ namespace ColorChord.NET
                 float ValueHere = OctaveBinValues[BinIndex];
                 float ValueRight = OctaveBinValues[IndexRight];
 
-                // TODO: THIS NEXT LINE DIFFERS FROM THE BASE VERSION TO FIX AN OUT-OF-BOUNDS CRASH.
                 if (ValueLeft >= ValueHere || ValueRight > ValueHere) { continue; } // Adjacent bins are higher, this is not a peak.
                 if (ValueLeft == ValueHere && ValueRight == ValueHere) { continue; } // Adjacent bins are both equal, this is a plateau (e.g. all 0).
 
-                // TODO: This isn't 100% certain.
+                // TODO: These descriptions aren't 100% certain.
                 // This bin is a peak, adjacent values are lower.
                 // Now we try to locate where the peak should be within this one bin.
                 float TotalAdjacentDifference = ((ValueHere - ValueLeft) + (ValueHere - ValueRight));
