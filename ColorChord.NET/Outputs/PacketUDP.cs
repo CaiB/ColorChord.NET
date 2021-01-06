@@ -2,10 +2,8 @@
 using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Net;
 using System.Net.Sockets;
-using System.Runtime.CompilerServices;
 
 namespace ColorChord.NET.Outputs
 {
@@ -49,6 +47,21 @@ namespace ColorChord.NET.Outputs
         /// <summary> Whether this sender instance is enabled (can send packets). </summary>
         public bool Enabled { get; set; }
 
+        /// <summary> Whether the LED matrix uses shorter wiring, reversing the direction of every other line. </summary>
+        public bool ArrayIsZigZag { get; set; }
+
+        /// <summary> Whether LEDs run left-to-right (false) or right-to-left (true). </summary>
+        public bool MirrorOutput { get; set; }
+
+        /// <summary> Whether the output should be rotated 180 degrees. </summary>
+        public bool RotateOutput { get; set; }
+
+        /// <summary> How many LEDs wide the matrix/strip is. </summary>
+        public int MatrixSizeX { get; set; } = 1;
+
+        /// <summary> How many LEDs tall the matrix is. </summary>
+        public int MatrixSizeY { get; set; } = 1;
+
         public PacketUDP(string name)
         {
             this.Name = name;
@@ -75,6 +88,11 @@ namespace ColorChord.NET.Outputs
             this.PaddingContent = (byte)ConfigTools.CheckInt(options, "PaddingContent", 0x00, 0xFF, 0x00, true);
             this.MaxPacketLength = ConfigTools.CheckInt(options, "MaxPacketLength", -1, 65535, -1, true);
             this.UseConstantPacketLength = ConfigTools.CheckBool(options, "ConstantPacketLength", false, true);
+            this.ArrayIsZigZag = ConfigTools.CheckBool(options, "ZigZag", false, true);
+            this.MirrorOutput = ConfigTools.CheckBool(options, "Mirror", false, true);
+            this.RotateOutput = ConfigTools.CheckBool(options, "RotatedArray", false, true);
+            this.MatrixSizeX = ConfigTools.CheckInt(options, "SizeX", 1, 100000, 1, true);
+            this.MatrixSizeY = ConfigTools.CheckInt(options, "SizeY", 1, 100000, 1, true);
             this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
             ReadLEDPattern(ConfigTools.CheckString(options, "LEDPattern", "RGB", true));
 
@@ -149,7 +167,7 @@ namespace ColorChord.NET.Outputs
         /// </summary>
         private void SendRaw()
         {
-            if (!(this.Source is IDiscrete1D Src)) { return; }
+            if (this.Source is not IDiscrete1D Src) { return; }
 
             byte[] Output = new byte[(Src.GetCountDiscrete() * this.LEDLength) + this.FrontPadding + this.BackPadding];
             uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
@@ -162,10 +180,13 @@ namespace ColorChord.NET.Outputs
             // Data Content
             for (int LED = 0; LED < Src.GetCountDiscrete(); LED++)
             {
+                // Transform the index depending on LED matrix shape
+                int InDataIndex = TransformIndex(this.MatrixSizeX, this.MatrixSizeY, LED, this.RotateOutput, this.MirrorOutput, this.ArrayIsZigZag);
+
                 // Extract RGB
-                byte Red = (byte)((SourceData[LED] >> 16) & 0xFF);
-                byte Green = (byte)((SourceData[LED] >> 8) & 0xFF);
-                byte Blue = (byte)(SourceData[LED] & 0xFF);
+                byte Red = (byte)((SourceData[InDataIndex] >> 16) & 0xFF);
+                byte Green = (byte)((SourceData[InDataIndex] >> 8) & 0xFF);
+                byte Blue = (byte)(SourceData[InDataIndex] & 0xFF);
 
                 // Calculate other channels if needed
                 byte Yellow = 0;
@@ -210,7 +231,7 @@ namespace ColorChord.NET.Outputs
         /// </summary>
         private void SendTPM2Net()
         {
-            if (!(this.Source is IDiscrete1D Src)) { return; }
+            if (this.Source is not IDiscrete1D Src) { return; }
 
             int LEDCount = Src.GetCountDiscrete();
             uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
@@ -231,15 +252,18 @@ namespace ColorChord.NET.Outputs
             int LEDIndex = 0; // The overall LED index (not reset per packet)
             for(int PacketNum = 0; PacketNum < PacketQty; PacketNum++)
             {
-                Output[4] = (byte)(PacketNum + 1); // TODO: This makes no sense, why is the first packet 1?
+                Output[4] = (byte)(PacketNum + 1); // Packet numbers are 1-indexed.
 
                 int DataIndex = 6;
                 for(int LED = 0; LED < LEDsPerPacket && LEDIndex < LEDCount; LED++)
                 {
+                    // Transform the index depending on LED matrix shape
+                    int InDataIndex = TransformIndex(this.MatrixSizeX, this.MatrixSizeY, LEDIndex, this.RotateOutput, this.MirrorOutput, this.ArrayIsZigZag);
+
                     // Extract RGB
-                    byte Red = (byte)((SourceData[LEDIndex] >> 16) & 0xFF);
-                    byte Green = (byte)((SourceData[LEDIndex] >> 8) & 0xFF);
-                    byte Blue = (byte)(SourceData[LEDIndex] & 0xFF);
+                    byte Red = (byte)((SourceData[InDataIndex] >> 16) & 0xFF);
+                    byte Green = (byte)((SourceData[InDataIndex] >> 8) & 0xFF);
+                    byte Blue = (byte)(SourceData[InDataIndex] & 0xFF);
 
                     // Calculate other channels if needed
                     byte Yellow = 0;
@@ -280,6 +304,28 @@ namespace ColorChord.NET.Outputs
 
                 this.Sender.Send(Output, DataIndex, this.Destination);
             }
+        }
+
+        /// <summary> Transforms a data array index to map physical LED matrix locations to data indeces. </summary>
+        /// <param name="sizeX"> The width of the LED array. </param>
+        /// <param name="sizeY"> The height of the LED array. </param>
+        /// <param name="i"> The input index to transform. </param>
+        /// <param name="rotate180"> Whether the LED array is rotated 180 degrees. </param>
+        /// <param name="mirror"> Whether the output should be right-to-left (true) or left-to-right (false). </param>
+        /// <param name="isZigZag"> Whether odd-numbered lines are flipped horizontally for matrices built with minimal wiring. </param>
+        /// <returns> The index of the original data to pull from for the given LED index. </returns>
+        private static int TransformIndex(int sizeX, int sizeY, int i, bool rotate180, bool mirror, bool isZigZag)
+        {
+            int X = i % sizeX;
+            int Y = i / sizeX;
+
+            if (rotate180)
+            {
+                Y = (sizeY - 1 - Y);
+                i = (Y * sizeX) + X;
+            }
+            if ((mirror ^ rotate180) ^ (isZigZag && (Y & 1) == 1)) { i = (Y * sizeX) + (sizeX - X - 1); }
+            return i;
         }
 
         private enum Channel : byte
