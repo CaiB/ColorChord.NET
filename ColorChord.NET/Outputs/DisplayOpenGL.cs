@@ -128,6 +128,9 @@ namespace ColorChord.NET.Outputs
             base.OnResize(evt);
         }
 
+        protected override void OnMaximized(MaximizedEventArgs evt) => OnResize(new ResizeEventArgs());
+        protected override void OnMinimized(MinimizedEventArgs evt) => OnResize(new ResizeEventArgs());
+
         protected override void OnUnload()
         {
             this.Display?.Close();
