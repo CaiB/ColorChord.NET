@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
-using OpenTK;
 using OpenTK.Graphics.ES30;
+using OpenTK.Mathematics;
 
 namespace ColorChord.NET.Outputs.Display
 {

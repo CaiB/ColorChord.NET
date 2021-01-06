@@ -1,9 +1,10 @@
 ﻿using ColorChord.NET.Outputs.Display;
 using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
-using OpenTK;
-using OpenTK.Graphics;
 using OpenTK.Graphics.ES30;
+using OpenTK.Mathematics;
+using OpenTK.Windowing.Common;
+using OpenTK.Windowing.Desktop;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -17,29 +18,30 @@ namespace ColorChord.NET.Outputs
 
         public readonly string Name;
 
-        /// <summary> The width of the window, in pixels. </summary>
-        public int WindowWidth
+        /// <summary> The width of the window contents, in pixels. </summary>
+        public int Width
         {
-            get => this.ClientSize.Width;
-            set => this.ClientSize = new OpenTK.Size(value, this.Size.Height);
+            get => this.ClientSize.X;
+            set => this.ClientRectangle = new Box2i(this.ClientRectangle.Min, new Vector2i(this.ClientRectangle.Min.X + value, this.ClientRectangle.Max.Y));
         }
 
-        /// <summary> The height of the window, in pixels. </summary>
-        public int WindowHeight
+        /// <summary> The height of the window contents, in pixels. </summary>
+        public int Height
         {
-            get => this.ClientSize.Height;
-            set => this.ClientSize = new OpenTK.Size(this.Size.Width, value);
+            get => this.ClientSize.Y;
+            set => this.ClientRectangle = new Box2i(this.ClientRectangle.Min, new Vector2i(this.ClientRectangle.Max.X, this.ClientRectangle.Min.Y + value));
         }
 
         private IDisplayMode Display;
         private bool Loaded = false;
 
-        public DisplayOpenGL(string name) : base(1280, 720, GraphicsMode.Default, "ColorChord.NET: " + name)
+        public DisplayOpenGL(string name) : base(GameWindowSettings.Default, NativeWindowSettings.Default)
         {
             this.Name = name;
+            this.Title = "ColorChord.NET: " + this.Name;
         }
 
-        public void Start() { Run(60D); }
+        public void Start() { Run(); }
         public void Stop() { } // TODO: Stop
 
         public void ApplyConfig(Dictionary<string, object> options)
@@ -49,8 +51,8 @@ namespace ColorChord.NET.Outputs
             this.Source = ColorChord.VisualizerInsts[(string)options["VisualizerName"]];
             this.Source.AttachOutput(this);
 
-            this.WindowWidth = ConfigTools.CheckInt(options, "WindowWidth", 10, 4000, 1280, true);
-            this.WindowHeight = ConfigTools.CheckInt(options, "WindowHeight", 10, 4000, 720, true);
+            this.Width = ConfigTools.CheckInt(options, "WindowWidth", 10, 4000, 1280, true);
+            this.Height = ConfigTools.CheckInt(options, "WindowHeight", 10, 4000, 720, true);
 
             if (options.ContainsKey("Modes")) // Make sure that everything else is configured before creating the modes!
             {
@@ -97,7 +99,7 @@ namespace ColorChord.NET.Outputs
             return null;
         }
 
-        protected override void OnLoad(EventArgs evt)
+        protected override void OnLoad()
         {
             this.VSync = VSyncMode.On;
             GL.DebugMessageCallback(DebugCallback, IntPtr.Zero);
@@ -105,7 +107,7 @@ namespace ColorChord.NET.Outputs
 
             this.Display?.Load();
 
-            base.OnLoad(evt);
+            base.OnLoad();
             this.Loaded = true;
         }
 
@@ -119,23 +121,23 @@ namespace ColorChord.NET.Outputs
             base.OnRenderFrame(evt);
         }
 
-        protected override void OnResize(EventArgs evt)
+        protected override void OnResize(ResizeEventArgs evt)
         {
             GL.Viewport(0, 0, this.Width, this.Height);
             this.Display?.Resize(this.Width, this.Height);
             base.OnResize(evt);
         }
 
-        protected override void OnUnload(EventArgs evt)
+        protected override void OnUnload()
         {
             this.Display?.Close();
-            base.OnUnload(evt);
+            base.OnUnload();
         }
 
-        protected override void OnClosed(EventArgs e)
+        protected override void OnClosed()
         {
             Environment.Exit(0);
-            base.OnClosed(e);
+            base.OnClosed();
         }
 
         protected void DebugCallback(DebugSource source, DebugType type, int id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam)

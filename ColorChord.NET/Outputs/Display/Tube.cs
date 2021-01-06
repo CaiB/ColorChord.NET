@@ -1,8 +1,10 @@
 ﻿using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
-using OpenTK;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Input;
+using OpenTK.Mathematics;
+using OpenTK.Windowing.Common;
+using OpenTK.Windowing.GraphicsLibraryFramework;
 using System;
 
 namespace ColorChord.NET.Outputs.Display
@@ -265,22 +267,23 @@ namespace ColorChord.NET.Outputs.Display
             GL.DrawArrays(PrimitiveType.Triangles, 0, this.VertexData.Length / 3);
         }
 
-        public void UpdateFrame(object sender, FrameEventArgs evt)
+        public void UpdateFrame(FrameEventArgs evt)
         {
-            KeyboardState Keys = Keyboard.GetState();
+            KeyboardState KeyState = this.HostWindow.KeyboardState;
+            //KeyboardState Keys = Keyboard.GetState();
             const float MOVE_QTY = 0.05F;
 
-            if (Keys.IsKeyDown(Key.Up)) { this.View *= Matrix4.CreateRotationX(-MOVE_QTY); }
-            if (Keys.IsKeyDown(Key.Down)) { this.View *= Matrix4.CreateRotationX(MOVE_QTY); }
-            if (Keys.IsKeyDown(Key.Left)) { this.View *= Matrix4.CreateRotationY(-MOVE_QTY); }
-            if (Keys.IsKeyDown(Key.Right)) { this.View *= Matrix4.CreateRotationY(MOVE_QTY); }
-
-            if (Keys.IsKeyDown(Key.W)) { this.TubePosition.Z += MOVE_QTY; }
-            if (Keys.IsKeyDown(Key.S)) { this.TubePosition.Z -= MOVE_QTY; }
-            if (Keys.IsKeyDown(Key.A)) { this.TubePosition.X += MOVE_QTY; }
-            if (Keys.IsKeyDown(Key.D)) { this.TubePosition.X -= MOVE_QTY; }
-            if (Keys.IsKeyDown(Key.Space)) { this.TubePosition.Y += MOVE_QTY; }
-            if (Keys.IsKeyDown(Key.ShiftLeft)) { this.TubePosition.Y -= MOVE_QTY; }
+            if (KeyState.IsKeyDown(Keys.Up)) { this.View *= Matrix4.CreateRotationX(-MOVE_QTY); }
+            if (KeyState.IsKeyDown(Keys.Down)) { this.View *= Matrix4.CreateRotationX(MOVE_QTY); }
+            if (KeyState.IsKeyDown(Keys.Left)) { this.View *= Matrix4.CreateRotationY(-MOVE_QTY); }
+            if (KeyState.IsKeyDown(Keys.Right)) { this.View *= Matrix4.CreateRotationY(MOVE_QTY); }
+                   
+            if (KeyState.IsKeyDown(Keys.W)) { this.TubePosition.Z += MOVE_QTY; }
+            if (KeyState.IsKeyDown(Keys.S)) { this.TubePosition.Z -= MOVE_QTY; }
+            if (KeyState.IsKeyDown(Keys.A)) { this.TubePosition.X += MOVE_QTY; }
+            if (KeyState.IsKeyDown(Keys.D)) { this.TubePosition.X -= MOVE_QTY; }
+            if (KeyState.IsKeyDown(Keys.Space)) { this.TubePosition.Y += MOVE_QTY; }
+            if (KeyState.IsKeyDown(Keys.LeftShift)) { this.TubePosition.Y -= MOVE_QTY; }
         }
 
         public void Resize(int width, int height)

@@ -2,8 +2,8 @@
 using ColorChord.NET.Visualizers.Formats;
 using System;
 using OpenTK.Graphics.OpenGL4;
-using OpenTK;
 using System.Collections.Generic;
+using OpenTK.Mathematics;
 
 namespace ColorChord.NET.Outputs.Display
 {

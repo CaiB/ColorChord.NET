@@ -1,7 +1,7 @@
 using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
-using OpenTK;
 using OpenTK.Graphics.OpenGL4;
+using OpenTK.Mathematics;
 using System;
 using System.Collections.Generic;
 
