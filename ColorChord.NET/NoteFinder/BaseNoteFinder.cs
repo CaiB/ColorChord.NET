@@ -210,7 +210,7 @@ namespace ColorChord.NET
             while (KeepGoing)
             {
                 Timer.Restart();
-                if (LastDataAdd.AddSeconds(5) < DateTime.UtcNow) { Cycle(); }
+                if (LastDataAdd.AddSeconds(5) > DateTime.UtcNow) { Cycle(); }
                 int WaitTime = (int)(ShortestPeriod - Timer.ElapsedMilliseconds);
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
             }
