@@ -35,13 +35,24 @@ namespace ColorChord.NET.Outputs
         private IDisplayMode Display;
         private bool Loaded = false;
 
-        public DisplayOpenGL(string name) : base(GameWindowSettings.Default, NativeWindowSettings.Default)
+        public DisplayOpenGL(string name) : base(GameWindowSettings.Default, SetupNativeWindow())
         {
             this.Name = name;
             this.Title = "ColorChord.NET: " + this.Name;
         }
 
-        public void Start() { Run(); }
+        private static NativeWindowSettings SetupNativeWindow()
+        {
+            NativeWindowSettings Output = NativeWindowSettings.Default;
+            Output.StartVisible = false;
+            return Output;
+        }
+
+        public void Start()
+        {
+            this.IsVisible = true;
+            Run();
+        }
         public void Stop() { } // TODO: Stop
 
         public void ApplyConfig(Dictionary<string, object> options)
