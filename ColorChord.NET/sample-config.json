@@ -2,9 +2,8 @@
     "Source":
     {
         "Type": "WASAPILoopback",
-        "useInput": false,
-        "device": "default",
-        "printDeviceInfo": true
+        "Device": "default",
+        "ShowDeviceInfo": true
     },
     "NoteFinder":
     {
@@ -15,7 +14,7 @@
         {
             "Type": "Linear",
             "Name": "SampleLinear",
-            "LEDCount": 50,
+            "LEDCount": 100,
             "IsCircular": true,
             "FrameRate": 60,
             "LightSiding": 1.0,
@@ -45,14 +44,11 @@
             "Modes":
             [
                 {
-                    "Type": "SmoothRadialFilled",
-                    "BaseBrightness": 0.0,
-                    "PeakWidth": 0.35,
-                    "BrightnessAmp": 1.5
+                    "Type": "SmoothStrip"
                 }
             ],
-            "WindowWidth": 600,
-            "WindowHeight": 600
+            "WindowWidth": 800,
+            "WindowHeight": 150
         }
     ],
     "Controllers":

@@ -16,7 +16,6 @@ namespace ColorChord.NET.Sources
         private const int FriendlyNamePKEY_PID = 14;
 
         private string DesiredDevice;
-        private bool UseInput = false;
         private bool PrintDeviceInfo = false;
 
         private const ulong BufferLength = 50 * 10000; // 50 ms, in ticks
@@ -40,9 +39,8 @@ namespace ColorChord.NET.Sources
         public void ApplyConfig(Dictionary<string, object> options)
         {
             Log.Info("Reading config for WASAPILoopback.");
-            this.UseInput = ConfigTools.CheckBool(options, "useInput", false, true);
-            this.DesiredDevice = ConfigTools.CheckString(options, "device", "default", true);
-            this.PrintDeviceInfo = ConfigTools.CheckBool(options, "printDeviceInfo", true, true);
+            this.DesiredDevice = ConfigTools.CheckString(options, "Device", "default", true);
+            this.PrintDeviceInfo = ConfigTools.CheckBool(options, "ShowDeviceInfo", true, true);
             ConfigTools.WarnAboutRemainder(options, typeof(IAudioSource));
         }
 
@@ -59,9 +57,15 @@ namespace ColorChord.NET.Sources
 
             if (this.DesiredDevice == "default")
             {
-                Log.Info("Using default " + (this.UseInput ? "capture" : "render") + " device.");
-                Device = GetDefaultDevice(this.UseInput);
-                DeviceIsCapture = this.UseInput;
+                Log.Info("Using default render device.");
+                Device = GetDefaultDevice(false);
+                DeviceIsCapture = false;
+            }
+            else if (this.DesiredDevice == "defaultInput")
+            {
+                Log.Info("Using default capture device.");
+                Device = GetDefaultDevice(true);
+                DeviceIsCapture = true;
             }
             // TODO: Implement "defaultTracking"
             else
@@ -69,9 +73,9 @@ namespace ColorChord.NET.Sources
                 ErrorCode = this.DeviceEnumerator.GetDevice(this.DesiredDevice, out Device);
                 if (IsError(ErrorCode) || Device == null)
                 {
-                    Log.Warn("Given audio device does not exist on this system. Using default " + (this.UseInput ? "capture" : "render") + " device instead.");
-                    Device = GetDefaultDevice(this.UseInput);
-                    DeviceIsCapture = this.UseInput;
+                    Log.Warn("Given audio device does not exist on this system. Using default render device instead.");
+                    Device = GetDefaultDevice(false);
+                    DeviceIsCapture = false;
                 }
                 else
                 {

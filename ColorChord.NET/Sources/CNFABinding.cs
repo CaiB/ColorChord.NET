@@ -27,7 +27,7 @@ namespace ColorChord.NET.Sources
             this.SuggestedSampleRate = ConfigTools.CheckInt(options, "SampleRate", 8000, 384000, 48000, true);
             this.SuggestedChannelCount = ConfigTools.CheckInt(options, "ChannelCount", 1, 20, 2, true);
             this.SuggestedBufferSize = ConfigTools.CheckInt(options, "BufferSize", 1, 10000, 480, true);
-            this.DeviceRecord = ConfigTools.CheckString(options, "device", "default", true);
+            this.DeviceRecord = ConfigTools.CheckString(options, "Device", "default", true);
             this.DevicePlay = ConfigTools.CheckString(options, "DeviceOutput", "default", true); // This isn't actually used, as no sounds are played.
             ConfigTools.WarnAboutRemainder(options, typeof(IAudioSource));
         }
