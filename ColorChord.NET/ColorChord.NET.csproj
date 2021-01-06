@@ -6,7 +6,7 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup>
-    <ApplicationIcon>Colochord2-Logo.ico</ApplicationIcon>
+    <ApplicationIcon>CC.NET.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup>
     <StartupObject>ColorChord.NET.ColorChord</StartupObject>
