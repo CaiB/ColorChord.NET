@@ -72,7 +72,7 @@ namespace ColorChord.NET.Outputs
                 TcpClient Client = this.TCPServer.AcceptTcpClient();
                 Log.Info("Yeelight client connecting");
 
-                byte[] TurnOn = Encoding.ASCII.GetBytes("{\"id\":1,\"method\":\"set_power\",\"params\":[\"on\",\"smooth\",500,2]}");
+                byte[] TurnOn = Encoding.ASCII.GetBytes("{\"id\":1,\"method\":\"set_power\",\"params\":[\"on\",\"smooth\",500,2]}\r\n");
                 if (!Client.GetStream().CanWrite) { continue; }
                 Client.GetStream().BeginWrite(TurnOn, 0, TurnOn.Length, null, null);
 
@@ -84,7 +84,7 @@ namespace ColorChord.NET.Outputs
         public void Dispatch()
         {
             if(!this.Enabled) { return; }
-            string PacketContent = "{\"id\":1,\"method\":\"set_rgb\",\"params\":[" + ((IDiscrete1D)this.Source).GetDataDiscrete()[0] + ",\"sudden\",0]}\n";
+            string PacketContent = "{\"id\":1,\"method\":\"set_rgb\",\"params\":[" + ((IDiscrete1D)this.Source).GetDataDiscrete()[0] + ",\"sudden\",0]}\r\n";
             byte[] PacketData = Encoding.ASCII.GetBytes(PacketContent);
             for (int i = 0; i < this.Clients.Count; i++)
             {
