@@ -29,7 +29,7 @@ namespace ColorChord.NET.Visualizers
         /// <summary> Whether to continue processing, or stop threads and finish up in preparation for closing the application. </summary>
         private bool KeepGoing = true;
 
-        /// <summary> THe thread on which input note data is processed by this visualizer. </summary>
+        /// <summary> The thread on which input note data is processed by this visualizer. </summary>
         private Thread ProcessThread;
 
         /// <summary> How strongly notes should be amplified before processing. </summary>
