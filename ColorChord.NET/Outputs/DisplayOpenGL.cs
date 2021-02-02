@@ -62,9 +62,6 @@ namespace ColorChord.NET.Outputs
             this.Source = ColorChord.VisualizerInsts[(string)options["VisualizerName"]];
             this.Source.AttachOutput(this);
 
-            this.Width = ConfigTools.CheckInt(options, "WindowWidth", 10, 4000, 1280, true);
-            this.Height = ConfigTools.CheckInt(options, "WindowHeight", 10, 4000, 720, true);
-
             if (options.ContainsKey("Modes")) // Make sure that everything else is configured before creating the modes!
             {
                 Dictionary<string, object>[] ModeList = (Dictionary<string, object>[])options["Modes"];
@@ -80,6 +77,9 @@ namespace ColorChord.NET.Outputs
                 if (ModeList.Length > 1) { Log.Warn("Config specifies multiple modes. This is not yet supported, so only the first one will be used."); }
                 Log.Info("Finished reading display modes under \"" + this.Name + "\".");
             }
+
+            this.Width = ConfigTools.CheckInt(options, "WindowWidth", 10, 4000, 1280, true);
+            this.Height = ConfigTools.CheckInt(options, "WindowHeight", 10, 4000, 720, true);
 
             ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
         }

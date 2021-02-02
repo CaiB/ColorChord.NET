@@ -190,6 +190,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             this.Resolution = new Vector2(width, height);
 
+            if(!this.SetupDone) { return; }
             this.CircleShader.Use();
             GL.Uniform2(this.LocationResolution, ref this.Resolution);
 
