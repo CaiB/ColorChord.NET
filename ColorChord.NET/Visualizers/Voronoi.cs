@@ -3,44 +3,55 @@ using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace ColorChord.NET.Visualizers
 {
     public class Voronoi : IVisualizer, IDiscrete2D
     {
+        /// <summary> The name of this instance. Used to refer to the instance. </summary>
         public string Name { get; private set; }
 
+        /// <summary> Whether this visualizer is currently active. </summary>
         public bool Enabled { get; set; }
 
         public int FramePeriod { get; private set; }
 
+        /// <summary> How many LEDs/blocks to output for in the X direction (width). </summary>
         public int LEDCountX { get; set; }
+
+        /// <summary> How many LEDs/blocks to output for in the Y direction (height). </summary>
         public int LEDCountY { get; set; }
 
+        /// <summary> Note amplitude is raised to this power as a preprocessing step. Higher means more differentiation between different peak sizes. </summary>
         public float AmplifyPower { get; set; }
+
+        /// <summary> Distances from centers to draw the colours up to. Higher numbers means fewer colours will take up a majority of screen space. </summary>
         public float DistancePower { get; set; }
 
+        /// <summary> How strong a note's amplitude needs to be for it to be considered in rendering. </summary>
         public float NoteCutoff { get; set; }
 
+        /// <summary> Whether to draw the colours in a circle around the edges (true), or to randomly place colours (false). </summary>
         public bool CentersFromSides { get; set; }
 
+        /// <summary> Amplifier on the output colour saturation. </summary>
         public float SaturationAmplifier { get; set; }
 
+        /// <summary> Scales the final output saturation curve. </summary>
         public float OutGamma { get; set; }
 
+        /// <summary> Output data for the continuous voronoi mode. </summary>
         public VoronoiPoint[] OutputData = new VoronoiPoint[BaseNoteFinder.NoteCount];
 
+        /// <summary> Output data for the discrete (pixel matrix) voronoi mode. </summary>
         private uint[,] OutputDataDiscrete;
 
         private readonly List<IOutput> Outputs = new List<IOutput>();
         private Thread ProcessThread;        
         private bool KeepGoing = true;
 
-        private DiscreteVoronoiNote[] DiscreteNotes = new DiscreteVoronoiNote[BaseNoteFinder.NoteCount];
+        private readonly DiscreteVoronoiNote[] DiscreteNotes = new DiscreteVoronoiNote[BaseNoteFinder.NoteCount];
 
         public Voronoi(string name) { this.Name = name; }
 
@@ -62,7 +73,6 @@ namespace ColorChord.NET.Visualizers
 
             this.OutputDataDiscrete = new uint[this.LEDCountX, this.LEDCountY];
         }
-
 
         public void Start()
         {
