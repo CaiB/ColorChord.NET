@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Outputs;
+using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace ColorChord.NET.Visualizers
 {
-    public class Voronoi : IVisualizer
+    public class Voronoi : IVisualizer, IDiscrete2D
     {
         public string Name { get; private set; }
 
@@ -17,11 +18,29 @@ namespace ColorChord.NET.Visualizers
 
         public int FramePeriod { get; private set; }
 
+        public int LEDCountX { get; set; }
+        public int LEDCountY { get; set; }
+
+        public float AmplifyPower { get; set; }
+        public float DistancePower { get; set; }
+
+        public float NoteCutoff { get; set; }
+
+        public bool CentersFromSides { get; set; }
+
+        public float SaturationAmplifier { get; set; }
+
+        public float OutGamma { get; set; }
+
         public VoronoiPoint[] OutputData = new VoronoiPoint[BaseNoteFinder.NoteCount];
+
+        private uint[,] OutputDataDiscrete;
 
         private readonly List<IOutput> Outputs = new List<IOutput>();
         private Thread ProcessThread;        
         private bool KeepGoing = true;
+
+        private DiscreteVoronoiNote[] DiscreteNotes = new DiscreteVoronoiNote[BaseNoteFinder.NoteCount];
 
         public Voronoi(string name) { this.Name = name; }
 
@@ -31,7 +50,17 @@ namespace ColorChord.NET.Visualizers
 
             this.FramePeriod = 1000 / ConfigTools.CheckInt(options, "frameRate", 0, 1000, 60, true);
             this.Enabled = ConfigTools.CheckBool(options, "enable", true, true);
+            this.LEDCountX = ConfigTools.CheckInt(options, "LEDCountX", 1, 1000000, 64, true);
+            this.LEDCountY = ConfigTools.CheckInt(options, "LEDCountY", 1, 1000000, 32, true);
+            this.NoteCutoff = ConfigTools.CheckFloat(options, "Cutoff", 0F, 100F, 0.03F, true);
+            this.SaturationAmplifier = ConfigTools.CheckFloat(options, "SaturationAmplifier", 0, 100, 5F, true);
+            this.OutGamma = ConfigTools.CheckFloat(options, "OutputGamma", 0F, 1F, 1F, true);
+            this.AmplifyPower = ConfigTools.CheckFloat(options, "AmplifyPower", 0F, 100F, 2.51F, true);
+            this.DistancePower = ConfigTools.CheckFloat(options, "DistancePower", 0F, 100F, 1.5F, true);
+            this.CentersFromSides = ConfigTools.CheckBool(options, "CentersFromSides", true, true);
             ConfigTools.WarnAboutRemainder(options, typeof(IVisualizer));
+
+            this.OutputDataDiscrete = new uint[this.LEDCountX, this.LEDCountY];
         }
 
 
@@ -66,6 +95,8 @@ namespace ColorChord.NET.Visualizers
 
         private void Update()
         {
+            // Smooth Voronoi
+            /*
             for (byte i = 0; i < BaseNoteFinder.NoteCount; i++)
             {
                 BaseNoteFinder.Note Note = BaseNoteFinder.Notes[i];
@@ -82,7 +113,94 @@ namespace ColorChord.NET.Visualizers
                 this.OutputData[i].R = (byte)((Colour >> 16) & 0xFF);
                 this.OutputData[i].G = (byte)((Colour >> 8) & 0xFF);
                 this.OutputData[i].B = (byte)(Colour & 0xFF);
+            }*/
+
+            // Discrete Voronoi
+            int TotalLEDCount = this.LEDCountX * this.LEDCountY; //tleds
+            float AmplitudeSum = 0F; // totalexp
+
+            for (byte i = 0; i < BaseNoteFinder.NoteCount; i++)
+            {
+                float Amplitude = MathF.Pow(BaseNoteFinder.Notes[i].AmplitudeFiltered, this.AmplifyPower) - this.NoteCutoff;
+                if (Amplitude < 0) { Amplitude = 0F; }
+                this.DiscreteNotes[i].Value = Amplitude;
+                AmplitudeSum += Amplitude;
+
+                if (this.CentersFromSides)
+                {
+                    float Angle = (BaseNoteFinder.Notes[i].Position / BaseNoteFinder.OctaveBinCount) * MathF.PI * 2;
+                    float CenterX = this.LEDCountX / 2F;
+                    float CenterY = this.LEDCountY / 2F;
+                    float NewX = MathF.Sin(Angle) * CenterX + CenterX;
+                    float NewY = MathF.Cos(Angle) * CenterY + CenterY;
+                    bool NotePresent = (BaseNoteFinder.PersistentNoteIDs[i] != 0);
+                    this.DiscreteNotes[i].X = NotePresent ? (this.DiscreteNotes[i].X * 0.9F) + (NewX * 0.1F) : CenterX;
+                    this.DiscreteNotes[i].Y = NotePresent ? (this.DiscreteNotes[i].Y * 0.9F) + (NewY * 0.1F) : CenterY;
+                }
+                else
+                {
+                    // Base colorchord uses a random number generator with the note ID as seed. I didn't see a good way to do that here, so I instead used a simplified hash function from SO.
+                    uint RandX = (((uint)BaseNoteFinder.PersistentNoteIDs[i] >> 16) ^ (uint)BaseNoteFinder.PersistentNoteIDs[i]) * 0x45D9F3B;
+                    this.DiscreteNotes[i].X = ((RandX >> 16) ^ RandX) % this.LEDCountX;
+                    uint RandY = (((uint)BaseNoteFinder.PersistentNoteIDs[i] >> 16) ^ (uint)BaseNoteFinder.PersistentNoteIDs[i]) * 0x119DE1F3;
+                    this.DiscreteNotes[i].Y = ((RandY >> 16) ^ RandY) % this.LEDCountY;
+                }
             }
+
+            // Determine number of LEDs/blocks for each note
+            for (byte i = 0; i < BaseNoteFinder.NoteCount; i++)
+            {
+                this.DiscreteNotes[i].LEDCount = this.DiscreteNotes[i].Value * TotalLEDCount / AmplitudeSum;
+                this.DiscreteNotes[i].Value /= AmplitudeSum;
+            }
+
+            for (int X = 0; X < this.LEDCountX; X++)
+            {
+                for (int Y = 0; Y < this.LEDCountY; Y++)
+                {
+                    float OffsetX = X + 0.5F;
+                    float OffsetY = Y + 0.5F;
+
+                    // Find the note that is closest to this LED, based on its amplitude and location.
+                    int BestMatch = -1;
+                    float BestMatchValue = 0F;
+
+                    for (byte PeakInd = 0; PeakInd < BaseNoteFinder.NoteCount; PeakInd++)
+                    {
+                        float DistX = OffsetX - this.DiscreteNotes[PeakInd].X;
+                        float DistY = OffsetY - this.DiscreteNotes[PeakInd].Y;
+                        float DistanceSquared = (DistX * DistX) + (DistY * DistY);
+                        float Distance;
+                        if (this.DistancePower == 1F) { Distance = DistanceSquared; }
+                        else if (this.DistancePower == 2F) { Distance = MathF.Sqrt(DistanceSquared); }
+                        else { Distance = DistanceSquared; } // TODO: Pretty sure this is a bug in base ColorChord.
+
+                        float Suitability = this.DiscreteNotes[PeakInd].Value / Distance;
+                        if (Suitability > BestMatchValue)
+                        {
+                            BestMatch = PeakInd;
+                            BestMatchValue = Suitability;
+                        }
+                    }
+
+                    uint Colour = 0;
+                    if (BestMatch != -1)
+                    {
+                        float Saturation = BaseNoteFinder.Notes[BestMatch].AmplitudeFinal * this.SaturationAmplifier;
+                        if (Saturation > 1F) { Saturation = 1F; }
+                        float Note = BaseNoteFinder.Notes[BestMatch].Position / BaseNoteFinder.OctaveBinCount;
+                        Colour = VisualizerTools.CCtoHEX(Note, 1F, MathF.Pow(Saturation, this.OutGamma));
+                    }
+                    this.OutputDataDiscrete[X, Y] = Colour;
+                }
+            }
+        }
+
+        private struct DiscreteVoronoiNote
+        {
+            public float X, Y;
+            public float Value;
+            public float LEDCount;
         }
 
         public struct VoronoiPoint
@@ -92,5 +210,10 @@ namespace ColorChord.NET.Visualizers
             public float Amplitude;
             public byte R, G, B;
         }
+
+        // Discrete
+        public int GetWidth() => this.LEDCountX;
+        public int GetHeight() => this.LEDCountY;
+        public uint[,] GetDataDiscrete() => this.OutputDataDiscrete;
     }
 }
