@@ -125,6 +125,8 @@ namespace ColorChord.NET
         /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
         private static readonly float[] OctaveBinValues = new float[OctaveBinCount];
 
+        private static int CurrentNoteID = 1;
+
         /// <summary> The individual note distributions (peaks) detected this cycle. </summary>
         /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
         public static readonly NoteDistribution[] NoteDistributions = new NoteDistribution[NoteCount];
@@ -132,6 +134,7 @@ namespace ColorChord.NET
         public static float LastLowFreqSum = 0;
 
         public static int LastLowFreqCount = 0;
+
         #endregion
 
         /// <summary> The non-folded frequency bins, used inter-frame to do smoothing, then folded to form the spectrum. </summary>
@@ -344,7 +347,6 @@ namespace ColorChord.NET
 
             // Try to find peaks that are close together (in respect to frequency).
             // This modifies [Notes] by using new data from [NoteDistributions].
-            int CurrentNoteID = 1;
             for (int PeakIndex = 0; PeakIndex < NoteCount; PeakIndex++)
             {
                 // For each note peak, check if a distribution is close by. If so, adjust the peak location and amplitude to use this new information.
