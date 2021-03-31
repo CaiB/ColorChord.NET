@@ -6,6 +6,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 namespace ColorChord.NET
@@ -51,10 +52,10 @@ namespace ColorChord.NET
                     }
                 }
             }
-            catch (Exception ex)
+            catch
             {
                 Log.Error("Failed to create default config file.");
-                throw ex; // The program cannot execute without configuration.
+                throw; // The program cannot execute without configuration.
             }
         }
 

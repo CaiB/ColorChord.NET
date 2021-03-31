@@ -19,7 +19,7 @@ namespace ColorChord.NET.Visualizers.Formats
     {
         int GetWidth();
         int GetHeight();
-        byte[,] GetDataDiscrete();
+        uint[,] GetDataDiscrete();
     }
 
     public class ContinuousDataUnit : IComparable<ContinuousDataUnit>
