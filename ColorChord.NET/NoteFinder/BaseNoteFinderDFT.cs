@@ -67,7 +67,7 @@ namespace ColorChord.NET.NoteFinder
 
         /// <summary>The sample*trig product sums, updated once per full schedule run.</summary>
         /// <remarks>
-        /// This gets updated 1 out of 2^(OCTAVES) cycles, and since every sample uses 2 cycvles, this is 1 out of every 2^(OCTAVES - 1) input samples.
+        /// This gets updated 1 out of 2^(OCTAVES) cycles, and since every sample uses 2 cycles, this is 1 out of every 2^(OCTAVES - 1) input samples.
         /// Contains sine and cosine data interleaved, in format {SinProductSum, CosProductSum} repeated <see cref="TOTALBINS"/> times.
         /// </remarks>
         private static readonly int[] SampleTrigProductSums = new int[TOTALBINS * 2];
@@ -84,7 +84,7 @@ namespace ColorChord.NET.NoteFinder
         /// <summary>Where in the input audio buffer we last read data. Used to know which samples to process at each run.</summary>
         private static int LastBufferReadLocation;
 
-        /// <summary>The data in the output bins last from last time the DFT was run.</summary>
+        /// <summary>The data in the output bins from last time the DFT was run.</summary>
         private static readonly float[] LastRunOutput = new float[TOTALBINS];
 
         /// <summary>Sets up <see cref="OctaveProcessingSchedule"/>. Must be done once before the first sample is processed, no need to redo it later.</summary>

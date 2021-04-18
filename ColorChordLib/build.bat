@@ -1,1 +1,0 @@
-"C:\Program Files\LLVM\bin\clang.exe" DFT32.c -shared -o ColorChordLib.dll -DWINDOWS

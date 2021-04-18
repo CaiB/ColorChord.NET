@@ -21,8 +21,6 @@ A single instance of the application supports a single audio source, any number 
 
 Only some sources, visualizers, and outputs from the base version have been implemented, but some new additions are also available.
 
-The core math is done in a C library, `ColorChordLib` due to complexity.
-
 The system performs very well, requiring negligible CPU and RAM, especially if only network output is needed.
 
 I try to maintain the same behaviour given the same inputs as CNLohr's version. If you notice an undocumented difference, please let me know.

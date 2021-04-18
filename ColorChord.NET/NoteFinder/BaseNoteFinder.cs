@@ -225,8 +225,6 @@ namespace ColorChord.NET
             float[] DFTBinData = new float[DFTRawBinCount];
 
             // This will read all buffer data from where it was called last up to [AudioBufferHeadWrite] in order to catch up.
-            //DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
-
             BaseNoteFinderDFT.DoDFTProgressive32(ref DFTBinData, RawBinFrequencies, AudioBuffer, AudioBufferHeadWrite);
 
             for (int BinInd = 0; BinInd < 24; BinInd++)
@@ -530,8 +528,5 @@ namespace ColorChord.NET
             /// <summary> The note amplitude, zeroed if very low amplitude. Based on <see cref="Amplitude"/>, so minimal inter-frame smoothing is applied. </summary>
             public float AmplitudeFinal;
         }
-
-        [DllImport("ColorChordLib", CallingConvention = CallingConvention.Cdecl)]
-        private static extern void DoDFTProgressive32([In, Out] float[] OutBins, [In, Out] float[] Frequencies, int Bins, float[] DataBuffer, int DataBufferLoc, int DataBufferSize, float Q, float Speedup);
     }
 }
