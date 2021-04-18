@@ -219,17 +219,15 @@ namespace ColorChord.NET
             }
         }
 
-        private static BaseNoteFinderDFT BaseDFT = new();
-
         private static void Cycle()
         {
             // DFT outputs only a small number of bins, we'll need to process this data a lot to get smooth note positions.
             float[] DFTBinData = new float[DFTRawBinCount];
 
             // This will read all buffer data from where it was called last up to [AudioBufferHeadWrite] in order to catch up.
-            DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
+            //DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
 
-            BaseDFT.DoDFTProgressive32(ref DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
+            BaseNoteFinderDFT.DoDFTProgressive32(ref DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
 
             for (int BinInd = 0; BinInd < 24; BinInd++)
             {
