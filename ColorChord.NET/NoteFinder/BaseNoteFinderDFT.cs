@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace ColorChord.NET.NoteFinder
 {
@@ -10,7 +11,7 @@ namespace ColorChord.NET.NoteFinder
 		private const int BINCYCLE = (1 << OCTAVES);
 		private const int DFTIIR = 6;
 
-		static float[] goutbins;
+		private static float[] goutbins;
 
 		/// <summary>Indicates whether data structures have been set up.</summary>
 		private static bool SetupDone = false;
@@ -69,57 +70,33 @@ namespace ColorChord.NET.NoteFinder
 		private static readonly int[] Saccum_octavebins = new int[OCTAVES];
 		private static byte Swhichoctaveplace;
 
-		private static void UpdateOutputBins32()
+		private static void SetupDFTProgressive32()
 		{
-			int i;
-			//int32_t* ipt = &Sdatspace32BOut[0];
-			for (i = 0; i < FIXBINS; i++)
+			SetupDone = true;
+			Sdo_this_octave[0] = 0xff;
+			for (int i = 0; i < BINCYCLE - 1; i++)
 			{
-				int isps = Sdatspace32BOut[(i * 2) + 0]; //keep 32 bits
-				int ispc = Sdatspace32BOut[(i * 2) + 1];
-				// take absolute values
-				isps = isps < 0 ? -isps : isps;
-				ispc = ispc < 0 ? -ispc : ispc;
-				int octave = i / FIXBPERO;
-
-				//If we are running DFT32 on regular ColorChord, then we will need to
-				//also update goutbins[]... But if we're on embedded systems, we only
-				//update embeddedbins32.
-				// convert 32 bit precision isps and ispc to floating point
-				float mux = ((float)isps * (float)isps) + ((float)ispc * (float)ispc);
-				goutbins[i] = MathF.Sqrt(mux) / 65536.0F; // scale by 2^16
-													//reasonable (but arbitrary attenuation)
-				goutbins[i] /= (78 << DFTIIR) * (1 << octave);
-				// TODO Embedded only?
-				/*
-				// using full 32 bit precision for isps and ispc
-				uint rmux = (uint)(isps > ispc ? isps + (ispc >> 1) : ispc + (isps >> 1)); // TODO Cast added
-				rmux = rmux >> 16; // keep most significant 16 bits
-
-				//bump up all outputs here, so when we nerf it by bit shifting by
-				//octave we don't lose a lot of detail.
-				rmux = rmux << 1;
-
-				embeddedbins32[i] = (ushort)(rmux >> octave); // TODO Cast added
-				*/
+				// Sdo_this_octave = 
+				// 255 4 3 4 2 4 3 4 1 4 3 4 2 4 3 4 0 4 3 4 2 4 3 4 1 4 3 4 2 4 3 4 is case for 5 octaves.
+				// Initial state is special one, then at step i do octave = Sdo_this_octave with averaged samples from last update of that octave
+				//search for "first" zero
+				int j;
+				for (j = 0; j <= OCTAVES; j++)
+				{
+					if (((1 << j) & i) == 0) { break; }
+				}
+				Debug.Assert(j <= OCTAVES, "Error: algorithm fault.");
+				Sdo_this_octave[i + 1] = (byte)(OCTAVES - j - 1); // TODO Cast added
 			}
 		}
 
-		private static void HandleInt(short sample) // TODO un-static-ed
+		private static void HandleInt(short sample)
 		{
-			int i;
-			ushort adv;
-			byte localipl;
-			short filteredsample;
-
 			byte oct = Sdo_this_octave[Swhichoctaveplace];
 			Swhichoctaveplace++;
 			Swhichoctaveplace &= BINCYCLE - 1;
 
-			for (i = 0; i < OCTAVES; i++)
-			{
-				Saccum_octavebins[i] += sample;
-			}
+			for (int i = 0; i < OCTAVES; i++) { Saccum_octavebins[i] += sample; }
 
 			if (oct > 128)
 			{
@@ -131,7 +108,7 @@ namespace ColorChord.NET.NoteFinder
 				//int32_t* bins = &Sdatspace32B[0];
 				//int32_t* binsOut = &Sdatspace32BOut[0];
 
-				for (i = 0; i < FIXBINS; i++)
+				for (int i = 0; i < FIXBINS; i++)
 				{
 					//First for the SIN then the COS.
 					int val = Sdatspace32B[(i * 2) + 0];
@@ -146,16 +123,13 @@ namespace ColorChord.NET.NoteFinder
 			}
 
 			// process a filtered sample for one of the octaves
-			//uint16_t* dsA = &Sdatspace32A[oct * FIXBPERO * 2];
-			//int32_t* dsB = &Sdatspace32B[oct * FIXBPERO * 2];
-
-			filteredsample = (short)(Saccum_octavebins[oct] >> (OCTAVES - oct)); // TODO Added cast
+			short filteredsample = (short)(Saccum_octavebins[oct] >> (OCTAVES - oct)); // TODO Added cast
 			Saccum_octavebins[oct] = 0;
 
-			for (i = 0; i < FIXBPERO; i++)
+			for (int i = 0; i < FIXBPERO; i++)
 			{
-				adv = Sdatspace32A[(oct * FIXBPERO * 2) + (i * 2) + 0];
-				localipl = (byte)(Sdatspace32A[(oct * FIXBPERO * 2) + (i * 2) + 1] >> 8); // TODO added cast
+				ushort adv = Sdatspace32A[(oct * FIXBPERO * 2) + (i * 2) + 0];
+				byte localipl = (byte)(Sdatspace32A[(oct * FIXBPERO * 2) + (i * 2) + 1] >> 8); // TODO added cast
 				Sdatspace32A[(oct * FIXBPERO * 2) + (i * 2) + 1] += adv;
 
 				Sdatspace32B[(oct * FIXBPERO * 2) + (i * 2) + 0] += (SineLUT[localipl] * filteredsample);
@@ -165,81 +139,42 @@ namespace ColorChord.NET.NoteFinder
 			}
 		}
 
-		private static int SetupDFTProgressive32()
+		private static void UpdateOutputBins32()
 		{
-			int i;
-			int j;
-
-			SetupDone = true;
-			Sdo_this_octave[0] = 0xff;
-			for (i = 0; i < BINCYCLE - 1; i++)
+			for (int i = 0; i < FIXBINS; i++)
 			{
-				// Sdo_this_octave = 
-				// 255 4 3 4 2 4 3 4 1 4 3 4 2 4 3 4 0 4 3 4 2 4 3 4 1 4 3 4 2 4 3 4 is case for 5 octaves.
-				// Initial state is special one, then at step i do octave = Sdo_this_octave with averaged samples from last update of that octave
-				//search for "first" zero
+				int isps = Sdatspace32BOut[(i * 2) + 0]; //keep 32 bits
+				int ispc = Sdatspace32BOut[(i * 2) + 1];
+				// take absolute values
+				isps = isps < 0 ? -isps : isps;
+				ispc = ispc < 0 ? -ispc : ispc;
+				int octave = i / FIXBPERO;
 
-				for (j = 0; j <= OCTAVES; j++)
-				{
-					if (((1 << j) & i) == 0) break;
-				}
-				if (j > OCTAVES)
-				{
-					Console.WriteLine("Error: algorithm fault.");
-					Environment.Exit(-1); // TODO Consider not doing this
-					return -1;
-				}
-				Sdo_this_octave[i + 1] = (byte)(OCTAVES - j - 1); // TODO Cast added
-			}
-			return 0;
-		}
-
-
-
-		private static void UpdateBins32( ushort[] frequencies )
-		{
-			int i;
-				int imod = 0;
-			for(i = 0; i<FIXBINS; i++, imod++ )
-			{
-				if (imod >= FIXBPERO) imod=0;
-				ushort freq = frequencies[imod];
-				Sdatspace32A[i * 2] = freq;// / oneoveroctave;
+				//If we are running DFT32 on regular ColorChord, then we will need to
+				//also update goutbins[]... But if we're on embedded systems, we only
+				//update embeddedbins32.
+				// convert 32 bit precision isps and ispc to floating point
+				float mux = ((float)isps * isps) + ((float)ispc * ispc);
+				goutbins[i] = MathF.Sqrt(mux) / 65536.0F; // scale by 2^16, reasonable (but arbitrary attenuation)
+				goutbins[i] /= (78 << DFTIIR) * (1 << octave); // TODO WTF is 78???
 			}
 		}
-
-		private static void PushSample32(short dat)
-		{
-			HandleInt(dat);
-			HandleInt(dat);
-		}
-
-
 
 		private static void UpdateBinsForDFT32( float[] frequencies)
 		{
-			int i;
-			for (i = 0; i < FIXBINS; i++)
+			for (int i  = 0; i < FIXBINS; i++)
 			{
 				float freq = frequencies[(i % FIXBPERO) + (FIXBPERO * (OCTAVES - 1))];
 				Sdatspace32A[i * 2] = (ushort)(65536.0F / freq);// / oneoveroctave; // TODO Cast added
 			}
 		}
 
-		static float[] DoDFTProgressive32_backupbins = new float[FIXBINS];
-		static int DoDFTProgressive32_last_place;
+		private static readonly float[] DoDFTProgressive32_backupbins = new float[FIXBINS];
+		private static int DoDFTProgressive32_last_place;
 		public static void DoDFTProgressive32(ref float[] outbins, float[] frequencies, int bins, float[] databuffer, int place_in_data_buffer, int size_of_data_buffer, float q, float speedup)
 		{
-			//static float backupbins[FIXBINS];
-			int i;
-			//static int last_place;
-
-			//memset(outbins, 0, bins * sizeof(float));
 			Array.Clear(outbins, 0, bins);
-
 			goutbins = outbins;
-
-			//memcpy(outbins, DoDFTProgressive32_backupbins, FIXBINS * 4);
 			Array.Copy(DoDFTProgressive32_backupbins, outbins, FIXBINS);
 
 			if (FIXBINS != bins)
@@ -256,9 +191,9 @@ namespace ColorChord.NET.NoteFinder
 
 			UpdateBinsForDFT32(frequencies);
 
-			for (i = DoDFTProgressive32_last_place; i != place_in_data_buffer; i = (i + 1) % size_of_data_buffer)
+			for (int i = DoDFTProgressive32_last_place; i != place_in_data_buffer; i = (i + 1) % size_of_data_buffer)
 			{
-				short ifr1 = (short)(((databuffer[i])) * 4095);
+				short ifr1 = (short)(databuffer[i] * 4095);
 				HandleInt(ifr1);
 				HandleInt(ifr1);
 			}
@@ -267,7 +202,6 @@ namespace ColorChord.NET.NoteFinder
 
 			DoDFTProgressive32_last_place = place_in_data_buffer;
 
-			//memcpy(DoDFTProgressive32_backupbins, outbins, FIXBINS * 4);
 			Array.Copy(outbins, DoDFTProgressive32_backupbins, FIXBINS);
 		}
     }
