@@ -5,18 +5,19 @@ namespace ColorChord.NET.NoteFinder
 {
     public static class BaseNoteFinderDFT
     {
-		private const int OCTAVES = 5;
-		private const int FIXBPERO = 24;
-		private const int FIXBINS = (FIXBPERO * OCTAVES);
-		private const int BINCYCLE = (1 << OCTAVES);
-		private const int DFTIIR = 6;
+		private const byte OCTAVES = 5;
+		private const ushort FIXBPERO = 24;
+		private const uint FIXBINS = (FIXBPERO * OCTAVES);
+		private const uint BINCYCLE = (1 << OCTAVES);
+		private const byte DFTIIR = 6;
 
-		private static float[] goutbins;
+		/// <summary>Where we are currently writing new bin information to be passed out to the requestor.</summary>
+		private static float[] OutputBins;
 
-		/// <summary>Indicates whether data structures have been set up.</summary>
+		/// <summary>Indicates whether <see cref="OctaveProcessingSchedule"/> has been set up.</summary>
 		private static bool SetupDone = false;
 
-		/// <summary>A table of precomputed sin values ranging -1500 to +1500</summary>
+		/// <summary>A table of precomputed sin values ranging -1500 to +1500.</summary>
 		/// <remarks>If we increase the magnitude, it may cause overflows elsewhere in code.</remarks>
 		private static readonly short[] SineLUT = new short[]
 		{
@@ -55,87 +56,92 @@ namespace ColorChord.NET.NoteFinder
 		};
 
         private static readonly ushort[] Sdatspace32A = new ushort[FIXBINS * 2];  //(advances,places) full revolution is 256. 8bits integer part 8bit fractional
-		private static readonly int[] Sdatspace32B = new int[FIXBINS * 2];  //(isses,icses)
+		private static readonly int[] SampleTrigProductsFiltered = new int[FIXBINS * 2];  //(isses,icses)
 
-		//This is updated every time the DFT hits the octavecount, or 1 out of (1<<OCTAVES) times which is (1<<(OCTAVES-1)) samples
-		private static readonly int[] Sdatspace32BOut = new int[FIXBINS * 2];  //(isses,icses)
+		/// <summary>The sample*trig products, updated once per full schedule run.</summary>
+		/// <remarks>This gets updated 1 out of 2^(OCTAVES) cycles, and since every sample uses 2 cycvles, this is 1 out of every 2^(OCTAVES - 1) input samples.</remarks>
+		private static readonly int[] SampleTrigProducts = new int[FIXBINS * 2];  //(isses,icses)
 
-		//Sdo_this_octave is a scheduling state for the running SIN/COS states for
-		//each bin.  We have to execute the highest octave every time, however, we can
-		//get away with updating the next octave down every-other-time, then the next
-		//one down yet, every-other-time from that one.  That way, no matter how many
-		//octaves we have, we only need to update FIXBPERO*2 DFT bins.
-		private static readonly byte[] Sdo_this_octave = new byte[BINCYCLE];
+		/// <summary>Holds the schedule for which octaves need to be proccessed in each cycle. The top octave needs to be calculated every cycle regardless, but other octaves are updated less frequently, and this array contains the octave index to process with each incoming sample cycle.</summary>
+		private static readonly byte[] OctaveProcessingSchedule = new byte[BINCYCLE];
 
-		private static readonly int[] Saccum_octavebins = new int[OCTAVES];
-		private static byte Swhichoctaveplace;
+		private static readonly int[] OctaveSampleAccumulators = new int[OCTAVES];
 
+		/// <summary>Keeps track of which cycle we are in, which dictates what octave(s) are processed in the current cycle according to <see cref="OctaveProcessingSchedule"/>.</summary>
+		private static byte OctaveCycleCounter;
+
+		/// <summary>Where in the input audio buffer we last read data. Used to know which samples to process at each run.</summary>
+		private static int LastBufferReadLocation;
+
+		/// <summary>The data in the output bins last from last time the DFT was run.</summary>
+		private static readonly float[] LastRunOutput = new float[FIXBINS];
+
+		/// <summary>Sets up <see cref="OctaveProcessingSchedule"/>. Must be done once before the first sample is processed, no need to redo it later.</summary>
 		private static void SetupDFTProgressive32()
 		{
-			SetupDone = true;
-			Sdo_this_octave[0] = 0xff;
+			OctaveProcessingSchedule[0] = 0xFF; // Process all octaves in the first cycle and every 2^(OCTAVES) cycles thereafter.
 			for (int i = 0; i < BINCYCLE - 1; i++)
 			{
-				// Sdo_this_octave = 
-				// 255 4 3 4 2 4 3 4 1 4 3 4 2 4 3 4 0 4 3 4 2 4 3 4 1 4 3 4 2 4 3 4 is case for 5 octaves.
-				// Initial state is special one, then at step i do octave = Sdo_this_octave with averaged samples from last update of that octave
-				//search for "first" zero
-				int j;
-				for (j = 0; j <= OCTAVES; j++)
+				// Example resulting sequence for OCTAVES = 5:
+				//   255 4 3 4 2 4 3 4 1 4 3 4 2 4 3 4 0 4 3 4 2 4 3 4 1 4 3 4 2 4 3 4
+				// Initial state is special one, then at step i do specified octave, with averaged samples from last update of that octave
+				byte j;
+				for (j = 0; j <= OCTAVES; j++) // search for "first" zero
 				{
 					if (((1 << j) & i) == 0) { break; }
 				}
-				Debug.Assert(j <= OCTAVES, "Error: algorithm fault.");
-				Sdo_this_octave[i + 1] = (byte)(OCTAVES - j - 1); // TODO Cast added
+				if (j > OCTAVES) { throw new Exception("BaseNoteFinderDFT octave scheduler encountered an algorithm fault."); }
+				OctaveProcessingSchedule[i + 1] = (byte)(OCTAVES - j - 1);
+			}
+			SetupDone = true;
+		}
+
+		private static void UpdateBinsForDFT32(float[] frequencies)
+		{
+			for (int i = 0; i < FIXBINS; i++)
+			{
+				float freq = frequencies[(i % FIXBPERO) + (FIXBPERO * (OCTAVES - 1))];
+				Sdatspace32A[i * 2] = (ushort)(65536.0F / freq);// / oneoveroctave; // TODO Cast added
 			}
 		}
 
 		private static void HandleInt(short sample)
 		{
-			byte oct = Sdo_this_octave[Swhichoctaveplace];
-			Swhichoctaveplace++;
-			Swhichoctaveplace &= BINCYCLE - 1;
+			byte OctaveToProcess = OctaveProcessingSchedule[OctaveCycleCounter];
+			OctaveCycleCounter++;
+			OctaveCycleCounter &= (byte)(BINCYCLE - 1);
 
-			for (int i = 0; i < OCTAVES; i++) { Saccum_octavebins[i] += sample; }
+			for (int i = 0; i < OCTAVES; i++) { OctaveSampleAccumulators[i] += sample; }
 
-			if (oct > 128)
+			if (OctaveToProcess > 128) // Special case: Update all bins. This happens at the first cycle, and every 2^(OCTAVES) cycles thereafter.
 			{
-				//Special: This is when we can update everything.
-				//This gets run once out of every (1<<OCTAVES) times.
-				// which is half as many samples
-				//It handles updating part of the DFT.
-				//It should happen at the very first call to HandleInit
-				//int32_t* bins = &Sdatspace32B[0];
-				//int32_t* binsOut = &Sdatspace32BOut[0];
-
 				for (int i = 0; i < FIXBINS; i++)
 				{
-					//First for the SIN then the COS.
-					int val = Sdatspace32B[(i * 2) + 0];
-					Sdatspace32BOut[(i * 2) + 0] = val;
-					Sdatspace32B[(i * 2) + 0] -= val >> DFTIIR;
+					int SinVal = SampleTrigProductsFiltered[(i * 2) + 0];
+					SampleTrigProducts[(i * 2) + 0] = SinVal;
+					SampleTrigProductsFiltered[(i * 2) + 0] -= SinVal >> DFTIIR;
 
-					val = Sdatspace32B[(i * 2) + 1];
-					Sdatspace32BOut[(i * 2) + 1] = val;
-					Sdatspace32B[(i * 2) + 1] -= val >> DFTIIR;
+					int CosVal = SampleTrigProductsFiltered[(i * 2) + 1];
+					SampleTrigProducts[(i * 2) + 1] = CosVal;
+					SampleTrigProductsFiltered[(i * 2) + 1] -= CosVal >> DFTIIR;
 				}
 				return;
 			}
 
-			// process a filtered sample for one of the octaves
-			short filteredsample = (short)(Saccum_octavebins[oct] >> (OCTAVES - oct)); // TODO Added cast
-			Saccum_octavebins[oct] = 0;
+			// Process a filtered sample for one of the octaves (specified by the schedule)
+			short FilteredSample = (short)(OctaveSampleAccumulators[OctaveToProcess] >> (OCTAVES - OctaveToProcess));
+			OctaveSampleAccumulators[OctaveToProcess] = 0;
 
-			for (int i = 0; i < FIXBPERO; i++)
+			short IndexOffset = (short)(OctaveToProcess * FIXBPERO * 2); // Place of this octave's first bin in the overall array
+			for (int i = 0; i < FIXBPERO; i++) // Each bin in this 1 octave
 			{
-				ushort adv = Sdatspace32A[(oct * FIXBPERO * 2) + (i * 2) + 0];
-				byte localipl = (byte)(Sdatspace32A[(oct * FIXBPERO * 2) + (i * 2) + 1] >> 8); // TODO added cast
-				Sdatspace32A[(oct * FIXBPERO * 2) + (i * 2) + 1] += adv;
+				ushort adv = Sdatspace32A[IndexOffset + (i * 2) + 0]; // TODO Figure this out
+				byte SineTableIndex = (byte)(Sdatspace32A[IndexOffset + (i * 2) + 1] >> 8); // TODO added cast
+				Sdatspace32A[IndexOffset + (i * 2) + 1] += adv;
+				SampleTrigProductsFiltered[IndexOffset + (i * 2) + 0] += (SineLUT[SineTableIndex] * FilteredSample);
 
-				Sdatspace32B[(oct * FIXBPERO * 2) + (i * 2) + 0] += (SineLUT[localipl] * filteredsample);
-				//Get the cosine (1/4 wavelength out-of-phase with sin)
-				localipl += 64;
-				Sdatspace32B[(oct * FIXBPERO * 2) + (i * 2) + 1] += (SineLUT[localipl] * filteredsample);
+				SineTableIndex += 64; // Offset by 1/4 wavelength to get the cosine value
+				SampleTrigProductsFiltered[IndexOffset + (i * 2) + 1] += (SineLUT[SineTableIndex] * FilteredSample);
 			}
 		}
 
@@ -143,66 +149,43 @@ namespace ColorChord.NET.NoteFinder
 		{
 			for (int i = 0; i < FIXBINS; i++)
 			{
-				int isps = Sdatspace32BOut[(i * 2) + 0]; //keep 32 bits
-				int ispc = Sdatspace32BOut[(i * 2) + 1];
-				// take absolute values
-				isps = isps < 0 ? -isps : isps;
-				ispc = ispc < 0 ? -ispc : ispc;
-				int octave = i / FIXBPERO;
+				int SinValue = SampleTrigProducts[(i * 2) + 0];
+				int CosValue = SampleTrigProducts[(i * 2) + 1];
+				SinValue = Math.Abs(SinValue);
+				CosValue = Math.Abs(CosValue);
+				int Octave = i / FIXBPERO;
 
-				//If we are running DFT32 on regular ColorChord, then we will need to
-				//also update goutbins[]... But if we're on embedded systems, we only
-				//update embeddedbins32.
-				// convert 32 bit precision isps and ispc to floating point
-				float mux = ((float)isps * isps) + ((float)ispc * ispc);
-				goutbins[i] = MathF.Sqrt(mux) / 65536.0F; // scale by 2^16, reasonable (but arbitrary attenuation)
-				goutbins[i] /= (78 << DFTIIR) * (1 << octave); // TODO WTF is 78???
+				float MagnitudeSquared = ((float)SinValue * SinValue) + ((float)CosValue * CosValue);
+				OutputBins[i] = MathF.Sqrt(MagnitudeSquared) / 65536.0F; // scale by 2^16, reasonable (but arbitrary attenuation)
+				OutputBins[i] /= (78 << DFTIIR) * (1 << Octave); // TODO WTF is 78???
 			}
 		}
 
-		private static void UpdateBinsForDFT32( float[] frequencies)
+		/// <summary>Runs the DFT on any new audio data in the circular input buffer.</summary>
+		/// <param name="binsOut">The DFT output bins. Length must always be equal to <see cref="FIXBINS"/>.</param>
+		/// <param name="binFrequencies">The frequency for each of the bins. Length must always be equal to <see cref="FIXBINS"/>.</param>
+		/// <param name="audioBuffer">The array to read audio data from. Only data added since last time will be read each time this function is called.</param>
+		/// <param name="locationInAudioData">The location in the audio buffer to read up to, and where reading will continue on the next run.</param>
+		public static void DoDFTProgressive32(ref float[] binsOut, float[] binFrequencies, float[] audioBuffer, int locationInAudioData)
 		{
-			for (int i  = 0; i < FIXBINS; i++)
+			//Array.Clear(binsOut, 0, binsOut.Length); // TODO see if this is needed (I don't think so)
+			OutputBins = binsOut;
+			Array.Copy(LastRunOutput, binsOut, FIXBINS);
+
+			if (FIXBINS != binsOut.Length) { throw new ArgumentOutOfRangeException($"Error: Bins were reconfigured. Only a constant number of bins is supported (configured for {FIXBINS}, received request for {binsOut.Length})."); }
+			if (!SetupDone) { SetupDFTProgressive32(); }
+			UpdateBinsForDFT32(binFrequencies);
+
+			for (int i = LastBufferReadLocation; i != locationInAudioData; i = (i + 1) % audioBuffer.Length)
 			{
-				float freq = frequencies[(i % FIXBPERO) + (FIXBPERO * (OCTAVES - 1))];
-				Sdatspace32A[i * 2] = (ushort)(65536.0F / freq);// / oneoveroctave; // TODO Cast added
-			}
-		}
-
-		private static readonly float[] DoDFTProgressive32_backupbins = new float[FIXBINS];
-		private static int DoDFTProgressive32_last_place;
-		public static void DoDFTProgressive32(ref float[] outbins, float[] frequencies, int bins, float[] databuffer, int place_in_data_buffer, int size_of_data_buffer, float q, float speedup)
-		{
-			Array.Clear(outbins, 0, bins);
-			goutbins = outbins;
-			Array.Copy(DoDFTProgressive32_backupbins, outbins, FIXBINS);
-
-			if (FIXBINS != bins)
-			{
-                Console.WriteLine("Error: Bins was reconfigured.  skippy requires a constant number of bins ({0} != {1}).", FIXBINS, bins);
-				return;
-			}
-
-			if (!SetupDone)
-			{
-				SetupDFTProgressive32();
-				SetupDone = true;
-			}
-
-			UpdateBinsForDFT32(frequencies);
-
-			for (int i = DoDFTProgressive32_last_place; i != place_in_data_buffer; i = (i + 1) % size_of_data_buffer)
-			{
-				short ifr1 = (short)(databuffer[i] * 4095);
-				HandleInt(ifr1);
-				HandleInt(ifr1);
+				short InputSample = (short)(audioBuffer[i] * 4095);
+				HandleInt(InputSample);
+				HandleInt(InputSample);
 			}
 
 			UpdateOutputBins32();
-
-			DoDFTProgressive32_last_place = place_in_data_buffer;
-
-			Array.Copy(outbins, DoDFTProgressive32_backupbins, FIXBINS);
+			LastBufferReadLocation = locationInAudioData;
+			Array.Copy(binsOut, LastRunOutput, FIXBINS);
 		}
     }
 }

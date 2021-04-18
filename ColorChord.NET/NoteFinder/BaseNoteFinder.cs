@@ -227,7 +227,7 @@ namespace ColorChord.NET
             // This will read all buffer data from where it was called last up to [AudioBufferHeadWrite] in order to catch up.
             //DoDFTProgressive32(DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
 
-            BaseNoteFinderDFT.DoDFTProgressive32(ref DFTBinData, RawBinFrequencies, DFTRawBinCount, AudioBuffer, AudioBufferHeadWrite, AudioBuffer.Length, DFT_Q, DFT_Speedup);
+            BaseNoteFinderDFT.DoDFTProgressive32(ref DFTBinData, RawBinFrequencies, AudioBuffer, AudioBufferHeadWrite);
 
             for (int BinInd = 0; BinInd < 24; BinInd++)
             {
