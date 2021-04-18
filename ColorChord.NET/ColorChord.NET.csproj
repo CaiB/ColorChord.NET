@@ -25,6 +25,7 @@
     <None Include="..\.editorconfig">
       <Link>.editorconfig</Link>
     </None>
+    <EmbeddedResource Include="Outputs\Display\Shaders\NoiseField.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.frag" />
@@ -65,6 +66,7 @@
     <EmbeddedResource Remove="MainForm.resx" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="Outputs\Display\Shaders\NoiseField.frag" />
     <None Remove="Outputs\Display\Shaders\Radar.frag" />
     <None Remove="Outputs\Display\Shaders\Radar.vert" />
     <None Remove="Outputs\Display\Shaders\SmoothRadialBright.frag" />
