@@ -118,14 +118,14 @@ namespace ColorChord.NET.Outputs.Display
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToBorder);
 
-            this.Projection = Matrix4.CreatePerspectiveFieldOfView((float)(Math.PI / 2), 1, 0.01F, 10F);
+            this.Projection = Matrix4.CreatePerspectiveFieldOfView(MathF.PI / 2, 1, 0.01F, 10F);
             this.LocationProjection = this.Shader.GetUniformLocation("projection");
             GL.UniformMatrix4(this.LocationProjection, true, ref this.Projection);
 
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
 
-            Matrix3 ViewRotation = this.Use3DView ? Matrix3.CreateRotationX((float)Math.PI * -0.3F) : Matrix3.Identity;
+            Matrix3 ViewRotation = this.Use3DView ? Matrix3.CreateRotationX(MathF.PI * -0.3F) : Matrix3.Identity;
             Vector3 ViewOffset = this.Use3DView ? ((Vector3.UnitZ * -1.3F) + (Vector3.UnitY * 0.3F)) : (Vector3.UnitZ * -1);
             
             Vector3 NormalVec = new Vector3(0, 2, 0);
@@ -203,7 +203,7 @@ namespace ColorChord.NET.Outputs.Display
             LowFreqData = this.CurrentFLData;
 
             // Some non-linearity to make the beats more apparent
-            LowFreqData = (float)Math.Pow(LowFreqData, 5);
+            LowFreqData = MathF.Pow(LowFreqData, 5);
 
             lock (this.TextureData)
             {
@@ -256,7 +256,7 @@ namespace ColorChord.NET.Outputs.Display
             if (!this.SetupDone) { return; }
 
             this.Shader.Use();
-            this.Projection = Matrix4.CreatePerspectiveFieldOfView((float)(Math.PI / 2), (float)this.HostWindow.Width / this.HostWindow.Height, 0.01F, 10F);
+            this.Projection = Matrix4.CreatePerspectiveFieldOfView(MathF.PI / 2, (float)this.HostWindow.Width / this.HostWindow.Height, 0.01F, 10F);
             GL.UniformMatrix4(this.LocationProjection, true, ref this.Projection);
         }
 

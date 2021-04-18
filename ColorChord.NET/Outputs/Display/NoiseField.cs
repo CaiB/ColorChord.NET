@@ -117,7 +117,7 @@ namespace ColorChord.NET.Outputs.Display
             LowFreqData = this.CurrentLFData;
 
             // Some non-linearity to make the beats more apparent
-            this.SizeBoost = (float)Math.Pow(LowFreqData, 3);
+            this.SizeBoost = MathF.Pow(LowFreqData, 3);
 
             this.Offset -= 10F;
 

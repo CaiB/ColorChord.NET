@@ -135,8 +135,8 @@ namespace ColorChord.NET.Visualizers
             for (int i = 0; i < BinCount; i++)
             {
                 BinColours[i] = BaseNoteFinder.Notes[i].Position / BaseNoteFinder.OctaveBinCount;
-                BinValuesSlow[i] = (float)Math.Pow(BaseNoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
-                BinValues[i] = (float)Math.Pow(BaseNoteFinder.Notes[i].Amplitude, this.LightSiding);
+                BinValuesSlow[i] = MathF.Pow(BaseNoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
+                BinValues[i] = MathF.Pow(BaseNoteFinder.Notes[i].Amplitude, this.LightSiding);
                 BinValuesSum += BinValuesSlow[i];
 
                 float DesiredCount = BinValuesSlow[i] * this.QtyAmp; // How many LEDs we'd like on for this colour

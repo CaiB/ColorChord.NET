@@ -150,8 +150,8 @@ namespace ColorChord.NET.Visualizers
             for (int i = 0; i < BIN_QTY; i++)
             {
                 NotePositions[i] = BaseNoteFinder.Notes[i].Position / BaseNoteFinder.OctaveBinCount;
-                NoteAmplitudes[i] = (float)Math.Pow(BaseNoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
-                NoteAmplitudesFast[i] = (float)Math.Pow(BaseNoteFinder.Notes[i].Amplitude, this.LightSiding);
+                NoteAmplitudes[i] = MathF.Pow(BaseNoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
+                NoteAmplitudesFast[i] = MathF.Pow(BaseNoteFinder.Notes[i].Amplitude, this.LightSiding);
                 AmplitudeSum += NoteAmplitudes[i];
             }
 

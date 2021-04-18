@@ -155,7 +155,7 @@ namespace ColorChord.NET
             SampleRate = sampleRate;
             for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
             {
-                RawBinFrequencies[RawBinIndex] = (float)((sampleRate / MinimumFrequency) / Math.Pow(2, (float)RawBinIndex / OctaveBinCount));
+                RawBinFrequencies[RawBinIndex] = (sampleRate / MinimumFrequency) / MathF.Pow(2, (float)RawBinIndex / OctaveBinCount);
             }
         }
 
@@ -334,7 +334,7 @@ namespace ColorChord.NET
             for (int DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++) { AmplitudeSum += NoteDistributions[DistrIndex].Amplitude; }
 
             // Find coefficient to multiply all by.
-            float AmplitudeCoefficient = (float)(PeakCompressCoefficient / Math.Pow(AmplitudeSum * PeakCompressCoefficient, PeakCompressExponent));
+            float AmplitudeCoefficient = PeakCompressCoefficient / MathF.Pow(AmplitudeSum * PeakCompressCoefficient, PeakCompressExponent);
 
             // Scale peaks.
             for (int DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++) { NoteDistributions[DistrIndex].Amplitude *= AmplitudeCoefficient; }

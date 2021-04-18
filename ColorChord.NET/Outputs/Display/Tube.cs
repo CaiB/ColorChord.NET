@@ -55,7 +55,7 @@ namespace ColorChord.NET.Outputs.Display
         private Vector3 TubePosition;
 
         /// <summary> Used to rotate the tube around the view. </summary>
-        private Matrix4 View = Matrix4.CreateRotationY((float)Math.PI / 12);
+        private Matrix4 View = Matrix4.CreateRotationY(MathF.PI / 12);
 
         /// <summary> Location of the view matrix uniform (for storing <see cref="View"/>). </summary>
         private int LocationView;
@@ -124,7 +124,7 @@ namespace ColorChord.NET.Outputs.Display
             LowFreqData = this.CurrentFLData;
             
             // Some non-linearity to make the beats more apparent
-            LowFreqData = (float)Math.Pow(LowFreqData, 5);
+            LowFreqData = MathF.Pow(LowFreqData, 5);
 
             for (int seg = 0; seg < TubeResolution; seg++)
             {
@@ -176,7 +176,7 @@ namespace ColorChord.NET.Outputs.Display
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToBorder);
 
-            this.Projection = Matrix4.CreatePerspectiveFieldOfView((float)(Math.PI / 2), 1, 0.01F, 10F);
+            this.Projection = Matrix4.CreatePerspectiveFieldOfView(MathF.PI / 2, 1, 0.01F, 10F);
             this.LocationProjection = this.TubeShader.GetUniformLocation("projection");
             GL.UniformMatrix4(this.LocationProjection, true, ref this.Projection);
 
@@ -196,11 +196,11 @@ namespace ColorChord.NET.Outputs.Display
                 {
                     // Turn on the commented out lines for crazy effects :)
                     //float SegStartX = (float)(Math.Cos(Math.PI * 2 * seg / TubeResolution) * (1 - ((float)i / TUBE_LENGTH)) * (1 - Math.Abs(Math.Sin(Frame / 10F)) * 0.2));
-                    float SegStartX = (float)Math.Cos(Math.PI * 2 * seg / TubeResolution);
-                    float SegStartY = (float)Math.Sin(Math.PI * 2 * seg / TubeResolution);
-                    float SegEndX = (float)Math.Cos(Math.PI * 2 * (seg + 1) / TubeResolution);
+                    float SegStartX = MathF.Cos(MathF.PI * 2 * seg / TubeResolution);
+                    float SegStartY = MathF.Sin(MathF.PI * 2 * seg / TubeResolution);
+                    float SegEndX = MathF.Cos(MathF.PI * 2 * (seg + 1) / TubeResolution);
                     //float SegEndY = (float)(Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution) * (1 - ((float)(i + 1) / TUBE_LENGTH)) * (1 - Math.Abs(Math.Cos(Frame / 10F)) * 0.2));
-                    float SegEndY = (float)Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution);
+                    float SegEndY = MathF.Sin(MathF.PI * 2 * (seg + 1) / TubeResolution);
                     float FrontZ = (i == 0) ? 0 : -1 - i * TUBE_LENGTH_UNITS / TUBE_LENGTH;
                     float BackZ = -1 - (i + 1) * TUBE_LENGTH_UNITS / TUBE_LENGTH;
 
@@ -255,7 +255,7 @@ namespace ColorChord.NET.Outputs.Display
                 this.NewLines = 0;
                 GL.Uniform1(this.LocationDepthOffset, (float)(this.TubeRenderIndex) / TUBE_LENGTH);
 
-                Matrix4 InfinityMovement = Matrix4.CreateRotationZ(Frame / 60F) * Matrix4.CreateRotationX((float)(Math.Sin(Frame / 50F) / 5F)) * Matrix4.CreateRotationY((float)(Math.Sin(Frame / 100F) / 3F));
+                Matrix4 InfinityMovement = Matrix4.CreateRotationZ(Frame / 60F) * Matrix4.CreateRotationX(MathF.Sin(Frame / 50F) / 5F) * Matrix4.CreateRotationY(MathF.Sin(Frame / 100F) / 3F);
                 this.TubeTransform = InfinityMovement * Matrix4.CreateTranslation(this.TubePosition);
                 GL.UniformMatrix4(this.LocationTransform, true, ref this.TubeTransform);
             }
@@ -291,7 +291,7 @@ namespace ColorChord.NET.Outputs.Display
             if (!this.SetupDone) { return; }
 
             this.TubeShader.Use();
-            this.Projection = Matrix4.CreatePerspectiveFieldOfView((float)(Math.PI / 2), (float)this.HostWindow.Width / this.HostWindow.Height, 0.01F, 10F);
+            this.Projection = Matrix4.CreatePerspectiveFieldOfView(MathF.PI / 2, (float)this.HostWindow.Width / this.HostWindow.Height, 0.01F, 10F);
             GL.UniformMatrix4(this.LocationProjection, true, ref this.Projection);
         }
 
