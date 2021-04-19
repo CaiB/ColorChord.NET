@@ -180,8 +180,8 @@ namespace ColorChord.NET.NoteFinder
                 int Octave = i / BINSPEROCT;
 
                 float MagnitudeSquared = ((float)SinProductSum * SinProductSum) + ((float)CosProductSum * CosProductSum);
-                OutputBins[i] = MathF.Sqrt(MagnitudeSquared) / 65536.0F; // scale by 2^16, reasonable (but arbitrary attenuation)
-                OutputBins[i] /= (78 << DFTIIR) * (1 << Octave); // TODO WTF is 78???
+                OutputBins[i] = MathF.Sqrt(MagnitudeSquared) / 65536.0F; // scale by 2^16
+                OutputBins[i] /= (78 << DFTIIR) * (1 << Octave); // 78 is an arbitrary number selected by experimentation, which provides "about the right amount of dampening"
             }
         }
 
