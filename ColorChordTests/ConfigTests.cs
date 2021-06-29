@@ -2,9 +2,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ColorChordTests
 {
@@ -23,7 +20,7 @@ namespace ColorChordTests
             public ushort DefaultTest = 50;
 
             [ConfigFloat("FloatTest", 0F, 1F, 0.5F)]
-            private float FloatTestName = 0F;
+            private readonly float FloatTestName = 0F;
 
             [ConfigString("StringTest", "DefaultStringValue")]
             public string StringTest = "Config Failed";
@@ -36,7 +33,7 @@ namespace ColorChordTests
                 Configurer.Configure(this, config);
             }
 
-            public bool CheckFloat() => this.FloatTestName == 0.2F;
+            public bool CheckFloat() => this.FloatTestName == 0.5F;
         }
 
         [TestMethod]
@@ -46,7 +43,7 @@ namespace ColorChordTests
             {
                 { "IntTest", 99 }, // out of range, will be 10
                 { "ByteTest", 25 }, // valid
-                { "FloatTest", 0.2F }, // valid
+                { "FloatTest", "garbage data" }, // invalid, will be 0.5F
                 { "StringTest", "ConfiguredCorrectly" }, // valid
                 { "BoolTest", false }, // valid
                 { "ExtraKey", new object() } // nonexistant, ignored
@@ -58,6 +55,41 @@ namespace ColorChordTests
             Assert.IsTrue(Target.CheckFloat(), "Float not set correctly");
             Assert.AreEqual("ConfiguredCorrectly", Target.StringTest, "String was not set correctly");
             Assert.IsFalse(Target.ThisTestFailed, "Bool was not set correctly");
+        }
+
+        public class ConfigTargetInvalid : IConfigurableAttr
+        {
+            [ConfigInt("FakeInt", 0, 100, 50)]
+            string ThisIsNoInt;
+
+            [ConfigString("FakeString", "Homura is best girl")]
+            int ThisIsNoString;
+
+            public ConfigTargetInvalid(Dictionary<string, object> config)
+            {
+                Configurer.Configure(this, config);
+            }
+        }
+
+        [TestMethod]
+        public void TestInvalidConfig()
+        {
+            Dictionary<string, object> ConfigValues = new()
+            {
+                { "FakeInt", "shouldn't work" },
+                { "FakeString", 37 }
+            };
+
+            bool Errored = false;
+            try
+            {
+                ConfigTargetInvalid Target = new(ConfigValues);
+            }
+            catch(InvalidOperationException)
+            {
+                Errored = true;
+            }
+            Assert.IsTrue(Errored);
         }
     }
 }
