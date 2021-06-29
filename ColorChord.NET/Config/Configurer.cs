@@ -7,6 +7,13 @@ namespace ColorChord.NET.Config
 {
     public static class Configurer
     {
+        /// <summary>Sets all attribute-tagged fields and properties in the given object from the config values provided.</summary>
+        /// <remarks>If a value is not set in the config file, or is set to an invalid value, or is set out of range (where applicable), the default value specified in the attribute is used instead. All attribute-tagged fields and properties are therefore set to reasonable values after this method returns true.</remarks>
+        /// <param name="targetObj">The object to configure. Must implement <see cref="IConfigurableAttr"/>.</param>
+        /// <param name="config">The set of config values to apply.</param>
+        /// <returns>Whether applying the configuration values succeeded.</returns>
+        /// <exception cref="InvalidOperationException">If the field or property type is not compatible with the attribute used.</exception>
+        /// <exception cref="NotImplementedException">If the attribute is one that is not yet supported.</exception>
         public static bool Configure(object targetObj, Dictionary<string, object> config)
         {
             if (targetObj is not IConfigurableAttr Target)
@@ -15,8 +22,8 @@ namespace ColorChord.NET.Config
                 return false;
             }
 
-            FieldInfo[] Fields = Target.GetType().GetFields();
-            PropertyInfo[] Properties = Target.GetType().GetProperties();
+            FieldInfo[] Fields = Target.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            PropertyInfo[] Properties = Target.GetType().GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
 
             foreach(FieldInfo Field in Fields)
             {
@@ -33,7 +40,7 @@ namespace ColorChord.NET.Config
                     else if (Field.FieldType == typeof(sbyte))  { Field.SetValue(targetObj, (sbyte)Value); }
                     else if (Field.FieldType == typeof(long))   { Field.SetValue(targetObj, (long)Value); }
                     else if (Field.FieldType == typeof(ulong))  { Field.SetValue(targetObj, (ulong)Value); }
-                    else { throw new Exception($"Field {IntAttr.Name} in {Target.GetType().FullName} used ConfigInt but is not a numeric type."); }
+                    else { throw new InvalidOperationException($"Field {IntAttr.Name} in {Target.GetType().FullName} used ConfigInt but is not a numeric type."); }
                     
                     config.Remove(IntAttr.Name);
                 }
@@ -42,7 +49,7 @@ namespace ColorChord.NET.Config
                     string Value = CheckString(config, StrAttr);
 
                     if (Field.FieldType == typeof(string)) { Field.SetValue(targetObj, Value); }
-                    else { throw new Exception($"Field {StrAttr.Name} in {Target.GetType().FullName} used ConfigString but is not a string type."); }
+                    else { throw new InvalidOperationException($"Field {StrAttr.Name} in {Target.GetType().FullName} used ConfigString but is not a string type."); }
 
                     config.Remove(StrAttr.Name);
                 }
@@ -51,7 +58,7 @@ namespace ColorChord.NET.Config
                     bool Value = CheckBool(config, BoolAttr);
 
                     if (Field.FieldType == typeof(bool)) { Field.SetValue(targetObj, Value); }
-                    else { throw new Exception($"Field {BoolAttr.Name} in {Target.GetType().FullName} used ConfigBool but is not a bool type."); }
+                    else { throw new InvalidOperationException($"Field {BoolAttr.Name} in {Target.GetType().FullName} used ConfigBool but is not a bool type."); }
 
                     config.Remove(BoolAttr.Name);
                 }
@@ -62,11 +69,11 @@ namespace ColorChord.NET.Config
                     if      (Field.FieldType == typeof(float))   { Field.SetValue(targetObj, Value); }
                     else if (Field.FieldType == typeof(double))  { Field.SetValue(targetObj, (double)Value); }
                     else if (Field.FieldType == typeof(decimal)) { Field.SetValue(targetObj, (decimal)Value); }
-                    else { throw new Exception($"Field {FltAttr.Name} in {Target.GetType().FullName} used ConfigFloat but is not a float type."); }
+                    else { throw new InvalidOperationException($"Field {FltAttr.Name} in {Target.GetType().FullName} used ConfigFloat but is not a float type."); }
 
                     config.Remove(FltAttr.Name);
                 }
-                else { throw new Exception("Unsupported config type encountered: " + Attr.GetType().FullName); }
+                else { throw new NotImplementedException("Unsupported config type encountered: " + Attr.GetType().FullName); }
             }
 
             foreach(PropertyInfo Prop in Properties)
@@ -84,7 +91,7 @@ namespace ColorChord.NET.Config
                     else if (Prop.PropertyType == typeof(sbyte))  { Prop.SetValue(targetObj, (sbyte)Value); }
                     else if (Prop.PropertyType == typeof(long))   { Prop.SetValue(targetObj, (long)Value); }
                     else if (Prop.PropertyType == typeof(ulong))  { Prop.SetValue(targetObj, (ulong)Value); }
-                    else { throw new Exception($"Property {IntAttr.Name} in {Target.GetType().FullName} used ConfigInt but is not a numeric type."); }
+                    else { throw new InvalidOperationException($"Property {IntAttr.Name} in {Target.GetType().FullName} used ConfigInt but is not a numeric type."); }
 
                     config.Remove(IntAttr.Name);
                 }
@@ -93,7 +100,7 @@ namespace ColorChord.NET.Config
                     string Value = CheckString(config, StrAttr);
 
                     if (Prop.PropertyType == typeof(string)) { Prop.SetValue(targetObj, Value); }
-                    else { throw new Exception($"Property {StrAttr.Name} in {Target.GetType().FullName} used ConfigString but is not a string type."); }
+                    else { throw new InvalidOperationException($"Property {StrAttr.Name} in {Target.GetType().FullName} used ConfigString but is not a string type."); }
 
                     config.Remove(StrAttr.Name);
                 }
@@ -102,7 +109,7 @@ namespace ColorChord.NET.Config
                     bool Value = CheckBool(config, BoolAttr);
 
                     if (Prop.PropertyType == typeof(bool)) { Prop.SetValue(targetObj, Value); }
-                    else { throw new Exception($"Field {BoolAttr.Name} in {Target.GetType().FullName} used ConfigBool but is not a bool type."); }
+                    else { throw new InvalidOperationException($"Field {BoolAttr.Name} in {Target.GetType().FullName} used ConfigBool but is not a bool type."); }
 
                     config.Remove(BoolAttr.Name);
                 }
@@ -113,11 +120,11 @@ namespace ColorChord.NET.Config
                     if      (Prop.PropertyType == typeof(float))   { Prop.SetValue(targetObj, Value); }
                     else if (Prop.PropertyType == typeof(double))  { Prop.SetValue(targetObj, (double)Value); }
                     else if (Prop.PropertyType == typeof(decimal)) { Prop.SetValue(targetObj, (decimal)Value); }
-                    else { throw new Exception($"Field {FltAttr.Name} in {Target.GetType().FullName} used ConfigFloat but is not a float type."); }
+                    else { throw new InvalidOperationException($"Field {FltAttr.Name} in {Target.GetType().FullName} used ConfigFloat but is not a float type."); }
 
                     config.Remove(FltAttr.Name);
                 }
-                else { throw new Exception("Unsupported config type encountered: " + Attr.GetType().FullName); }
+                else { throw new NotImplementedException("Unsupported config type encountered: " + Attr.GetType().FullName); }
             }
 
             // Warn about any remaining items
@@ -131,6 +138,10 @@ namespace ColorChord.NET.Config
             return true;
         }
 
+        /// <summary>Checks the config to see if a reasonable value is provided, otherwise uses the default and outputs a warning.</summary>
+        /// <param name="config">The configuration to read from.</param>
+        /// <param name="fltAttr">The attribute on the item to configure.</param>
+        /// <returns>A float within the range specified.</returns>
         private static float CheckFloat(Dictionary<string, object> config, ConfigFloatAttribute fltAttr)
         {
             float Value = fltAttr.DefaultValue;
@@ -147,6 +158,10 @@ namespace ColorChord.NET.Config
             return Value;
         }
 
+        /// <summary>Checks the config to see if a reasonable value is provided, otherwise uses the default and outputs a warning.</summary>
+        /// <param name="config">The configuration to read from.</param>
+        /// <param name="intAttr">The attribute on the item to configure.</param>
+        /// <returns>A long within the range specified.</returns>
         private static long CheckInt(Dictionary<string, object> config, ConfigIntAttribute intAttr)
         {
             long Value = intAttr.DefaultValue;
@@ -163,6 +178,10 @@ namespace ColorChord.NET.Config
             return Value;
         }
 
+        /// <summary>Checks the config to see if a reasonable value is provided, otherwise uses the default and outputs a warning.</summary>
+        /// <param name="config">The configuration to read from.</param>
+        /// <param name="boolAttr">The attribute on the item to configure.</param>
+        /// <returns>Either the configured value, or default.</returns>
         private static bool CheckBool(Dictionary<string, object> config, ConfigBoolAttribute boolAttr)
         {
             bool Value = boolAttr.DefaultValue;
@@ -174,6 +193,10 @@ namespace ColorChord.NET.Config
             return Value;
         }
 
+        /// <summary>Checks the config to see if a value is provided, otherwise uses the default.</summary>
+        /// <param name="config">The configuration to read from.</param>
+        /// <param name="strAttr">The attribute on the item to configure.</param>
+        /// <returns>Either the configured value, or the default. No validity checking is done.</returns>
         private static string CheckString(Dictionary<string, object> config, ConfigStringAttribute strAttr)
         {
             return config.ContainsKey(strAttr.Name) ? config[strAttr.Name].ToString() : strAttr.DefaultValue;

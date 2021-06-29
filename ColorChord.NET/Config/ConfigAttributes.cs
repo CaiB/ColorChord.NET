@@ -2,7 +2,7 @@
 
 namespace ColorChord.NET.Config
 {
-    /// <summary>This should not be used directly, instead it is the parent of the type-specific configurable attributes.</summary>
+    /// <summary>This should not be used directly, instead it is the parent of the type-specific configurable attributes like <see cref="ConfigIntAttribute"/>.</summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class ConfigAttribute : Attribute
     {
@@ -10,6 +10,7 @@ namespace ColorChord.NET.Config
         public ConfigAttribute(string name) { this.Name = name; }
     }
 
+    /// <summary>Used to get integer values from the config. Supports all integral numeric types, signed or unsigned.</summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class ConfigIntAttribute : ConfigAttribute
     {
@@ -25,6 +26,7 @@ namespace ColorChord.NET.Config
         }
     }
 
+    /// <summary>Used to get floating-point values from the config. Supports any floating-point types, but precision is limited to float32.</summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class ConfigFloatAttribute : ConfigAttribute
     {
@@ -40,10 +42,13 @@ namespace ColorChord.NET.Config
         }
     }
 
+    /// <summary>Used to get a string value from the config. Note that there is currently no validity checking on string values.</summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class ConfigStringAttribute : ConfigAttribute
     {
         public string DefaultValue { get; private set; }
+
+        // TODO: Create string validity check system, perhaps via a custom check method delegate?
 
         public ConfigStringAttribute(string name, string defaultValue) : base(name)
         {
@@ -51,6 +56,7 @@ namespace ColorChord.NET.Config
         }
     }
 
+    /// <summary>Used to get a boolean value from the config.</summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class ConfigBoolAttribute : ConfigAttribute
     {
