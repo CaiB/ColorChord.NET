@@ -1,17 +1,21 @@
-﻿using ColorChord.NET.Outputs;
+﻿using ColorChord.NET.Config;
+using ColorChord.NET.Outputs;
 using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace ColorChord.NET.Visualizers
 {
     public class Linear : IVisualizer, IDiscrete1D, IContinuous1D
     {
+        /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
+        public string Name { get; private set; }
+
         /// <summary> The number of discrete elements outputted by this visualizer. </summary>
         /// <remarks> If only using continuous mode, set this to 12 or 24. </remarks>
+        [ConfigInt("LEDCount", 1, 100000, 50)]
         public int LEDCount
         {
             get => this.P_LEDCount;
@@ -23,64 +27,63 @@ namespace ColorChord.NET.Visualizers
         }
         private int P_LEDCount;
 
-        /// <summary> The name of this instance. Used to refer to the instance. </summary>
-        public string Name { get; private set; }
-
         /// <summary> Whether the visualizer is currently processing/outputting. </summary>
+        [ConfigBool("Enable", true)]
         public bool Enabled { get; set; }
 
-        public int FramePeriod = 1000 / 90;
+        /// <summary> How many times per second the output should be updated. </summary>
+        [ConfigInt("FrameRate", 0, 1000, 60)]
+        public int FrameRate { get; set; } = 60;
 
-        /// <summary> Whether the output should be treated as a line with ends, or a continuous circle. </summary>
+        /// <summary> The number of milliseconds to wait between output updates. </summary>
+        private int FramePeriod => 1000 / this.FrameRate;
+
+        /// <summary> Whether the output should be treated as a line with ends, or a continuous circle with the ends joined. </summary>
+        [ConfigBool("IsCircular", false)]
         public bool IsCircular { get; set; }
 
         /// <summary> Exponent used to convert raw note amplitudes to strength. </summary>
+        [ConfigFloat("LightSiding", 0F, 100F, 1F)]
         public float LightSiding { get; set; }
 
-        /// <summary> Applies inter-frame smoothing to the LED brightnesses to prevent fast flickering. </summary>
+        /// <summary> Whether to use smoothed input data (to reduce flicker at the cost of higher response time), or only the latest data. </summary>
+        [ConfigBool("SteadyBright", false)]
         public bool SteadyBright { get; set; }
 
         /// <summary> The minimum relative amplitude of a note required to consider it for output. </summary>
+        [ConfigFloat("LEDFloor", 0F, 1F, 0.1F)]
         public float LEDFloor { get; set; }
 
-        /// <summary> The maximum brightness of all output LEDs. </summary>
-        /// <remarks> Caps the brightness at this, doesn't scale brightnesses below. </remarks>
+        /// <summary> The maximum brightness to cap output at. </summary>
+        /// <remarks> Useful to limit current consumption in physical systems. </remarks>
+        [ConfigFloat("LEDLimit", 0F, 1F, 1F)]
         public float LEDLimit { get; set; }
 
-        /// <summary> How intense to make the colours. </summary>
+        /// <summary> How much to amplify saturation (LED brightness) after processing. </summary>
+        [ConfigFloat("SaturationAmplifier", 0F, 100F, 1.6F)]
         public float SaturationAmplifier { get; set; }
 
-        private readonly List<IOutput> Outputs = new List<IOutput>();
-        public uint[] OutputDataDiscrete;
-        public ContinuousDataUnit[] OutputDataContinuous;
-        public int OutputCountContinuous;
-        public float OutputAdvanceContinuous;
+        /// <summary> All outputs that need to be notified when new data is available. </summary>
+        private readonly List<IOutput> Outputs = new();
 
+        private uint[] OutputDataDiscrete;
+
+        private readonly ContinuousDataUnit[] OutputDataContinuous;
+        private int OutputCountContinuous;
+        private float OutputAdvanceContinuous;
+
+        /// <summary> Whether to continue processing, or stop threads and finish up in preparation for closing the application. </summary>
         private bool KeepGoing = true;
+
+        /// <summary> The thread on which input note data is processed by this visualizer. </summary>
         private Thread ProcessThread;
 
-        public Linear(string name)
+        public Linear(string name, Dictionary<string, object> config)
         {
             this.Name = name;
+            Configurer.Configure(this, config);
             this.OutputDataContinuous = new ContinuousDataUnit[BaseNoteFinder.NoteCount];
             for (int i = 0; i < this.OutputDataContinuous.Length; i++) { this.OutputDataContinuous[i] = new ContinuousDataUnit(); }
-        }
-
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-            Log.Info("Reading config for Linear \"" + this.Name + "\".");
-            if (!options.ContainsKey("LEDCount") || !int.TryParse((string)options["LEDCount"], out int LEDs) || LEDs <= 0) { Log.Error("Tried to create Linear visualizer with invalid/missing LEDCount."); return; }
-
-            this.LEDCount = ConfigTools.CheckInt(options, "LEDCount", 1, 100000, 50, true);
-            this.LightSiding = ConfigTools.CheckFloat(options, "LightSiding", 0, 100, 1, true);
-            this.LEDFloor = ConfigTools.CheckFloat(options, "LEDFloor", 0, 1, 0.1F, true);
-            this.FramePeriod = 1000 / ConfigTools.CheckInt(options, "FrameRate", 0, 1000, 60, true);
-            this.IsCircular = ConfigTools.CheckBool(options, "IsCircular", false, true);
-            this.SteadyBright = ConfigTools.CheckBool(options, "SteadyBright", false, true);
-            this.LEDLimit = ConfigTools.CheckFloat(options, "LEDLimit", 0, 1, 1, true);
-            this.SaturationAmplifier = ConfigTools.CheckFloat(options, "SaturationAmplifier", 0, 100, 1.6F, true);
-            this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
-            ConfigTools.WarnAboutRemainder(options, typeof(IVisualizer));
         }
 
         /// <summary> Used to update internal structures when the number of LEDs changes. </summary>
@@ -111,7 +114,7 @@ namespace ColorChord.NET.Visualizers
 
         private void DoProcessing()
         {
-            Stopwatch Timer = new Stopwatch();
+            Stopwatch Timer = new();
             while (this.KeepGoing)
             {
                 Timer.Restart();
@@ -135,8 +138,7 @@ namespace ColorChord.NET.Visualizers
         private float[] LastLEDPositionsFiltered; // Only used when IsCircular is true.
         private float[] LastLEDSaturations;
         private int PrevAdvance;
-        private float PrevAdvanceVector = 0;
-        private float[] LastVectorCenters = new float[BaseNoteFinder.NoteCount]; // Where the center-point of each block was last frame
+        private readonly float[] LastVectorCenters = new float[BaseNoteFinder.NoteCount]; // Where the center-point of each block was last frame
 
         public void Update()
         {
@@ -280,7 +282,6 @@ namespace ColorChord.NET.Visualizers
                 if (float.IsNaN(this.OutputAdvanceContinuous)) { this.OutputAdvanceContinuous = 0; }
             }
             this.PrevAdvance = Advance;
-            this.PrevAdvanceVector = this.OutputAdvanceContinuous;
 
             // Shift the LEDs by Advance, then output.
             for (int LEDIndex = 0; LEDIndex < this.LEDCount; LEDIndex++)
@@ -302,10 +303,6 @@ namespace ColorChord.NET.Visualizers
                 uint Colour = VisualizerTools.CCtoHEX(LastLEDColours[LEDIndex], 1.0F, OutSaturation);
 
                 this.OutputDataDiscrete[LEDIndex] = Colour;
-
-                //this.OutputDataDiscrete[(LEDIndex * 3) + 0] = (byte)((Colour >> 16) & 0xff);
-                //this.OutputDataDiscrete[(LEDIndex * 3) + 1] = (byte)((Colour >> 8) & 0xff);
-                //this.OutputDataDiscrete[(LEDIndex * 3) + 2] = (byte)((Colour) & 0xff);
             }
 
             if (this.IsCircular)

@@ -31,7 +31,7 @@ namespace ColorChord.NET.Sources
         [ConfigString("DeviceOutput", "default")]
         private string DevicePlay = "default";
 
-        public CNFABinding(Dictionary<string, object> config) { Configurer.Configure(this, config); }
+        public CNFABinding(string name, Dictionary<string, object> config) { Configurer.Configure(this, config); }
         
         public void Start()
         {

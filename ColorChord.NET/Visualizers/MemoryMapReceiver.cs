@@ -1,12 +1,11 @@
-﻿using ColorChord.NET.Outputs;
+﻿using ColorChord.NET.Config;
+using ColorChord.NET.Outputs;
 using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.MemoryMappedFiles;
-using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading;
 
 namespace ColorChord.NET.Visualizers
@@ -15,19 +14,26 @@ namespace ColorChord.NET.Visualizers
     /// <remarks> If you actually want to use this, let me know and I'll expand functionality. Currently very minimal, as it was just to test memory-mapped output. </remarks>
     public class MemoryMapReceiver : IVisualizer, IDiscrete1D
     {
-        private readonly List<IOutput> Outputs = new List<IOutput>();
-
-        /// <summary> How many LEDs are in the source data. </summary>
-        private int LEDCount;
-
-        /// <summary> The colour data from the source. </summary>
-        private uint[] LEDData;
+        /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
+        public string Name { get; private set; }
 
         /// <summary> The name of the memory-mapped file to look for. </summary>
-        private string MapName;
+        [ConfigString("MapName", "UnconfiguredMapName")]
+        private readonly string MapName;
 
         /// <summary> The name of the map mutex to look for. </summary>
-        private string MapMutexName;
+        [ConfigString("MutexName", "UnconfiguredMutexName")]
+        private readonly string MapMutexName;
+
+        /// <summary> How many times per second the output should be updated. </summary>
+        [ConfigInt("FrameRate", 0, 1000, 60)]
+        public int FrameRate { get; set; } = 60;
+
+        /// <summary> The number of milliseconds to wait between output updates. </summary>
+        private int FramePeriod => 1000 / this.FrameRate;
+
+        /// <summary> All outputs that need to be notified when new data is available. </summary>
+        private readonly List<IOutput> Outputs = new();
 
         /// <summary> The shared memory to read colour data from. </summary>
         private MemoryMappedFile Map;
@@ -41,28 +47,26 @@ namespace ColorChord.NET.Visualizers
         /// <summary> Used to synchronize writes/reads. </summary>
         private Mutex MapMutex;
 
+        /// <summary> How many LEDs are in the source data. </summary>
+        private int LEDCount;
+
+        /// <summary> The colour data from the source. </summary>
+        private uint[] LEDData;
+
         /// <summary> The thread for receiving data from the shared memory. </summary>
         private Thread ReceiveThread;
 
         private bool Stopping = false;
 
-        public int FramePeriod = 1000 / 90;
-
-        public string Name { get; private set; }
-
-        public MemoryMapReceiver(string name) { this.Name = name; }
-
-        public void ApplyConfig(Dictionary<string, object> options)
+        public MemoryMapReceiver(string name, Dictionary<string, object> config)
         {
-            Log.Info("Reading config for " + GetType().Name + " \"" + this.Name + "\".");
-            this.MapName = ConfigTools.CheckString(options, "MapName", "UnconfiguredMapName", true);
-            this.MapMutexName = ConfigTools.CheckString(options, "MutexName", "UnconfiguredMutexName", true);
-            this.FramePeriod = 1000 / ConfigTools.CheckInt(options, "FrameRate", 0, 1000, 60, true);
-            ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
+            this.Name = name;
+            Configurer.Configure(this, config);
         }
 
         public void Start()
         {
+            if (!OperatingSystem.IsWindows()) { throw new InvalidOperationException("MemoryMapReceiver is only supported on Windows."); }
             if (this.Map != null) { throw new InvalidOperationException("Cannot start already receiving memory map receiver."); }
             try
             {
@@ -74,15 +78,12 @@ namespace ColorChord.NET.Visualizers
                 this.ReceiveThread = new Thread(DoReceive);
                 this.ReceiveThread.Start();
             }
-            catch(FileNotFoundException)
-            {
-                Log.Error("Could not find memory map by name \"" + this.MapName + "\".");
-            }
+            catch(FileNotFoundException) { Log.Error("Could not find memory map by name \"" + this.MapName + "\"."); }
         }
 
         private void DoReceive()
         {
-            Stopwatch Timer = new Stopwatch();
+            Stopwatch Timer = new();
             while (!this.Stopping)
             {
                 Timer.Restart();

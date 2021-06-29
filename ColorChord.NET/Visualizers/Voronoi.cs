@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.Outputs;
+﻿using ColorChord.NET.Config;
+using ColorChord.NET.Outputs;
 using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
@@ -9,69 +10,72 @@ namespace ColorChord.NET.Visualizers
 {
     public class Voronoi : IVisualizer, IDiscrete2D
     {
-        /// <summary> The name of this instance. Used to refer to the instance. </summary>
+        /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
         public string Name { get; private set; }
 
         /// <summary> Whether this visualizer is currently active. </summary>
+        [ConfigBool("Enable", true)]
         public bool Enabled { get; set; }
 
-        public int FramePeriod { get; private set; }
+        /// <summary> How many times per second the output should be updated. </summary>
+        [ConfigInt("FrameRate", 0, 1000, 60)]
+        public int FrameRate { get; set; } = 60;
+
+        /// <summary> The number of milliseconds to wait between output updates. </summary>
+        private int FramePeriod => 1000 / this.FrameRate;
 
         /// <summary> How many LEDs/blocks to output for in the X direction (width). </summary>
+        [ConfigInt("LEDCountX", 1, 1000000, 64)]
         public int LEDCountX { get; set; }
 
         /// <summary> How many LEDs/blocks to output for in the Y direction (height). </summary>
+        [ConfigInt("LEDCountY", 1, 1000000, 32)]
         public int LEDCountY { get; set; }
 
         /// <summary> Note amplitude is raised to this power as a preprocessing step. Higher means more differentiation between different peak sizes. </summary>
+        [ConfigFloat("AmplifyPower", 0F, 100F, 2.51F)]
         public float AmplifyPower { get; set; }
 
         /// <summary> Distances from centers to draw the colours up to. Higher numbers means fewer colours will take up a majority of screen space. </summary>
+        [ConfigFloat("DistancePower", 0F, 100F, 1.5F)]
         public float DistancePower { get; set; }
 
         /// <summary> How strong a note's amplitude needs to be for it to be considered in rendering. </summary>
+        [ConfigFloat("Cutoff", 0F, 100F, 0.03F)]
         public float NoteCutoff { get; set; }
 
         /// <summary> Whether to draw the colours in a circle around the edges (true), or to randomly place colours (false). </summary>
+        [ConfigBool("CentersFromSides", true)]
         public bool CentersFromSides { get; set; }
 
         /// <summary> Amplifier on the output colour saturation. </summary>
+        [ConfigFloat("SaturationAmplifier", 0, 100, 5F)]
         public float SaturationAmplifier { get; set; }
 
         /// <summary> Scales the final output saturation curve. </summary>
+        [ConfigFloat("OutputGamma", 0F, 1F, 1F)]
         public float OutGamma { get; set; }
+
+        /// <summary> All outputs that need to be notified when new data is available. </summary>
+        private readonly List<IOutput> Outputs = new();
 
         /// <summary> Output data for the continuous voronoi mode. </summary>
         public VoronoiPoint[] OutputData = new VoronoiPoint[BaseNoteFinder.NoteCount];
 
         /// <summary> Output data for the discrete (pixel matrix) voronoi mode. </summary>
-        private uint[,] OutputDataDiscrete;
+        private readonly uint[,] OutputDataDiscrete;
 
-        private readonly List<IOutput> Outputs = new List<IOutput>();
-        private Thread ProcessThread;        
+        private readonly DiscreteVoronoiNote[] DiscreteNotes;
+
+        private Thread ProcessThread;
         private bool KeepGoing = true;
 
-        private readonly DiscreteVoronoiNote[] DiscreteNotes = new DiscreteVoronoiNote[BaseNoteFinder.NoteCount];
-
-        public Voronoi(string name) { this.Name = name; }
-
-        public void ApplyConfig(Dictionary<string, object> options)
+        public Voronoi(string name, Dictionary<string, object> config)
         {
-            Log.Info("Reading config for Voronoi \"" + this.Name + "\".");
-
-            this.FramePeriod = 1000 / ConfigTools.CheckInt(options, "frameRate", 0, 1000, 60, true);
-            this.Enabled = ConfigTools.CheckBool(options, "enable", true, true);
-            this.LEDCountX = ConfigTools.CheckInt(options, "LEDCountX", 1, 1000000, 64, true);
-            this.LEDCountY = ConfigTools.CheckInt(options, "LEDCountY", 1, 1000000, 32, true);
-            this.NoteCutoff = ConfigTools.CheckFloat(options, "Cutoff", 0F, 100F, 0.03F, true);
-            this.SaturationAmplifier = ConfigTools.CheckFloat(options, "SaturationAmplifier", 0, 100, 5F, true);
-            this.OutGamma = ConfigTools.CheckFloat(options, "OutputGamma", 0F, 1F, 1F, true);
-            this.AmplifyPower = ConfigTools.CheckFloat(options, "AmplifyPower", 0F, 100F, 2.51F, true);
-            this.DistancePower = ConfigTools.CheckFloat(options, "DistancePower", 0F, 100F, 1.5F, true);
-            this.CentersFromSides = ConfigTools.CheckBool(options, "CentersFromSides", true, true);
-            ConfigTools.WarnAboutRemainder(options, typeof(IVisualizer));
-
+            this.Name = name;
+            Configurer.Configure(this, config);
             this.OutputDataDiscrete = new uint[this.LEDCountX, this.LEDCountY];
+            this.DiscreteNotes = new DiscreteVoronoiNote[BaseNoteFinder.NoteCount];
         }
 
         public void Start()
@@ -92,13 +96,13 @@ namespace ColorChord.NET.Visualizers
 
         private void DoProcessing()
         {
-            Stopwatch Timer = new Stopwatch();
+            Stopwatch Timer = new();
             while (this.KeepGoing)
             {
                 Timer.Restart();
                 Update();
                 foreach (IOutput Output in this.Outputs) { Output.Dispatch(); }
-                int WaitTime = (int)(this.FramePeriod - (Timer.ElapsedMilliseconds));
+                int WaitTime = (int)(this.FramePeriod - Timer.ElapsedMilliseconds);
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
             }
         }
@@ -141,8 +145,8 @@ namespace ColorChord.NET.Visualizers
                     float Angle = (BaseNoteFinder.Notes[i].Position / BaseNoteFinder.OctaveBinCount) * MathF.PI * 2;
                     float CenterX = this.LEDCountX / 2F;
                     float CenterY = this.LEDCountY / 2F;
-                    float NewX = MathF.Sin(Angle) * CenterX + CenterX;
-                    float NewY = MathF.Cos(Angle) * CenterY + CenterY;
+                    float NewX = (MathF.Sin(Angle) * CenterX) + CenterX;
+                    float NewY = (MathF.Cos(Angle) * CenterY) + CenterY;
                     bool NotePresent = (BaseNoteFinder.PersistentNoteIDs[i] != 0);
                     this.DiscreteNotes[i].X = NotePresent ? (this.DiscreteNotes[i].X * 0.9F) + (NewX * 0.1F) : CenterX;
                     this.DiscreteNotes[i].Y = NotePresent ? (this.DiscreteNotes[i].Y * 0.9F) + (NewY * 0.1F) : CenterY;

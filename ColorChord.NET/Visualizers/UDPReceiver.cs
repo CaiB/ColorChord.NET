@@ -2,8 +2,7 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
-using System.Threading;
+using ColorChord.NET.Config;
 using ColorChord.NET.Outputs;
 using ColorChord.NET.Visualizers.Formats;
 
@@ -13,7 +12,19 @@ namespace ColorChord.NET.Visualizers
     /// <remarks> If you actually want to use this, let me know and I'll expand functionality. Currently very minimal, as it was just to test UDP output. </remarks>
     public class UDPReceiver1D : IVisualizer, IDiscrete1D
     {
-        private readonly List<IOutput> Outputs = new List<IOutput>();
+        /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
+        public string Name { get; private set; }
+
+        /// <summary> The port to listen on. </summary>
+        [ConfigInt("Port", 0, 65535, 7777)]
+        public int Port { get; private set; }
+
+        /// <summary> Whether to expect 4 bytes per LED (true), or 3 (false). </summary>
+        [ConfigBool("HasYellow", false)]
+        public bool HasYellowChannel { get; set; }
+
+        /// <summary> All outputs that need to be notified when new data is available. </summary>
+        private readonly List<IOutput> Outputs = new();
 
         /// <summary> The receiver for UDP packets. </summary>
         private UdpClient Receiver;
@@ -22,28 +33,13 @@ namespace ColorChord.NET.Visualizers
         private bool Stopping;
 
         /// <summary> The data in the most recent packet. </summary>
-        private uint[] Data = new uint[0];
+        private uint[] Data = Array.Empty<uint>();
 
-        /// <summary> Whether to expect 4 bytes per LED (true), or 3 (false). </summary>
-        public bool HasYellowChannel { get; set; }
-
-        /// <summary> The port to listen on. </summary>
-        public int Port { get; private set; }
-
-        public string Name { get; private set; }
-
-        public UDPReceiver1D(string name)
+        public UDPReceiver1D(string name, Dictionary<string, object> config)
         {
             this.Name = name;
-        }
-
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-            this.HasYellowChannel = ConfigTools.CheckBool(options, "HasYellow", false, true);
-            this.Port = ConfigTools.CheckInt(options, "Port", 0, 65535, 7777, true);
+            Configurer.Configure(this, config);
             if (this.Port < 1024) { Log.Warn("It is not recommended to use ports below 1024, as they are reserved. UDP listener is operating on port " + this.Port + "."); }
-
-            ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
         }
 
         public void AttachOutput(IOutput output) { if (output != null) { this.Outputs.Add(output); } }

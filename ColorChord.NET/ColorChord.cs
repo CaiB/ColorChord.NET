@@ -93,7 +93,7 @@ namespace ColorChord.NET
             {
                 foreach (JToken Entry in (JArray)JSON["Visualizers"])
                 {
-                    IVisualizer Vis = CreateObject<IVisualizer>("ColorChord.NET.Visualizers." + (string)Entry["Type"], Entry);
+                    IVisualizer Vis = CreateObjectAttr<IVisualizer>("ColorChord.NET.Visualizers." + (string)Entry["Type"], Entry);
                     Vis.Start();
                     VisualizerInsts.Add((string)Entry["Name"], Vis);
                 }
@@ -142,7 +142,7 @@ namespace ColorChord.NET
         {
             Type ObjType = Type.GetType(fullName);
             if (ObjType == null || !typeof(InterfaceType).IsAssignableFrom(ObjType)) { return default; } // Type doesn't exist, or does not implement the right interface.
-            object Instance = Activator.CreateInstance(ObjType, ToDict(configEntry, complexConfig));
+            object Instance = Activator.CreateInstance(ObjType, (string)configEntry["Name"], ToDict(configEntry, complexConfig));
             return (InterfaceType)Instance;
         }
 

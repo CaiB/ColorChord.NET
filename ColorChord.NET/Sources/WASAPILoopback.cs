@@ -38,7 +38,7 @@ namespace ColorChord.NET.Sources
         private readonly AutoResetEvent AudioEvent = new AutoResetEvent(false);
         private static GCHandle AudioEventHandle;
 
-        public WASAPILoopback(Dictionary<string, object> config) { Configurer.Configure(this, config); }
+        public WASAPILoopback(string name, Dictionary<string, object> config) { Configurer.Configure(this, config); }
 
         public void Start()
         {
