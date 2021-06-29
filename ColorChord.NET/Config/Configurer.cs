@@ -28,6 +28,7 @@ namespace ColorChord.NET.Config
             foreach(FieldInfo Field in Fields)
             {
                 Attribute Attr = Attribute.GetCustomAttribute(Field, typeof(ConfigAttribute));
+                if(Attr is null) { continue; } // Field without attribute, ignore
                 if(Attr is ConfigIntAttribute IntAttr)
                 {
                     long Value = CheckInt(config, IntAttr);
@@ -73,12 +74,13 @@ namespace ColorChord.NET.Config
 
                     config.Remove(FltAttr.Name);
                 }
-                else { throw new NotImplementedException("Unsupported config type encountered: " + Attr.GetType().FullName); }
+                else { throw new NotImplementedException("Unsupported config type encountered: " + Attr?.GetType()?.FullName); }
             }
 
             foreach(PropertyInfo Prop in Properties)
             {
                 Attribute Attr = Attribute.GetCustomAttribute(Prop, typeof(ConfigAttribute));
+                if (Attr is null) { continue; } // Property without attribute, ignore
                 if (Attr is ConfigIntAttribute IntAttr)
                 {
                     long Value = CheckInt(config, IntAttr);

@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.Outputs;
+﻿using ColorChord.NET.Config;
+using ColorChord.NET.Outputs;
 using ColorChord.NET.Sources;
 using ColorChord.NET.Visualizers;
 using Newtonsoft.Json;
@@ -16,6 +17,11 @@ namespace ColorChord.NET
         private static string ConfigFile = "config.json";
         public static bool Debug = false;
 
+        public static readonly Dictionary<string, IVisualizer> VisualizerInsts = new Dictionary<string, IVisualizer>();
+        public static readonly Dictionary<string, IOutput> OutputInsts = new Dictionary<string, IOutput>();
+        //public static Dictionary<string, IController> Controllers;
+        public static IAudioSource Source;
+
         public static void Main(string[] args)
         {
             if (args != null && args.Length > 0)
@@ -32,11 +38,6 @@ namespace ColorChord.NET
 
             ReadConfig();
         }
-
-        public static Dictionary<string, IVisualizer> VisualizerInsts;
-        public static Dictionary<string, IOutput> OutputInsts;
-        //public static Dictionary<string, IController> Controllers;
-        public static IAudioSource Source;
 
         private static void WriteDefaultConfig()
         {
@@ -61,9 +62,6 @@ namespace ColorChord.NET
 
         public static void ReadConfig()
         {
-            VisualizerInsts = new Dictionary<string, IVisualizer>();
-            OutputInsts = new Dictionary<string, IOutput>();
-            // Controllers = new Dictionary<string IController>();
             JObject JSON;
             using (StreamReader Reader = File.OpenText(ConfigFile)) { JSON = JObject.Parse(Reader.ReadToEnd()); }
             Log.Info("Reading and applying configuration file \"" + ConfigFile + "\"...");
@@ -72,7 +70,7 @@ namespace ColorChord.NET
             if (!JSON.ContainsKey("Source") || !JSON["Source"].HasValues) { Log.Warn("Could not find valid \"Source\" definition. No audio source will be configured."); }
             else
             {
-                IAudioSource Source = CreateObject<IAudioSource>("ColorChord.NET.Sources." + (string)JSON["Source"]["Type"], JSON["Source"]);
+                IAudioSource Source = CreateObjectAttr<IAudioSource>("ColorChord.NET.Sources." + (string)JSON["Source"]["Type"], JSON["Source"]);
                 if (Source != null)
                 {
                     ColorChord.Source = Source;
@@ -128,10 +126,24 @@ namespace ColorChord.NET
             if (Instance != null)
             {
                 InterfaceType Instance2 = (InterfaceType)Instance;
+                
                 Instance2.ApplyConfig(ToDict(configEntry, complexConfig));
                 return Instance2;
             }
             return default;
+        }
+
+        /// <summary> Creates a new instance of the specified type, and checks to make sure it implements the given interface. </summary>
+        /// <typeparam name="InterfaceType"> The interface that the resulting object must implement. </typeparam>
+        /// <param name="fullName"> The full name (namespace + type) of the object to create. </param>
+        /// <param name="configEntry"> The config entry containing options that should be applied to the resulting object. </param>
+        /// <returns> A configured, ready object, or null if it was not able to be made. </returns>
+        private static InterfaceType CreateObjectAttr<InterfaceType>(string fullName, JToken configEntry, bool complexConfig = false) where InterfaceType : IConfigurableAttr // TODO: Replace original
+        {
+            Type ObjType = Type.GetType(fullName);
+            if (ObjType == null || !typeof(InterfaceType).IsAssignableFrom(ObjType)) { return default; } // Type doesn't exist, or does not implement the right interface.
+            object Instance = Activator.CreateInstance(ObjType, ToDict(configEntry, complexConfig));
+            return (InterfaceType)Instance;
         }
 
         /// <summary> Takes a JSON token, and converts all single-valued children into a Dictionary. </summary>

@@ -17,7 +17,7 @@ namespace ColorChordTests
             public readonly byte ByteTest = 30;
 
             [ConfigInt("ThisKeyDoesNotExist", 10, 200, 10)]
-            public ushort DefaultTest = 50;
+            public ushort DefaultTest { get; private set; } = 50;
 
             [ConfigFloat("FloatTest", 0F, 1F, 0.5F)]
             private readonly float FloatTestName = 0F;
@@ -27,6 +27,9 @@ namespace ColorChordTests
 
             [ConfigBool("BoolTest", true)]
             public bool ThisTestFailed = true;
+
+            public bool ThisIsNotConfigurable;
+            public bool AndNeitherIsThis { get; set; }
 
             public ConfigTargetValid(Dictionary<string, object> config)
             {

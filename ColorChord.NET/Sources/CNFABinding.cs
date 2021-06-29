@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ColorChord.NET.Config;
+using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
@@ -12,31 +13,31 @@ namespace ColorChord.NET.Sources
         private CNFACallback Callback;
         private GCHandle CallbackHandle;
 
-        private string DriverMode;
-        private int SuggestedSampleRate;
-        private int SuggestedChannelCount;
-        private int SuggestedBufferSize;
-        private string DeviceRecord, DevicePlay;
+        [ConfigString("Driver", "AUTO")]
+        private readonly string DriverMode = "AUTO";
 
-        public CNFABinding(string name) { }
+        [ConfigInt("SampleRate", 8000, 384000, 48000)]
+        private readonly int SuggestedSampleRate = 48000;
 
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-            Log.Info("Reading config for CFNABinding.");
-            this.DriverMode = ConfigTools.CheckString(options, "Driver", "AUTO", true).ToUpper();
-            this.SuggestedSampleRate = ConfigTools.CheckInt(options, "SampleRate", 8000, 384000, 48000, true);
-            this.SuggestedChannelCount = ConfigTools.CheckInt(options, "ChannelCount", 1, 20, 2, true);
-            this.SuggestedBufferSize = ConfigTools.CheckInt(options, "BufferSize", 1, 10000, 480, true);
-            this.DeviceRecord = ConfigTools.CheckString(options, "Device", "default", true);
-            this.DevicePlay = ConfigTools.CheckString(options, "DeviceOutput", "default", true); // This isn't actually used, as no sounds are played.
-            ConfigTools.WarnAboutRemainder(options, typeof(IAudioSource));
-        }
+        [ConfigInt("ChannelCount", 1, 20, 2)]
+        private readonly int SuggestedChannelCount = 2;
+
+        [ConfigInt("BufferSize", 1, 10000, 480)]
+        private readonly int SuggestedBufferSize = 480;
+
+        [ConfigString("Device", "default")]
+        private string DeviceRecord = "default";
+        
+        [ConfigString("DeviceOutput", "default")]
+        private string DevicePlay = "default";
+
+        public CNFABinding(Dictionary<string, object> config) { Configurer.Configure(this, config); }
         
         public void Start()
         {
             this.Callback = SoundCallback;
             this.CallbackHandle = GCHandle.Alloc(this.Callback);
-            this.DriverPtr = Initialize(this.DriverMode == "AUTO" ? null : this.DriverMode, "ColorChord.NET", Marshal.GetFunctionPointerForDelegate(this.Callback), this.SuggestedSampleRate, this.SuggestedSampleRate, this.SuggestedChannelCount, this.SuggestedChannelCount, this.SuggestedBufferSize, this.DevicePlay, this.DeviceRecord, IntPtr.Zero);
+            this.DriverPtr = Initialize(this.DriverMode.ToUpper() == "AUTO" ? null : this.DriverMode.ToUpper(), "ColorChord.NET", Marshal.GetFunctionPointerForDelegate(this.Callback), this.SuggestedSampleRate, this.SuggestedSampleRate, this.SuggestedChannelCount, this.SuggestedChannelCount, this.SuggestedBufferSize, this.DevicePlay, this.DeviceRecord, IntPtr.Zero);
             this.Driver = Marshal.PtrToStructure<CNFAConfig>(this.DriverPtr);
             BaseNoteFinder.SetSampleRate(this.Driver.SampleRateRecord);
         }

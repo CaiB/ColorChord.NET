@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ColorChord.NET.Config;
+using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -15,8 +16,11 @@ namespace ColorChord.NET.Sources
         private static readonly Guid FriendlyNamePKEY = new Guid(0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0);
         private const int FriendlyNamePKEY_PID = 14;
 
-        private string DesiredDevice;
-        private bool PrintDeviceInfo = false;
+        [ConfigString("Device", "default")]
+        private readonly string DesiredDevice = "default";
+
+        [ConfigBool("ShowDeviceInfo", true)]
+        private readonly bool PrintDeviceInfo = true;
 
         private const ulong BufferLength = 50 * 10000; // 50 ms, in ticks
         private ulong SystemBufferLength;
@@ -34,15 +38,7 @@ namespace ColorChord.NET.Sources
         private readonly AutoResetEvent AudioEvent = new AutoResetEvent(false);
         private static GCHandle AudioEventHandle;
 
-        public WASAPILoopback(string name) { }
-
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-            Log.Info("Reading config for WASAPILoopback.");
-            this.DesiredDevice = ConfigTools.CheckString(options, "Device", "default", true);
-            this.PrintDeviceInfo = ConfigTools.CheckBool(options, "ShowDeviceInfo", true, true);
-            ConfigTools.WarnAboutRemainder(options, typeof(IAudioSource));
-        }
+        public WASAPILoopback(Dictionary<string, object> config) { Configurer.Configure(this, config); }
 
         public void Start()
         {
