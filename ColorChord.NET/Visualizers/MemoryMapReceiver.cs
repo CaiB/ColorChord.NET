@@ -15,7 +15,7 @@ namespace ColorChord.NET.Visualizers
     public class MemoryMapReceiver : IVisualizer, IDiscrete1D
     {
         /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
-        public string Name { get; private set; }
+        public string Name { get; private init; }
 
         /// <summary> The name of the memory-mapped file to look for. </summary>
         [ConfigString("MapName", "UnconfiguredMapName")]

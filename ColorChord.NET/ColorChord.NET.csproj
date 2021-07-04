@@ -41,7 +41,6 @@
     <EmbeddedResource Include="sample-config.json" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Colochord2-Logo.ico" />
     <Content Include="..\Libraries\CNFA.so">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.Outputs.Display;
+﻿using ColorChord.NET.Config;
+using ColorChord.NET.Outputs.Display;
 using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
 using OpenTK.Graphics.ES30;
@@ -7,7 +8,6 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Runtime.InteropServices;
 
 namespace ColorChord.NET.Outputs
@@ -19,6 +19,7 @@ namespace ColorChord.NET.Outputs
         public readonly string Name;
 
         /// <summary> The width of the window contents, in pixels. </summary>
+        [ConfigInt("WindowWidth", 10, 4000, 1280)]
         public int Width
         {
             get => this.ClientSize.X;
@@ -26,19 +27,40 @@ namespace ColorChord.NET.Outputs
         }
 
         /// <summary> The height of the window contents, in pixels. </summary>
+        [ConfigInt("WindowHeight", 10, 4000, 720)]
         public int Height
         {
             get => this.ClientSize.Y;
             set => this.ClientRectangle = new Box2i(this.ClientRectangle.Min, new Vector2i(this.ClientRectangle.Max.X, this.ClientRectangle.Min.Y + value));
         }
 
-        private IDisplayMode Display;
+        private readonly IDisplayMode Display;
         private bool Loaded = false;
 
-        public DisplayOpenGL(string name) : base(GameWindowSettings.Default, SetupNativeWindow())
+        public DisplayOpenGL(string name, Dictionary<string, object> config) : base(GameWindowSettings.Default, SetupNativeWindow())
         {
             this.Name = name;
             this.Title = "ColorChord.NET: " + this.Name;
+            this.Source = Configurer.FindVisualizer(this, config);
+            Configurer.Configure(this, config);
+
+            if (config.ContainsKey("Modes")) // Make sure that everything else is configured before creating the modes!
+            {
+                Dictionary<string, object>[] ModeList = (Dictionary<string, object>[])config["Modes"];
+                for (int i = 0; i < 1/*ModeList.Length*/; i++) // TODO: Add support for multiple modes.
+                {
+                    if (!ModeList[i].ContainsKey("Type")) { Log.Error("Mode at index " + i + " is missing \"Type\" specification."); continue; }
+                    this.Display = CreateMode("ColorChord.NET.Outputs.Display." + ModeList[i]["Type"], ModeList[i]);
+                    if (this.Display == null) { Log.Error("Failed to create display of type \"" + ModeList[i]["Type"] + "\" under \"" + this.Name + "\"."); }
+
+                    // We already loaded, we want to make sure our display does as well.
+                    if (this.Loaded) { this.Display?.Load(); }
+                }
+                if (ModeList.Length > 1) { Log.Warn("Config specifies multiple modes. This is not yet supported, so only the first one will be used."); }
+                Log.Info("Finished reading display modes under \"" + this.Name + "\".");
+            }
+
+            this.Source.AttachOutput(this);
         }
 
         private static NativeWindowSettings SetupNativeWindow()
@@ -55,36 +77,7 @@ namespace ColorChord.NET.Outputs
         }
         public void Stop() { } // TODO: Stop
 
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-            Log.Info("Reading config for DisplayOpenGL \"" + this.Name + "\".");
-            if (!options.ContainsKey("VisualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["VisualizerName"])) { Log.Error("Tried to create DisplayOpenGL with missing or invalid visualizer."); return; }
-            this.Source = ColorChord.VisualizerInsts[(string)options["VisualizerName"]];
-            this.Source.AttachOutput(this);
-
-            if (options.ContainsKey("Modes")) // Make sure that everything else is configured before creating the modes!
-            {
-                Dictionary<string, object>[] ModeList = (Dictionary<string, object>[])options["Modes"];
-                for (int i = 0; i < 1/*ModeList.Length*/; i++) // TODO: Add support for multiple modes.
-                {
-                    if (!ModeList[i].ContainsKey("Type")) { Log.Error("Mode at index " + i + " is missing \"Type\" specification."); continue; }
-                    this.Display = CreateMode("ColorChord.NET.Outputs.Display." + ModeList[i]["Type"], ModeList[i]);
-                    if (this.Display == null) { Log.Error("Failed to create display of type \"" + ModeList[i]["Type"] + "\" under \"" + this.Name + "\"."); }
-
-                    // We already loaded, we want to make sure our display does as well.
-                    if (this.Loaded) { this.Display?.Load(); }
-                }
-                if (ModeList.Length > 1) { Log.Warn("Config specifies multiple modes. This is not yet supported, so only the first one will be used."); }
-                Log.Info("Finished reading display modes under \"" + this.Name + "\".");
-            }
-
-            this.Width = ConfigTools.CheckInt(options, "WindowWidth", 10, 4000, 1280, true);
-            this.Height = ConfigTools.CheckInt(options, "WindowHeight", 10, 4000, 720, true);
-
-            ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
-        }
-
-        private IDisplayMode CreateMode(string fullName, Dictionary<string, object> config)
+        private IDisplayMode CreateMode(string fullName, Dictionary<string, object> config) // TODO: Look over this
         {
             Type ObjType = Type.GetType(fullName);
             if (!typeof(IDisplayMode).IsAssignableFrom(ObjType)) { return null; } // Does not implement the right interface.
@@ -160,6 +153,5 @@ namespace ColorChord.NET.Outputs
         }
 
         public void Dispatch() => this.Display?.Dispatch();
-
     }
 }

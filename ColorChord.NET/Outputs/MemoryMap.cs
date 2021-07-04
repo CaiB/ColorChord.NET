@@ -1,21 +1,21 @@
-﻿using ColorChord.NET.Visualizers;
+﻿using ColorChord.NET.Config;
+using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.MemoryMappedFiles;
-using System.Text;
 using System.Threading;
 
 namespace ColorChord.NET.Outputs
 {
     public class MemoryMap : IOutput
     {
-        /// <summary> Where colour data is taken from. </summary>
-        private IVisualizer Source;
-
         /// <summary> Instance name, for identification and attaching controllers. </summary>
-        private readonly string Name;
+        public string Name { get; private init; }
+
+        /// <summary> Where colour data is taken from. </summary>
+        private readonly IVisualizer Source;
 
         /// <summary> The location where we store colour data for other processes to consume. </summary>
         private MemoryMappedFile Map;
@@ -32,21 +32,13 @@ namespace ColorChord.NET.Outputs
         /// <summary> Whether the map is set up and ready for data to be written. </summary>
         private bool Ready;
 
-        public MemoryMap(string name)
+        public MemoryMap(string name, Dictionary<string, object> config)
         {
             this.Name = name;
-        }
+            this.Source = Configurer.FindVisualizer(this, config, typeof(IDiscrete1D));
+            Configurer.Configure(this, config);
 
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-            Log.Info("Reading config for " + GetType().Name + " \"" + this.Name + "\".");
-
-            if (!options.ContainsKey("VisualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["VisualizerName"])) { Log.Error("Tried to create " + GetType().Name + " with missing or invalid visualizer."); return; }
-            this.Source = ColorChord.VisualizerInsts[(string)options["VisualizerName"]];
-            if (!(this.Source is IDiscrete1D)) { Log.Error(GetType().Name + " only supports " + nameof(IDiscrete1D) + " visualizers."); }
             this.Source.AttachOutput(this);
-
-            ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
         }
 
         public void Dispatch()
@@ -72,7 +64,7 @@ namespace ColorChord.NET.Outputs
 
         public void Start()
         {
-            if (Map != null) { throw new InvalidOperationException("MemoryMap sender cannot be started when already running."); }
+            if (this.Map != null) { throw new InvalidOperationException("MemoryMap sender cannot be started when already running."); }
 
             string MapName = "ColorChord.NET-" + this.Name;
             // TODO: Make size configurable, or autoscale to LEDCount?

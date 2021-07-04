@@ -13,7 +13,7 @@ namespace ColorChord.NET.Visualizers
     public class UDPReceiver1D : IVisualizer, IDiscrete1D
     {
         /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
-        public string Name { get; private set; }
+        public string Name { get; private init; }
 
         /// <summary> The port to listen on. </summary>
         [ConfigInt("Port", 0, 65535, 7777)]

@@ -1,4 +1,6 @@
 ﻿using ColorChord.NET.Outputs;
+using ColorChord.NET.Visualizers;
+using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -16,6 +18,7 @@ namespace ColorChord.NET.Config
         /// <exception cref="NotImplementedException">If the attribute is one that is not yet supported.</exception>
         public static bool Configure(object targetObj, Dictionary<string, object> config)
         {
+            Log.Info("Reading config for " + targetObj?.GetType()?.Name + '.');
             if (targetObj is not IConfigurableAttr Target)
             {
                 Log.Warn("Tried to configure non-configurable object " + targetObj);
@@ -138,6 +141,33 @@ namespace ColorChord.NET.Config
             }
 
             return true;
+        }
+
+        /// <summary>Used by outputs. Reads the config, and finds the visualizer instance that this output should attach to.</summary>
+        /// <param name="target">The output that will attach to the visualizer.</param>
+        /// <param name="config">The config entries which will be used in finding the appropriate visualizer.</param>
+        /// <returns>The visualizer that this output should attach to.</returns>
+        public static IVisualizer FindVisualizer(IOutput target, Dictionary<string, object> config)
+        {
+            const string VIZ_NAME = "VisualizerName";
+            if (!config.ContainsKey(VIZ_NAME) || !ColorChord.VisualizerInsts.ContainsKey((string)config[VIZ_NAME]))
+            {
+                Log.Error("Tried to create " + target.GetType()?.Name + " with missing or invalid visualizer.");
+                return null;
+            }
+            return ColorChord.VisualizerInsts[(string)config[VIZ_NAME]];
+        }
+
+        /// <summary>Used by outputs. Reads the config, and finds the visualizer instance that this output should attach to.</summary>
+        /// <param name="target">The output that will attach to the visualizer.</param>
+        /// <param name="config">The config entries which will be used in finding the appropriate visualizer.</param>
+        /// <param name="acceptableFormat">The <see cref="IVisualizerFormat"/> type that is accepted by this output.</param>
+        /// <returns>The visualizer that this output should attach to.</returns>
+        public static IVisualizer FindVisualizer(IOutput target, Dictionary<string, object> config, Type acceptableFormat)
+        {
+            IVisualizer Visualizer = FindVisualizer(target, config);
+            if (!target.GetType().IsAssignableFrom(acceptableFormat)) { Log.Error($"{target.GetType()?.Name} only supports {acceptableFormat.Name} visualizers, cannot use {target.GetType()?.Name}"); }
+            return Visualizer;
         }
 
         /// <summary>Checks the config to see if a reasonable value is provided, otherwise uses the default and outputs a warning.</summary>

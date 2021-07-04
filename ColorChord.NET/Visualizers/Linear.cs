@@ -11,7 +11,7 @@ namespace ColorChord.NET.Visualizers
     public class Linear : IVisualizer, IDiscrete1D, IContinuous1D
     {
         /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
-        public string Name { get; private set; }
+        public string Name { get; private init; }
 
         /// <summary> The number of discrete elements outputted by this visualizer. </summary>
         /// <remarks> If only using continuous mode, set this to 12 or 24. </remarks>

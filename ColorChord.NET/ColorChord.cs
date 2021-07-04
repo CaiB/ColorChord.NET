@@ -105,7 +105,7 @@ namespace ColorChord.NET
             {
                 foreach (JToken Entry in (JArray)JSON["Outputs"])
                 {
-                    IOutput Out = CreateObject<IOutput>("ColorChord.NET.Outputs." + (string)Entry["Type"], Entry, true);
+                    IOutput Out = CreateObjectAttr<IOutput>("ColorChord.NET.Outputs." + (string)Entry["Type"], Entry, true);
                     Out.Start();
                     OutputInsts.Add((string)Entry["Name"], Out);
                 }

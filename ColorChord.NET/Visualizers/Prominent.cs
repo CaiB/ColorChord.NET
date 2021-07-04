@@ -11,7 +11,7 @@ namespace ColorChord.NET.Visualizers
     public class Prominent : IVisualizer, IDiscrete1D
     {
         /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
-        public string Name { get; private set; }
+        public string Name { get; private init; }
 
         /// <summary> The number of discrete points to be output. Usually equals the number of LEDs on a physical system. </summary>
         /// <remarks> All LEDs are assigned the same colour in this visualizer, so 1 works just fine. </remarks>

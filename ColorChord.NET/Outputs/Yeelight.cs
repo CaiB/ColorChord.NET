@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.Visualizers;
+﻿using ColorChord.NET.Config;
+using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
@@ -11,19 +12,27 @@ namespace ColorChord.NET.Outputs
 {
     public class Yeelight : IOutput
     {
-        private IVisualizer Source;
-        private readonly string Name;
-        private bool Enabled;
-        private int Port;
-        private bool Stopping = false;
+        /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
+        public string Name { get; private init; }
+        
+        [ConfigBool("Enable", true)]
+        public bool Enabled { get; set; }
 
-        private bool DoDeviceListing;
+        [ConfigInt("Port", 0, 65535, 14887)]
+        private readonly int Port = 14887;
+
+        [ConfigBool("ListDevices", false)]
+        private readonly bool DoDeviceListing = false;
+
+        private readonly IVisualizer Source;
 
         private TcpListener TCPServer;
 
         private Thread ClientAcceptor;
         
-        private readonly List<TcpClient> Clients = new List<TcpClient>();
+        private readonly List<TcpClient> Clients = new();
+
+        private bool Stopping = false;
 
         //private ManualResetEventSlim ResetEvent;
 
@@ -41,22 +50,13 @@ namespace ColorChord.NET.Outputs
 
         private readonly string DiscoverRequest = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1982\r\nMAN: \"ssdp:discover\"\r\nST: wifi_bulb\r\n";
 
-        public Yeelight(string name) { this.Name = name; }
-
-        public void ApplyConfig(Dictionary<string, object> options)
+        public Yeelight(string name, Dictionary<string, object> config)
         {
-            Log.Info("Reading config for Yeelight \"" + this.Name + "\"");
+            this.Name = name;
+            this.Source = Configurer.FindVisualizer(this, config);
+            Configurer.Configure(this, config);
 
-            if (!options.ContainsKey("VisualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["VisualizerName"])) { Log.Error("Tried to create Yeelight with missing or invalid visualizer."); return; }
-            this.Source = ColorChord.VisualizerInsts[(string)options["VisualizerName"]];
             this.Source.AttachOutput(this);
-
-            this.Port = ConfigTools.CheckInt(options, "Port", 0, 65535, 14887, true);
-            this.DoDeviceListing = ConfigTools.CheckBool(options, "ListDevices", false, true);
-
-            this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
-
-            ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
         }
 
         public void Start()
@@ -71,16 +71,11 @@ namespace ColorChord.NET.Outputs
             this.TCPServer = new TcpListener(new IPEndPoint(IPAddress.Any, this.Port));
             this.TCPServer.Start();
             Log.Info("Waiting for Yeelight clients");
-            if(this.DoDeviceListing)
-            {
-                List<string> Responses = new List<string>();
-                IPEndPoint Endpoint = new IPEndPoint(IPAddress.Parse("239.255.255.250"), 1982);
-                UdpClient UDPClient = new UdpClient { ExclusiveAddressUse = false };
-                UDPClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                UDPClient.Client.Bind(Endpoint);
 
-                foreach (string Line in Responses) { Log.Info(Line); }
-            }
+            // Send discovery request to find clients
+            if(this.DoDeviceListing) { DoDiscovery(); }
+
+            // Handles incoming TCP connections and adds the clients to the list
             while (!this.Stopping)
             {
                 if(!this.TCPServer.Pending()) // No clients want to connect
@@ -113,7 +108,18 @@ namespace ColorChord.NET.Outputs
             }
         }
 
-        private string ParseDiscoverResponse()
+        private void DoDiscovery()
+        {
+            List<string> Responses = new();
+            IPEndPoint Endpoint = new(IPAddress.Parse("239.255.255.250"), 1982);
+            UdpClient UDPClient = new() { ExclusiveAddressUse = false };
+            UDPClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            UDPClient.Client.Bind(Endpoint);
+
+            foreach (string Line in Responses) { Log.Info(Line); }
+        }
+
+        private static string ParseDiscoverResponse()
         {
             string Response = "HTTP/1.1 200 OK\r\nCache-Control: max-age=3600\r\nDate: \r\nLocation: yeelight://192.168.1.239:55443\r\nid: 0x000000000015243f\r\nmodel: color \r\nfw_ver: 18 \r\nsupport: get_prop set_default set_power toggle set_bright start_cf stop_cf set_scene cron_add cron_get cron_del set_ct_abx set_rgb\r\nname: lolwut\r\n";
             string[] Lines = Response.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);

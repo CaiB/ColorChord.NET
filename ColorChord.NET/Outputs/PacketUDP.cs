@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.Visualizers;
+﻿using ColorChord.NET.Config;
+using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
@@ -9,22 +10,24 @@ namespace ColorChord.NET.Outputs
 {
     public class PacketUDP : IOutput
     {
-        private IVisualizer Source;
-        private readonly UdpClient Sender = new UdpClient();
-        private IPEndPoint Destination;
-
         /// <summary> Instance name, for identification and attaching controllers. </summary>
-        private readonly string Name;
+        public string Name { get; private init; }
 
         /// <summary> Number of empty bytes to leave at the front of the packet. </summary>
+        [ConfigInt("PaddingFront", 0, 1000, 0)]
         public uint FrontPadding { get; set; }
 
         /// <summary> Number of empty bytes to leave at the end of the packet. </summary>
+        [ConfigInt("PaddingBack", 0, 1000, 0)]
         public uint BackPadding { get; set; }
 
         /// <summary> The data to place into the padding bytes specified by <see cref="FrontPadding"/> and <see cref="BackPadding"/>. </summary>
+        [ConfigInt("PaddingContent", 0x00, 0xFF, 0x00)]
         public byte PaddingContent { get; set; }
-        
+
+        [ConfigString("LEDPattern", "RGB")]
+        private readonly string LEDPatternFromConfig = "RGB";
+
         /// <summary> How many bytes a single LED takes up in the packet. </summary>
         public byte LEDLength { get; private set; }
 
@@ -35,72 +38,77 @@ namespace ColorChord.NET.Outputs
         /// <summary> Whether the output has a yellow channel that requires processing colours differently. </summary>
         public bool UsesChannelY;
 
+        [ConfigString("Protocol", "Raw")]
+        private readonly string ProtocolFromConfig = "raw";
+
         /// <summary> What format to send the packets in. </summary>
         public SendMode Mode { get; private set; }
 
         /// <summary> The max length of individual packets for protocols that support splitting. </summary>
+        [ConfigInt("MaxPacketLength", -1, 65535, -1)]
         public int MaxPacketLength { get; private set; }
 
         /// <summary> For protocols that support variable-length packets, determind whether all packets are the same size, remainder filled with <see cref="PaddingContent"/>. </summary>
+        [ConfigBool("ConstantPacketLength", false)]
         public bool UseConstantPacketLength { get; private set; }
 
         /// <summary> Whether this sender instance is enabled (can send packets). </summary>
+        [ConfigBool("Enable", true)]
         public bool Enabled { get; set; }
 
         /// <summary> Whether the LED matrix uses shorter wiring, reversing the direction of every other line. </summary>
+        [ConfigBool("ZigZag", false)]
         public bool ArrayIsZigZag { get; set; }
 
         /// <summary> Whether LEDs run left-to-right (false) or right-to-left (true). </summary>
+        [ConfigBool("Mirror", false)]
         public bool MirrorOutput { get; set; }
 
         /// <summary> Whether the output should be rotated 180 degrees. </summary>
+        [ConfigBool("RotatedArray", false)]
         public bool RotateOutput { get; set; }
 
         /// <summary> How many LEDs wide the matrix/strip is. </summary>
+        [ConfigInt("SizeX", 1, 100000, 1)]
         public int MatrixSizeX { get; set; } = 1;
 
         /// <summary> How many LEDs tall the matrix is. </summary>
+        [ConfigInt("SizeY", 1, 100000, 1)]
         public int MatrixSizeY { get; set; } = 1;
 
-        public PacketUDP(string name)
+        [ConfigInt("Port", 1, 65535, 7777)]
+        private readonly ushort PortFromConfig = 7777;
+
+        [ConfigString("IP", "127.0.0.1")]
+        private readonly string IPFromConfig = "127.0.0.1";
+
+        /// <summary> Where the packets will be sent. </summary>
+        private readonly IPEndPoint Destination;
+
+        private readonly IVisualizer Source;
+        private readonly UdpClient Sender = new();
+
+        public PacketUDP(string name, Dictionary<string, object> config)
         {
             this.Name = name;
+            this.Source = Configurer.FindVisualizer(this, config);
+            Configurer.Configure(this, config);
+
+            // Post-configuration setup
+            this.Mode = ReadProtocol(this.ProtocolFromConfig);
+            if (this.PortFromConfig < 1024) { Log.Warn("It is not recommended to use ports below 1024, as they are reserved. UDP sender is operating on port " + this.PortFromConfig + "."); }
+            this.Destination = new IPEndPoint(IPAddress.Parse(this.IPFromConfig), this.PortFromConfig);
+            ReadLEDPattern(this.LEDPatternFromConfig);
+
+            this.Source.AttachOutput(this);
         }
 
         public void Start() { }
         public void Stop() { }
 
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-            Log.Info("Reading config for PacketUDP \"" + this.Name + "\".");
-
-            if (!options.ContainsKey("VisualizerName") || !ColorChord.VisualizerInsts.ContainsKey((string)options["VisualizerName"])) { Log.Error("Tried to create PacketUDP with missing or invalid visualizer."); return; }
-            this.Source = ColorChord.VisualizerInsts[(string)options["VisualizerName"]];
-            this.Source.AttachOutput(this);
-
-            ReadProtocol(ConfigTools.CheckString(options, "Protocol", "Raw", true));
-            int Port = ConfigTools.CheckInt(options, "Port", 0, 65535, GetDefaultPort(this.Mode), true);
-            if (Port < 1024) { Log.Warn("It is not recommended to use ports below 1024, as they are reserved. UDP sender is operating on port " + Port + "."); }
-            string IP = ConfigTools.CheckString(options, "IP", "127.0.0.1", true);
-            this.Destination = new IPEndPoint(IPAddress.Parse(IP), Port);
-            this.FrontPadding = (uint)ConfigTools.CheckInt(options, "PaddingFront", 0, 1000, 0, true);
-            this.BackPadding = (uint)ConfigTools.CheckInt(options, "PaddingBack", 0, 1000, 0, true);
-            this.PaddingContent = (byte)ConfigTools.CheckInt(options, "PaddingContent", 0x00, 0xFF, 0x00, true);
-            this.MaxPacketLength = ConfigTools.CheckInt(options, "MaxPacketLength", -1, 65535, -1, true);
-            this.UseConstantPacketLength = ConfigTools.CheckBool(options, "ConstantPacketLength", false, true);
-            this.ArrayIsZigZag = ConfigTools.CheckBool(options, "ZigZag", false, true);
-            this.MirrorOutput = ConfigTools.CheckBool(options, "Mirror", false, true);
-            this.RotateOutput = ConfigTools.CheckBool(options, "RotatedArray", false, true);
-            this.MatrixSizeX = ConfigTools.CheckInt(options, "SizeX", 1, 100000, 1, true);
-            this.MatrixSizeY = ConfigTools.CheckInt(options, "SizeY", 1, 100000, 1, true);
-            this.Enabled = ConfigTools.CheckBool(options, "Enable", true, true);
-            ReadLEDPattern(ConfigTools.CheckString(options, "LEDPattern", "RGB", true));
-
-            ConfigTools.WarnAboutRemainder(options, typeof(IOutput));
-        }
-
         /// <summary> Gets the default port for the given protocol. </summary>
         /// <param name="mode"> The protocol being used for sending. </param>
+        // TODO: Need to figure out how to re-integrate this with the new config system.
         private static ushort GetDefaultPort(SendMode mode)
         {
             return mode switch
@@ -134,11 +142,11 @@ namespace ColorChord.NET.Outputs
             }
         }
 
-        /// <summary> Sets the current protocol mode in <see cref="Mode"/> from the given config entry. </summary>
+        /// <summary> Reads the name of the protocol specified in the config, and translates it to a <see cref="SendMode"/>. </summary>
         /// <param name="protocolName"> The name of the protocol, case-insensitive. </param>
-        private void ReadProtocol(string protocolName)
+        private static SendMode ReadProtocol(string protocolName)
         {
-            this.Mode = (protocolName.ToLowerInvariant()) switch
+            return protocolName.ToLowerInvariant() switch
             {
                 "raw" => SendMode.RAW,
                 "tpm2.net" => SendMode.TPM2NET,

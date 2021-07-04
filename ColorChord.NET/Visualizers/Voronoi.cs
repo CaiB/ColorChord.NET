@@ -11,7 +11,7 @@ namespace ColorChord.NET.Visualizers
     public class Voronoi : IVisualizer, IDiscrete2D
     {
         /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
-        public string Name { get; private set; }
+        public string Name { get; private init; }
 
         /// <summary> Whether this visualizer is currently active. </summary>
         [ConfigBool("Enable", true)]
