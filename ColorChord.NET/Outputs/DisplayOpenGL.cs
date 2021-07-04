@@ -77,15 +77,18 @@ namespace ColorChord.NET.Outputs
         }
         public void Stop() { } // TODO: Stop
 
-        private IDisplayMode CreateMode(string fullName, Dictionary<string, object> config) // TODO: Look over this
+        private IDisplayMode CreateMode(string fullName, Dictionary<string, object> config)
         {
             Type ObjType = Type.GetType(fullName);
-            if (!typeof(IDisplayMode).IsAssignableFrom(ObjType)) { return null; } // Does not implement the right interface.
+            if (!typeof(IDisplayMode).IsAssignableFrom(ObjType) || ObjType == null) { return null; } // Does not implement the right interface.
+
+            bool IsConfigurable = typeof(IConfigurableAttr).IsAssignableFrom(ObjType);
 
             object Instance = null;
             try
             {
-                Instance = ObjType == null ? null : Activator.CreateInstance(ObjType, this, this.Source);
+                if (IsConfigurable) { Instance = Activator.CreateInstance(ObjType, this, this.Source, config); }
+                else { Instance = Activator.CreateInstance(ObjType, this, this.Source); }
             }
             catch (MissingMethodException exc)
             {
@@ -93,14 +96,7 @@ namespace ColorChord.NET.Outputs
                 Console.WriteLine(exc);
             }
 
-            if (Instance != null)
-            {
-                IDisplayMode Instance2 = (IDisplayMode)Instance;
-                if (Instance2 is IConfigurable InstanceForConfig) { InstanceForConfig.ApplyConfig(config); }
-                else { Log.Warn("Display mode \"" + fullName + "\" does not support configuration."); }
-                return Instance2;
-            }
-            return null;
+            return Instance == null ? null : (IDisplayMode)Instance;
         }
 
         protected override void OnLoad()

@@ -1,3 +1,4 @@
+using ColorChord.NET.Config;
 using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
 using OpenTK.Graphics.OpenGL4;
@@ -7,17 +8,19 @@ using System.Collections.Generic;
 
 namespace ColorChord.NET.Outputs.Display
 {
-    public class Radar : IDisplayMode, IConfigurable
+    public class Radar : IDisplayMode, IConfigurableAttr
     {
         /// <summary> How many spokes comprise one radar rotation. More means longer history. </summary>
-        private int Spokes = 150;
+        [ConfigInt("Spokes", 1, 10000, 100)]
+        private readonly int Spokes = 150;
 
         /// <summary> How many pieces comprise one spoke. Equal to the visualizer's data count. </summary>
         private int RadiusResolution = 8;
         // TODO: Handle this changing during runtime.
 
         /// <summary> Whether to tilt the view and show spikes for beats. </summary>
-        private bool Use3DView = false;
+        [ConfigBool("Is3D", false)]
+        private readonly bool Use3DView = false;
 
         /// <summary> How many floats comprise one vertex of data sent to the GPU. </summary>
         private const byte DATA_PER_VERTEX = 9;
@@ -59,25 +62,17 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> Whether there is new data to be uploaded to the texture. </summary>
         private bool NewData = false;
 
-        public Radar(DisplayOpenGL parent, IVisualizer visualizer)
+        public Radar(DisplayOpenGL parent, IVisualizer visualizer, Dictionary<string, object> config)
         {
-            if (!(visualizer is IDiscrete1D))
+            if (visualizer is not IDiscrete1D)
             {
                 Log.Error("Radar cannot use the provided visualizer, as it does not output 1D discrete data.");
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IDiscrete1D.");
             }
+            Configurer.Configure(this, config);
             this.HostWindow = parent;
             this.DataSource = (IDiscrete1D)visualizer;
             this.RadiusResolution = this.DataSource.GetCountDiscrete();
-        }
-
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-            Log.Info("Reading config for Radar.");
-            this.Spokes = ConfigTools.CheckInt(options, "Spokes", 1, 10000, 100, true);
-            this.Use3DView = ConfigTools.CheckBool(options, "Is3D", false, true);
-
-            ConfigTools.WarnAboutRemainder(options, typeof(IDisplayMode));
         }
 
         public void Load()

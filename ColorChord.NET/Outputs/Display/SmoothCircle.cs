@@ -4,10 +4,11 @@ using System;
 using OpenTK.Graphics.OpenGL4;
 using System.Collections.Generic;
 using OpenTK.Mathematics;
+using ColorChord.NET.Config;
 
 namespace ColorChord.NET.Outputs.Display
 {
-    public class SmoothCircle : IDisplayMode, IConfigurable
+    public class SmoothCircle : IDisplayMode, IConfigurableAttr
     {
         // TODO: Use only the central square in the window, rather than assuming a 1:1 aspect ratio and rendering an ellipse
 
@@ -18,7 +19,8 @@ namespace ColorChord.NET.Outputs.Display
         private readonly IContinuous1D DataSource;
 
         /// <summary> False just renders the ring, true also renders a decaying persistence effect, appearing to go off to infinity. </summary>
-        private bool IsInfinity = true;
+        [ConfigBool("IsInfinity", false)]
+        public bool IsInfinity { get; set; }
 
         /// <summary> Used to create the current ring, with transparent background and no antialiasing. </summary>
         /// <remarks> Used only in infinity mode. </remarks>
@@ -85,13 +87,14 @@ namespace ColorChord.NET.Outputs.Display
         /// <remarks> Used only in infinity mode. </remarks>
         bool CurrentFB;
 
-        public SmoothCircle(DisplayOpenGL parent, IVisualizer visualizer)
+        public SmoothCircle(DisplayOpenGL parent, IVisualizer visualizer, Dictionary<string, object> config)
         {
-            if (!(visualizer is IContinuous1D))
+            if (visualizer is not IContinuous1D)
             {
                 Log.Error("SmoothStrip cannot use the provided visualizer, as it does not output 1D continuous data.");
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IContinuous1D.");
             }
+            Configurer.Configure(this, config);
             this.HostWindow = parent;
             this.DataSource = (IContinuous1D)visualizer;
         }
@@ -199,14 +202,6 @@ namespace ColorChord.NET.Outputs.Display
 
             this.BufferA.Resize(width, height);
             this.BufferB.Resize(width, height);
-        }
-
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-            Log.Info("Reading config for SmoothCircle.");// + this.Name + "\".");
-            this.IsInfinity = ConfigTools.CheckBool(options, "IsInfinity", false, true);
-
-            ConfigTools.WarnAboutRemainder(options, typeof(IDisplayMode));
         }
 
         public void Load()

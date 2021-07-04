@@ -1,12 +1,12 @@
-﻿using ColorChord.NET.Visualizers.Formats;
+﻿using ColorChord.NET.Config;
+using ColorChord.NET.Visualizers.Formats;
 using OpenTK.Graphics.OpenGL4;
-using OpenTK.Mathematics;
 using System;
 using System.Collections.Generic;
 
 namespace ColorChord.NET.Outputs.Display
 {
-    public class NoiseField : IDisplayMode, IConfigurable
+    public class NoiseField : IDisplayMode, IConfigurableAttr
     {
         /// <summary> This needs to correspond to NOTE_QTY in the fragment shaders. </summary>
         private const int MAX_COUNT = 12;
@@ -16,8 +16,16 @@ namespace ColorChord.NET.Outputs.Display
 
         private Shader Shader;
 
-        private float SizeMult1, SizeMult2;
-        private float Time, TimeIncr;
+        [ConfigFloat("Size1", 0.0F, 10000.0F, 8.0F)]
+        public float SizeMult1 { get; set; }
+
+        [ConfigFloat("Size2", 0.0F, 10000.0F, 3.5F)]
+        public float SizeMult2 { get; set; }
+
+        [ConfigFloat("Speed", 0.0F, 10000.0F, 5.0F)]
+        public float TimeIncr { get; set; }
+
+        private float Time;
 
         private int LocationSizeMult1, LocationSizeMult2, LocationTime, LocationOffset;
         private int LocationColours, LocationStarts;
@@ -39,7 +47,7 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> Whether this output is ready to accept data and draw. </summary>
         private bool SetupDone = false;
 
-        public NoiseField(DisplayOpenGL parent, IVisualizerFormat visualizer)
+        public NoiseField(DisplayOpenGL parent, IVisualizerFormat visualizer, Dictionary<string, object> config)
         {
             if(visualizer is not IContinuous1D)
             {
@@ -48,16 +56,7 @@ namespace ColorChord.NET.Outputs.Display
             }
             this.HostWindow = parent;
             this.DataSource = (IContinuous1D)visualizer;
-        }
-
-        public void ApplyConfig(Dictionary<string, object> options)
-        {
-            Log.Info("Reading config for NoiseField.");
-            this.SizeMult1 = ConfigTools.CheckFloat(options, "Size1", 0.0F, 10000.0F, 8.0F, true) / 1000F;
-            this.SizeMult2 = ConfigTools.CheckFloat(options, "Size2", 0.0F, 10000.0F, 3.5F, true) / 1000F;
-            this.TimeIncr = ConfigTools.CheckFloat(options, "Speed", 0.0F, 10000.0F, 5.0F, true) / 1000F;
-
-            ConfigTools.WarnAboutRemainder(options, typeof(IDisplayMode));
+            Configurer.Configure(this, config);
         }
 
         public void Load()
