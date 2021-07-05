@@ -64,7 +64,7 @@ namespace ColorChord.NET.Visualizers
         private bool KeepGoing = true;
 
         /// <summary> The thread on which input note data is processed by this visualizer. </summary>
-        private Thread ProcessThread;
+        private Thread? ProcessThread;
 
         public Cells(string name, Dictionary<string, object> config)
         {
@@ -86,7 +86,7 @@ namespace ColorChord.NET.Visualizers
         public void Stop()
         {
             this.KeepGoing = false;
-            this.ProcessThread.Join();
+            this.ProcessThread?.Join();
         }
 
         public void AttachOutput(IOutput output) { if (output != null) { this.Outputs.Add(output); } }

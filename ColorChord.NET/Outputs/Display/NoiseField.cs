@@ -14,7 +14,7 @@ namespace ColorChord.NET.Outputs.Display
         private readonly DisplayOpenGL HostWindow;
         private readonly IContinuous1D DataSource;
 
-        private Shader Shader;
+        private Shader? Shader;
 
         [ConfigFloat("Size1", 0.0F, 10000.0F, 8.0F)]
         public float SizeMult1 { get; set; }
@@ -147,7 +147,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             if (!this.SetupDone) { return; }
             this.Time += this.TimeIncr;
-            this.Shader.Use();
+            this.Shader!.Use();
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.Uniform1(this.LocationStarts, 12, this.Starts);
             GL.Uniform1(this.LocationColours, 36, this.Colours);
@@ -164,7 +164,7 @@ namespace ColorChord.NET.Outputs.Display
             if (!this.SetupDone) { return; }
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.DeleteBuffer(this.VertexBufferHandle);
-            this.Shader.Dispose();
+            this.Shader?.Dispose();
         }
 
         public bool SupportsFormat(IVisualizerFormat format) => format is IContinuous1D;

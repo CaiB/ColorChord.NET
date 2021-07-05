@@ -12,7 +12,7 @@ namespace ColorChord.NET.Outputs.Display
     {
         private readonly DisplayOpenGL HostWindow;
 
-        private Shader Shader;
+        private Shader? Shader;
 
         private static readonly float[] DefaultGeometryData = new float[] // {[X,Y,R,G,B]} x 6
         { // X   Y    R  G  B
@@ -66,7 +66,7 @@ namespace ColorChord.NET.Outputs.Display
         public void Render()
         {
             if (!this.IsReady) { return; }
-            this.Shader.Use();
+            this.Shader!.Use();
             GL.BindVertexArray(this.VertexArrayHandle);
 
             float[] Means = new float[12];
@@ -88,7 +88,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             this.Resolution = new Vector2(width, height);
 
-            if (!this.IsReady) { return; }
+            if (!this.IsReady || this.Shader == null) { return; }
 
             this.Shader.Use();
             GL.Uniform2(this.LocationResolution, ref this.Resolution);
@@ -126,7 +126,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.DeleteBuffer(this.VertexBufferHandle);
-            this.Shader.Dispose();
+            this.Shader?.Dispose();
         }
 
         public bool SupportsFormat(IVisualizerFormat format) => true;

@@ -18,6 +18,7 @@ namespace ColorChord.NET.Config
         /// <exception cref="NotImplementedException">If the attribute is one that is not yet supported.</exception>
         public static bool Configure(object targetObj, Dictionary<string, object> config)
         {
+
             Log.Info("Reading config for " + targetObj?.GetType()?.Name + '.');
             if (targetObj is not IConfigurableAttr Target)
             {
@@ -30,7 +31,7 @@ namespace ColorChord.NET.Config
 
             foreach(FieldInfo Field in Fields)
             {
-                Attribute Attr = Attribute.GetCustomAttribute(Field, typeof(ConfigAttribute));
+                Attribute? Attr = Attribute.GetCustomAttribute(Field, typeof(ConfigAttribute));
                 if(Attr is null) { continue; } // Field without attribute, ignore
                 if(Attr is ConfigIntAttribute IntAttr)
                 {
@@ -82,7 +83,7 @@ namespace ColorChord.NET.Config
 
             foreach(PropertyInfo Prop in Properties)
             {
-                Attribute Attr = Attribute.GetCustomAttribute(Prop, typeof(ConfigAttribute));
+                Attribute? Attr = Attribute.GetCustomAttribute(Prop, typeof(ConfigAttribute));
                 if (Attr is null) { continue; } // Property without attribute, ignore
                 if (Attr is ConfigIntAttribute IntAttr)
                 {
@@ -147,7 +148,7 @@ namespace ColorChord.NET.Config
         /// <param name="target">The output that will attach to the visualizer.</param>
         /// <param name="config">The config entries which will be used in finding the appropriate visualizer.</param>
         /// <returns>The visualizer that this output should attach to.</returns>
-        public static IVisualizer FindVisualizer(IOutput target, Dictionary<string, object> config)
+        public static IVisualizer? FindVisualizer(IOutput target, Dictionary<string, object> config)
         {
             const string VIZ_NAME = "VisualizerName";
             if (!config.ContainsKey(VIZ_NAME) || !ColorChord.VisualizerInsts.ContainsKey((string)config[VIZ_NAME]))
@@ -163,9 +164,9 @@ namespace ColorChord.NET.Config
         /// <param name="config">The config entries which will be used in finding the appropriate visualizer.</param>
         /// <param name="acceptableFormat">The <see cref="IVisualizerFormat"/> type that is accepted by this output.</param>
         /// <returns>The visualizer that this output should attach to.</returns>
-        public static IVisualizer FindVisualizer(IOutput target, Dictionary<string, object> config, Type acceptableFormat)
+        public static IVisualizer? FindVisualizer(IOutput target, Dictionary<string, object> config, Type acceptableFormat)
         {
-            IVisualizer Visualizer = FindVisualizer(target, config);
+            IVisualizer? Visualizer = FindVisualizer(target, config);
             if (!target.GetType().IsAssignableFrom(acceptableFormat)) { Log.Error($"{target.GetType()?.Name} only supports {acceptableFormat.Name} visualizers, cannot use {target.GetType()?.Name}"); }
             return Visualizer;
         }
@@ -231,7 +232,9 @@ namespace ColorChord.NET.Config
         /// <returns>Either the configured value, or the default. No validity checking is done.</returns>
         private static string CheckString(Dictionary<string, object> config, ConfigStringAttribute strAttr)
         {
-            return config.ContainsKey(strAttr.Name) ? config[strAttr.Name].ToString() : strAttr.DefaultValue;
+            if(!config.ContainsKey(strAttr.Name)) { return strAttr.DefaultValue; }
+            string? Output = config[strAttr.Name].ToString();
+            return Output ?? strAttr.DefaultValue;
         }
     }
 }

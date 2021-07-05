@@ -9,7 +9,7 @@ namespace ColorChord.NET.Outputs.Display
         private readonly DisplayOpenGL HostWindow;
         private readonly IDiscrete2D DataSource;
 
-        private Shader Shader;
+        private Shader? Shader;
 
         private int CountX, CountY;
         private readonly float[] GeometryData = new float[]
@@ -98,7 +98,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             if (!this.SetupDone) { return; }
 
-            this.Shader.Use();
+            this.Shader!.Use();
             if (this.NewData) { GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.CountX, this.CountY, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData); }
             this.NewData = false;
 
@@ -113,7 +113,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.DeleteBuffer(this.VertexBufferHandle);
-            this.Shader.Dispose();
+            this.Shader?.Dispose();
         }
 
         public bool SupportsFormat(IVisualizerFormat format) => format is IDiscrete2D;

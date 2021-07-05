@@ -10,7 +10,7 @@ namespace ColorChord.NET.Outputs.Display
         private readonly DisplayOpenGL HostWindow;
         private readonly IContinuous1D DataSource;
 
-        private Shader Shader;
+        private Shader? Shader;
 
         private static readonly float[] DefaultGeometryData = new float[] // {[X,Y,R,G,B]} x 6
         { // X   Y    R  G  B
@@ -89,7 +89,7 @@ namespace ColorChord.NET.Outputs.Display
 
         public void Render()
         {
-            this.Shader.Use();
+            this.Shader!.Use();
             GL.BindVertexArray(this.VertexArrayHandle);
             if (this.NewData) { GL.BufferData(BufferTarget.ArrayBuffer, this.GeometryData.Length * sizeof(float), this.GeometryData, BufferUsageHint.DynamicDraw); }
             GL.DrawArrays(PrimitiveType.Triangles, 0, this.GeometryData.Length / 5);
@@ -116,7 +116,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.DeleteBuffer(this.VertexBufferHandle);
-            this.Shader.Dispose();
+            this.Shader?.Dispose();
         }
 
         public bool SupportsFormat(IVisualizerFormat format) => format is IContinuous1D;

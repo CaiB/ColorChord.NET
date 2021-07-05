@@ -24,14 +24,14 @@ namespace ColorChord.NET.Outputs.Display
 
         /// <summary> Used to create the current ring, with transparent background and no antialiasing. </summary>
         /// <remarks> Used only in infinity mode. </remarks>
-        private Shader CircleShader;
+        private Shader? CircleShader;
 
         /// <summary> Used to copy the old ring down a level, but slightly smaller. Colour passthrough. </summary>
         /// <remarks> Used only in infinity mode. </remarks>
-        private Shader HistoryShader;
+        private Shader? HistoryShader;
         
         /// <summary> Used to render the newest (or only) ring, with antialiasing. </summary>
-        private Shader CircleFinishShader;
+        private Shader? CircleFinishShader;
 
         /// <summary> Just a full-size rectangle, with only XY info. </summary>
         private static readonly float[] RingShaderGeometry = new float[] // {[X,Y]} x 6
@@ -81,7 +81,7 @@ namespace ColorChord.NET.Outputs.Display
 
         /// <summary> The framebuffers rendering to each other to achieve the infinity effect. </summary>
         /// <remarks> Used only in infinity mode. </remarks>
-        FrameBuffer BufferA, BufferB;
+        FrameBuffer? BufferA, BufferB;
 
         /// <summary> Which framebuffer needs to be drawn into this frame. Swaps with every frame in infinity mode. </summary>
         /// <remarks> Used only in infinity mode. </remarks>
@@ -138,11 +138,11 @@ namespace ColorChord.NET.Outputs.Display
             if (this.IsInfinity)
             {
                 // Bind the current buffer to draw into.
-                if (this.CurrentFB) { BufferA.Bind(); }
-                else { BufferB.Bind(); }
+                if (this.CurrentFB) { BufferA!.Bind(); }
+                else { BufferB!.Bind(); }
 
                 // Render the ring into the buffer.
-                this.CircleShader.Use();
+                this.CircleShader!.Use();
                 GL.BindVertexArray(this.VertexArrayHandle);
                 GL.Uniform1(this.LocationStarts, 12, this.Starts);
                 GL.Uniform1(this.LocationColours, 36, this.Colours);
@@ -152,19 +152,19 @@ namespace ColorChord.NET.Outputs.Display
                 // Bind the opposite buffer, and use the one now containing the ring as a texture.
                 if (this.CurrentFB)
                 {
-                    BufferA.Unbind();
-                    BufferA.UseTextureColor();
-                    BufferB.Bind();
+                    BufferA!.Unbind();
+                    BufferA!.UseTextureColor();
+                    BufferB!.Bind();
                 }
                 else
                 {
-                    BufferB.Unbind();
-                    BufferB.UseTextureColor();
-                    BufferA.Bind();
+                    BufferB!.Unbind();
+                    BufferB!.UseTextureColor();
+                    BufferA!.Bind();
                 }
 
                 // Draw the buffer containing the newest ring into the other, but slightly smaller to push it in.
-                this.HistoryShader.Use();
+                this.HistoryShader!.Use();
                 GL.BindVertexArray(this.VertexArraySmallHandle);
                 GL.DrawArrays(PrimitiveType.Triangles, 0, BufferGeometrySmall.Length / 4);
 
@@ -179,7 +179,7 @@ namespace ColorChord.NET.Outputs.Display
             }
 
             // Whether or not we are using infinity mode, we want the newest ring to be rendered on top with antialiasing.
-            this.CircleFinishShader.Use();
+            this.CircleFinishShader!.Use();
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.Uniform1(this.LocationStartsFinish, 12, this.Starts);
             GL.Uniform1(this.LocationColoursFinish, 36, this.Colours);
@@ -194,14 +194,14 @@ namespace ColorChord.NET.Outputs.Display
             this.Resolution = new Vector2(width, height);
 
             if(!this.SetupDone) { return; }
-            this.CircleShader.Use();
+            this.CircleShader!.Use();
             GL.Uniform2(this.LocationResolution, ref this.Resolution);
 
-            this.CircleFinishShader.Use();
+            this.CircleFinishShader!.Use();
             GL.Uniform2(this.LocationResolutionFinish, ref this.Resolution);
 
-            this.BufferA.Resize(width, height);
-            this.BufferB.Resize(width, height);
+            this.BufferA!.Resize(width, height);
+            this.BufferB!.Resize(width, height);
         }
 
         public void Load()
@@ -269,9 +269,9 @@ namespace ColorChord.NET.Outputs.Display
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.DeleteBuffer(this.VertexBufferHandle);
             GL.DeleteBuffer(this.VertexArraySmallHandle);
-            this.CircleShader.Dispose();
-            this.HistoryShader.Dispose();
-            this.CircleFinishShader.Dispose();
+            this.CircleShader?.Dispose();
+            this.HistoryShader?.Dispose();
+            this.CircleFinishShader?.Dispose();
         }
 
         /// <summary> Only <see cref="IContinuous1D"/> visualizers are accepted. </summary>

@@ -29,11 +29,11 @@ namespace ColorChord.NET.Outputs
         private readonly string LEDPatternFromConfig = "RGB";
 
         /// <summary> How many bytes a single LED takes up in the packet. </summary>
-        public byte LEDLength { get; private set; }
+        public byte LEDLength { get; private set; } = 0;
 
         /// <summary> A mapping from the individual LED's content index to values in <see cref="Channel"/>. </summary>
         /// <remarks> Length = <see cref="LEDLength"/>. </remarks>
-        public byte[] LEDValueMapping { get; private set; }
+        public byte[] LEDValueMapping { get; private set; } = Array.Empty<byte>();
 
         /// <summary> Whether the output has a yellow channel that requires processing colours differently. </summary>
         public bool UsesChannelY;
@@ -91,7 +91,9 @@ namespace ColorChord.NET.Outputs
         public PacketUDP(string name, Dictionary<string, object> config)
         {
             this.Name = name;
-            this.Source = Configurer.FindVisualizer(this, config);
+            IVisualizer? Source = Configurer.FindVisualizer(this, config);
+            if (Source == null) { throw new Exception($"{GetType().Name} \"{name}\" could not find requested visualizer."); }
+            this.Source = Source;
             Configurer.Configure(this, config);
 
             // Post-configuration setup

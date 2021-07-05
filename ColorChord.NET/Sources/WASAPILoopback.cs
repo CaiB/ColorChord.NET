@@ -7,6 +7,7 @@ using Vannatech.CoreAudio.Constants;
 using Vannatech.CoreAudio.Enumerations;
 using Vannatech.CoreAudio.Externals;
 using Vannatech.CoreAudio.Interfaces;
+using static ColorChord.NET.AudioTools;
 
 namespace ColorChord.NET.Sources
 {
@@ -103,7 +104,9 @@ namespace ColorChord.NET.Sources
 
             ErrorCode = this.Client.GetMixFormat(out IntPtr MixFormatPtr);
             if (IsErrorAndOut(ErrorCode, "Could not get mix format.")) { return; }
-            this.MixFormat = AudioTools.FormatFromPointer(MixFormatPtr);
+            WAVEFORMATEX? Format = AudioTools.FormatFromPointer(MixFormatPtr);
+            if (Format == null) { Log.Error("Mix format was null"); return; }
+            else { this.MixFormat = (WAVEFORMATEX)Format; }
 
             ErrorCode = this.Client.GetDevicePeriod(out ulong DefaultInterval, out ulong MinimumInterval);
             if (IsErrorAndOut(ErrorCode, "Could not get device timing info.")) { return; }

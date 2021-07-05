@@ -10,7 +10,7 @@ namespace ColorChord.NET.Outputs.Display
         private readonly DisplayOpenGL HostWindow;
         private readonly IDiscrete1D DataSource;
 
-        private Shader Shader;
+        private Shader? Shader;
 
         private int BlockCount;
         private float[] GeometryData; // {[X,Y,R,G,B] x 6} x BlockCount
@@ -94,7 +94,7 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> Called whenever we want to render a frame. </summary>
         public void Render()
         {
-            this.Shader.Use();
+            this.Shader!.Use();
             GL.BindVertexArray(this.VertexArrayHandle);
             if (this.NewData) { GL.BufferData(BufferTarget.ArrayBuffer, this.GeometryData.Length * sizeof(float), this.GeometryData, BufferUsageHint.DynamicDraw); }
             GL.DrawArrays(PrimitiveType.Triangles, 0, this.GeometryData.Length / 5);
@@ -121,7 +121,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.DeleteBuffer(this.VertexBufferHandle);
-            this.Shader.Dispose();
+            this.Shader?.Dispose();
         }
 
         public bool SupportsFormat(IVisualizerFormat format) => format is IDiscrete1D;

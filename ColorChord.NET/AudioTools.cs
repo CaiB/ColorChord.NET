@@ -44,7 +44,7 @@ namespace ColorChord.NET
             public UInt16 cbSize;
         }
 
-        public static WAVEFORMATEX FormatFromPointer(IntPtr Pointer) => (WAVEFORMATEX)Marshal.PtrToStructure(Pointer, typeof(WAVEFORMATEX));
+        public static WAVEFORMATEX? FormatFromPointer(IntPtr Pointer) => (WAVEFORMATEX?)Marshal.PtrToStructure(Pointer, typeof(WAVEFORMATEX));
 
     }
 }

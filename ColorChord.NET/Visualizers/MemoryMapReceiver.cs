@@ -19,11 +19,11 @@ namespace ColorChord.NET.Visualizers
 
         /// <summary> The name of the memory-mapped file to look for. </summary>
         [ConfigString("MapName", "UnconfiguredMapName")]
-        private readonly string MapName;
+        private readonly string MapName = "UnconfiguredMapName";
 
         /// <summary> The name of the map mutex to look for. </summary>
         [ConfigString("MutexName", "UnconfiguredMutexName")]
-        private readonly string MapMutexName;
+        private readonly string MapMutexName = "UnconfiguredMutexName";
 
         /// <summary> How many times per second the output should be updated. </summary>
         [ConfigInt("FrameRate", 0, 1000, 60)]

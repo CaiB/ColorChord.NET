@@ -28,8 +28,9 @@ namespace ColorChord.NET.Visualizers.Formats
         public float Size;
         public byte R, G, B;
 
-        public int CompareTo(ContinuousDataUnit other)
+        public int CompareTo(ContinuousDataUnit? other)
         {
+            if (other == null) { return 1; }
             if (other.Location > this.Location) { return -1; }
             if (other.Location < this.Location) { return 1; }
             else { return 0; }

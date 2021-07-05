@@ -1,10 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text;
-using System.Threading.Tasks;
 using OpenTK.Graphics.ES30;
 
 namespace ColorChord.NET.Outputs.Display
@@ -23,13 +20,15 @@ namespace ColorChord.NET.Outputs.Display
             string VertexShaderSource, FragmentShaderSource;
 
             Assembly Asm = Assembly.GetExecutingAssembly();
-            using (Stream VertexStream = Asm.GetManifestResourceStream(PATH_PREFIX + vertexPath))
+            using (Stream? VertexStream = Asm.GetManifestResourceStream(PATH_PREFIX + vertexPath))
             {
-                using (StreamReader VertexReader = new StreamReader(VertexStream, Encoding.UTF8)) { VertexShaderSource = VertexReader.ReadToEnd(); }
+                if (VertexStream == null) { throw new Exception($"Could not load vertex shader \"{PATH_PREFIX}{vertexPath}\""); }
+                using (StreamReader VertexReader = new(VertexStream, Encoding.UTF8)) { VertexShaderSource = VertexReader.ReadToEnd(); }
             }
-            using (Stream FragmentStream = Asm.GetManifestResourceStream(PATH_PREFIX + fragmentPath))
+            using (Stream? FragmentStream = Asm.GetManifestResourceStream(PATH_PREFIX + fragmentPath))
             {
-                using (StreamReader FragmentReader = new StreamReader(FragmentStream, Encoding.UTF8)) { FragmentShaderSource = FragmentReader.ReadToEnd(); }
+                if (FragmentStream == null) { throw new Exception($"Could not load fragment shader \"{PATH_PREFIX}{vertexPath}\""); }
+                using (StreamReader FragmentReader = new(FragmentStream, Encoding.UTF8)) { FragmentShaderSource = FragmentReader.ReadToEnd(); }
             }
 
             VertexShaderHandle = GL.CreateShader(ShaderType.VertexShader);

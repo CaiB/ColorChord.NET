@@ -63,14 +63,17 @@ namespace ColorChordTests
         public class ConfigTargetInvalid : IConfigurableAttr
         {
             [ConfigInt("FakeInt", 0, 100, 50)]
-            string ThisIsNoInt;
+            public string ThisIsNoInt;
 
             [ConfigString("FakeString", "Homura is best girl")]
-            int ThisIsNoString;
+            public int ThisIsNoString;
 
             public ConfigTargetInvalid(Dictionary<string, object> config)
             {
                 Configurer.Configure(this, config);
+                ThisIsNoInt = "hello";
+                ThisIsNoString = 3;
+                Console.WriteLine(ThisIsNoInt + ThisIsNoString);
             }
         }
 

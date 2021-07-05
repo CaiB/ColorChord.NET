@@ -34,14 +34,17 @@ namespace ColorChord.NET.Outputs
             set => this.ClientRectangle = new Box2i(this.ClientRectangle.Min, new Vector2i(this.ClientRectangle.Max.X, this.ClientRectangle.Min.Y + value));
         }
 
-        private readonly IDisplayMode Display;
+        private readonly IDisplayMode? Display;
         private bool Loaded = false;
 
         public DisplayOpenGL(string name, Dictionary<string, object> config) : base(GameWindowSettings.Default, SetupNativeWindow())
         {
             this.Name = name;
             this.Title = "ColorChord.NET: " + this.Name;
-            this.Source = Configurer.FindVisualizer(this, config);
+            IVisualizer? Visualizer = Configurer.FindVisualizer(this, config);
+            if (Visualizer == null) { throw new InvalidOperationException($"{GetType().Name} cannot find visualizer to attach to"); }
+            this.Source = Visualizer;
+
             Configurer.Configure(this, config);
 
             if (config.ContainsKey("Modes")) // Make sure that everything else is configured before creating the modes!
@@ -77,14 +80,15 @@ namespace ColorChord.NET.Outputs
         }
         public void Stop() { } // TODO: Stop
 
-        private IDisplayMode CreateMode(string fullName, Dictionary<string, object> config)
+        private IDisplayMode? CreateMode(string fullName, Dictionary<string, object> config)
         {
-            Type ObjType = Type.GetType(fullName);
-            if (!typeof(IDisplayMode).IsAssignableFrom(ObjType) || ObjType == null) { return null; } // Does not implement the right interface.
+            Type? ObjType = Type.GetType(fullName);
+            if (ObjType == null) { Log.Error($"Cannot find display mode type {fullName}!"); return null; }
+            if (!typeof(IDisplayMode).IsAssignableFrom(ObjType)) { Log.Error($"Requested display mode {fullName} is not a valid display mode (must be IDisplayMode)."); return null; }
 
             bool IsConfigurable = typeof(IConfigurableAttr).IsAssignableFrom(ObjType);
 
-            object Instance = null;
+            object? Instance = null;
             try
             {
                 if (IsConfigurable) { Instance = Activator.CreateInstance(ObjType, this, this.Source, config); }
