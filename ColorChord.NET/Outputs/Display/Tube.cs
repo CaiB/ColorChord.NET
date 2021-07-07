@@ -149,8 +149,8 @@ namespace ColorChord.NET.Outputs.Display
                 this.VertexData[DataIndex++] = x;
                 this.VertexData[DataIndex++] = y;
                 this.VertexData[DataIndex++] = z;
-                this.VertexData[DataIndex++] = (float)segment / TubeResolution + (0.5F / TubeResolution);
-                this.VertexData[DataIndex++] = (float)depth / TUBE_LENGTH + (0.5F / TUBE_LENGTH);
+                this.VertexData[DataIndex++] = ((float)segment / TubeResolution) + (0.5F / TubeResolution);
+                this.VertexData[DataIndex++] = ((float)depth / TUBE_LENGTH) + (0.5F / TUBE_LENGTH);
                 this.VertexData[DataIndex++] = isLeft ? 0F : 1F;
                 this.VertexData[DataIndex++] = normal.X;
                 this.VertexData[DataIndex++] = normal.Y;
@@ -201,8 +201,8 @@ namespace ColorChord.NET.Outputs.Display
                     float SegEndX = MathF.Cos(MathF.PI * 2 * (seg + 1) / TubeResolution);
                     //float SegEndY = (float)(Math.Sin(Math.PI * 2 * (seg + 1) / TubeResolution) * (1 - ((float)(i + 1) / TUBE_LENGTH)) * (1 - Math.Abs(Math.Cos(Frame / 10F)) * 0.2));
                     float SegEndY = MathF.Sin(MathF.PI * 2 * (seg + 1) / TubeResolution);
-                    float FrontZ = (i == 0) ? 0 : -1 - i * TUBE_LENGTH_UNITS / TUBE_LENGTH;
-                    float BackZ = -1 - (i + 1) * TUBE_LENGTH_UNITS / TUBE_LENGTH;
+                    float FrontZ = (i == 0) ? 0 : -1 - (i * TUBE_LENGTH_UNITS / TUBE_LENGTH);
+                    float BackZ = -1 - ((i + 1) * TUBE_LENGTH_UNITS / TUBE_LENGTH);
 
                     // Radius multipliers to make cone
                     float OutMult = 1 - (i / (TUBE_LENGTH * 2.02F));

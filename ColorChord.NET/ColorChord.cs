@@ -18,8 +18,8 @@ namespace ColorChord.NET
         private static string ConfigFile = "config.json";
         public static bool Debug = false;
 
-        public static readonly Dictionary<string, IVisualizer> VisualizerInsts = new Dictionary<string, IVisualizer>();
-        public static readonly Dictionary<string, IOutput> OutputInsts = new Dictionary<string, IOutput>();
+        public static readonly Dictionary<string, IVisualizer> VisualizerInsts = new();
+        public static readonly Dictionary<string, IOutput> OutputInsts = new();
         //public static Dictionary<string, IController> Controllers;
         public static IAudioSource? Source;
 
@@ -186,13 +186,12 @@ namespace ColorChord.NET
         /// <returns> A Dictionary containing all properties contained in the parent element. </returns>
         private static Dictionary<string, object> ToDict(JToken parent, bool convertComplex = false)
         {
-            Dictionary<string, object> Items = new Dictionary<string, object>();
+            Dictionary<string, object> Items = new();
             foreach(JToken ItemToken in parent.Children())
             {
                 JProperty Item = (JProperty)ItemToken;
-                if (Item.Value is JArray && convertComplex) // TODO: See if Object needs to be handled.
+                if (Item.Value is JArray Array && convertComplex) // TODO: See if Object needs to be handled.
                 {
-                    JArray Array = (JArray)Item.Value;
                     Dictionary<string, object>[] ArrayItems = new Dictionary<string, object>[Array.Count];
                     for (int i = 0; i < ArrayItems.Length; i++)
                     {

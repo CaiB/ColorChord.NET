@@ -18,7 +18,7 @@ namespace ColorChord.NET.Outputs.Display
 
         private int ColorWidth, ColorHeight;
 
-        public Color4 ClearColour = new Color4(1F, 0F, 1F, 0F); // Transparent?
+        public Color4 ClearColour = new(1F, 0F, 1F, 0F); // Transparent?
 
         /// <summary> Use this ctor if you don't intend to use the depth information as a texture. </summary>
         public FrameBuffer(int width, int height)

@@ -207,7 +207,7 @@ namespace ColorChord.NET
         /// <summary> Runs until <see cref="KeepGoing"/> becomes false, processing incoming audio data. </summary>
         private static void DoProcessing()
         {
-            Stopwatch Timer = new Stopwatch();
+            Stopwatch Timer = new();
             while (KeepGoing)
             {
                 Timer.Restart();
@@ -302,7 +302,7 @@ namespace ColorChord.NET
                 // TODO: These descriptions aren't 100% certain.
                 // This bin is a peak, adjacent values are lower.
                 // Now we try to locate where the peak should be within this one bin.
-                float TotalAdjacentDifference = ((ValueHere - ValueLeft) + (ValueHere - ValueRight));
+                float TotalAdjacentDifference = (ValueHere - ValueLeft) + (ValueHere - ValueRight);
                 float ProportionalDifferenceLeft = (ValueHere - ValueLeft) / TotalAdjacentDifference;
                 float ProportionalDifferenceRight = (ValueHere - ValueRight) / TotalAdjacentDifference;
 

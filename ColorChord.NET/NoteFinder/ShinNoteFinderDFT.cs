@@ -231,7 +231,7 @@ namespace ColorChord.NET.NoteFinder
         // TODO: Remove this or move elsewhere, only for testing
         public void SaveData()
         {
-            using (StreamWriter Writer = new StreamWriter("testdata.csv"))
+            using (StreamWriter Writer = new("testdata.csv"))
             {
                 for (uint i = 0; i < this.AudioBuffer.Length; i++)
                 {

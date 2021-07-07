@@ -77,7 +77,7 @@ namespace ColorChord.NET.Outputs.Display
         private bool SetupDone = false;
 
         /// <summary> The current window and framebuffer resolution. (Width, Height) </summary>
-        private Vector2 Resolution = new Vector2(600, 600);
+        private Vector2 Resolution = new(600, 600);
 
         /// <summary> The framebuffers rendering to each other to achieve the infinity effect. </summary>
         /// <remarks> Used only in infinity mode. </remarks>

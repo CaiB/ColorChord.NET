@@ -133,7 +133,7 @@ namespace ColorChord.NET.Outputs.Display
             Matrix3 ViewRotation = this.Use3DView ? Matrix3.CreateRotationX(MathF.PI * -0.3F) : Matrix3.Identity;
             Vector3 ViewOffset = this.Use3DView ? ((Vector3.UnitZ * -1.3F) + (Vector3.UnitY * 0.3F)) : (Vector3.UnitZ * -1);
             
-            Vector3 NormalVec = new Vector3(0, 2, 0);
+            Vector3 NormalVec = new(0, 2, 0);
 
             // Generate geometry
             for(int Spoke = 0; Spoke < this.Spokes; Spoke++)

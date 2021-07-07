@@ -14,7 +14,7 @@ namespace ColorChord.NET.Sources
     public class WASAPILoopback : IAudioSource
     {
         private const CLSCTX CLSCTX_ALL = CLSCTX.CLSCTX_INPROC_SERVER | CLSCTX.CLSCTX_INPROC_HANDLER | CLSCTX.CLSCTX_LOCAL_SERVER | CLSCTX.CLSCTX_REMOTE_SERVER;
-        private static readonly Guid FriendlyNamePKEY = new Guid(0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0);
+        private static readonly Guid FriendlyNamePKEY = new(0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0);
         private const int FriendlyNamePKEY_PID = 14;
 
         [ConfigString("Device", "default")]
@@ -36,7 +36,7 @@ namespace ColorChord.NET.Sources
         private IAudioClient? Client;
         private IAudioCaptureClient? CaptureClient;
         private AudioTools.WAVEFORMATEX MixFormat;
-        private readonly AutoResetEvent AudioEvent = new AutoResetEvent(false);
+        private readonly AutoResetEvent AudioEvent = new(false);
         private static GCHandle AudioEventHandle;
 
         public WASAPILoopback(string name, Dictionary<string, object> config) { Configurer.Configure(this, config); }
