@@ -140,16 +140,16 @@ namespace ColorChord.NET.Outputs.Display
             {
                 for(int Seg = 0; Seg < RadiusResolution; Seg++)
                 {
-                    double RotStart = Math.PI * 2 * Spoke / this.Spokes;
-                    double RotEnd = Math.PI * 2 * (Spoke + 1) / this.Spokes;
+                    float RotStart = MathF.PI * 2 * Spoke / this.Spokes;
+                    float RotEnd = MathF.PI * 2 * (Spoke + 1) / this.Spokes;
 
                     float RadIn = ((float)Seg / RadiusResolution * 0.9F) + 0.1F;
                     float RadOut = ((float)(Seg + 1) / RadiusResolution * 0.9F) + 0.1F;
 
-                    float StartX = (float)Math.Cos(RotStart);
-                    float StartY = (float)Math.Sin(RotStart);
-                    float EndX = (float)Math.Cos(RotEnd);
-                    float EndY = (float)Math.Sin(RotEnd);
+                    float StartX = MathF.Cos(RotStart);
+                    float StartY = MathF.Sin(RotStart);
+                    float EndX = MathF.Cos(RotEnd);
+                    float EndY = MathF.Sin(RotEnd);
                     const float Z = 0F;
 
                     // RadIn/RadOut is in range [0..1] premade for linear interpolation

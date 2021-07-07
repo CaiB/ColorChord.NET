@@ -54,12 +54,12 @@ namespace ColorChordTests
             NF.PrepareSampleStorage();
 
             // Fill input.
-            float Omega1 = (float)(testFreq * Math.PI * 2 / NF.SampleRate);
+            float Omega1 = testFreq * MathF.PI * 2 / NF.SampleRate;
 
             float[] TestWaveform = new float[NF.WindowSize / 2];
             for (uint i = 0; i < TestWaveform.Length; i++)
             {
-                TestWaveform[i] = (float)Math.Sin(i * Omega1);
+                TestWaveform[i] = MathF.Sin(i * Omega1);
             }
             NF.AddSamples(TestWaveform);
             //NF.SaveData();
@@ -106,15 +106,15 @@ namespace ColorChordTests
             NF.PrepareSampleStorage();
 
             // Fill input.
-            float Omega1 = (float)(testFreq1 * Math.PI * 2 / NF.SampleRate);
-            float Omega2 = (float)(testFreq2 * Math.PI * 2 / NF.SampleRate);
+            float Omega1 = testFreq1 * MathF.PI * 2 / NF.SampleRate;
+            float Omega2 = testFreq2 * MathF.PI * 2 / NF.SampleRate;
 
             float[] TestWaveform = new float[NF.WindowSize / 2];
             for (uint i = 0; i < TestWaveform.Length; i++)
             {
-                double Wave1 = ratio * Math.Sin(i * Omega1);
-                double Wave2 = (1 - ratio) * Math.Sin(i * Omega2);
-                TestWaveform[i] = (float)(Wave1 + Wave2);
+                float Wave1 = ratio * MathF.Sin(i * Omega1);
+                float Wave2 = (1 - ratio) * MathF.Sin(i * Omega2);
+                TestWaveform[i] = Wave1 + Wave2;
             }
             NF.AddSamples(TestWaveform);
 
@@ -182,56 +182,56 @@ namespace ColorChordTests
         {
             const float BASE_FREQ = 55F; // A2
             const float SIGNAL_FREQ = 880F;
-            const double PHASE_OFFSET = Math.PI / 4; // Apply a small phase offset so that the signal doesn't start at 0.
+            const float PHASE_OFFSET = MathF.PI / 4; // Apply a small phase offset so that the signal doesn't start at 0.
 
             ShinNoteFinderDFT NF = new ShinNoteFinderDFT();
             NF.CalculateFrequencies(BASE_FREQ);
             NF.FillReferenceTables();
             NF.PrepareSampleStorage();
 
-            float Omega = (float)(SIGNAL_FREQ * Math.PI * 2 / NF.SampleRate);
+            float Omega = SIGNAL_FREQ * MathF.PI * 2 / NF.SampleRate;
 
             // Add the first sample, so we should only see content in the topmost octave
-            NF.AddSample((float)Math.Sin((0 * Omega) + PHASE_OFFSET), true);
+            NF.AddSample(MathF.Sin((0 * Omega) + PHASE_OFFSET), true);
             CheckAllBins((NF.OctaveCount - 1) * NF.BinsPerOctave);
 
             // Second sample, now the top two octaves should be calculated.
-            NF.AddSample((float)Math.Sin((1 * Omega) + PHASE_OFFSET), true);
+            NF.AddSample(MathF.Sin((1 * Omega) + PHASE_OFFSET), true);
             CheckAllBins((NF.OctaveCount - 2) * NF.BinsPerOctave);
 
             // Third sample, only the top octave should update
-            NF.AddSample((float)Math.Sin((2 * Omega) + PHASE_OFFSET), true);
+            NF.AddSample(MathF.Sin((2 * Omega) + PHASE_OFFSET), true);
             CheckAllBins((NF.OctaveCount - 2) * NF.BinsPerOctave);
 
             // Fourth sample, the top 3 octaves should all get calculated
-            NF.AddSample((float)Math.Sin((3 * Omega) + PHASE_OFFSET), true);
+            NF.AddSample(MathF.Sin((3 * Omega) + PHASE_OFFSET), true);
             CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
 
             // Fifth sample, only top octave
-            NF.AddSample((float)Math.Sin((4 * Omega) + PHASE_OFFSET), true);
+            NF.AddSample(MathF.Sin((4 * Omega) + PHASE_OFFSET), true);
             CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
 
             // Sixth sample, top 2 octaves
-            NF.AddSample((float)Math.Sin((5 * Omega) + PHASE_OFFSET), true);
+            NF.AddSample(MathF.Sin((5 * Omega) + PHASE_OFFSET), true);
             CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
 
             // Seventh sample, only top
-            NF.AddSample((float)Math.Sin((6 * Omega) + PHASE_OFFSET), true);
+            NF.AddSample(MathF.Sin((6 * Omega) + PHASE_OFFSET), true);
             CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
 
             // Eighth sample, top 4 octaves should all be calculated.
-            NF.AddSample((float)Math.Sin((7 * Omega) + PHASE_OFFSET), true);
+            NF.AddSample(MathF.Sin((7 * Omega) + PHASE_OFFSET), true);
             CheckAllBins((NF.OctaveCount - 4) * NF.BinsPerOctave);
 
             // 9th - 15th samples, same pattern, no new octaves yet
             for (int i = 8; i < 15; i++)
             {
-                NF.AddSample((float)Math.Sin((i * Omega) + PHASE_OFFSET), true);
+                NF.AddSample(MathF.Sin((i * Omega) + PHASE_OFFSET), true);
                 CheckAllBins((NF.OctaveCount - 4) * NF.BinsPerOctave);
             }
 
             // 16th sample, top 5 octaves should be calculated.
-            NF.AddSample((float)Math.Sin((15 * Omega) + PHASE_OFFSET), true);
+            NF.AddSample(MathF.Sin((15 * Omega) + PHASE_OFFSET), true);
             CheckAllBins((NF.OctaveCount - 5) * NF.BinsPerOctave);
 
             void CheckAllBins(int contentStart)

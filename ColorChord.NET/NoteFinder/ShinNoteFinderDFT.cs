@@ -95,13 +95,13 @@ namespace ColorChord.NET.NoteFinder
         {
             this.SinTable = new float[BinsPerOctave, WindowSize];
             this.CosTable = new float[BinsPerOctave, WindowSize];
-            float Coefficient = (float)(Math.PI * 2 / this.SampleRate);
+            float Coefficient = MathF.PI * 2 / this.SampleRate;
             for (ushort Bin = 0; Bin < this.BinsPerOctave; Bin++)
             {
                 for (ushort Sample = 0; Sample < this.WindowSize; Sample++)
                 {
-                    this.SinTable[Bin, Sample] = (float)Math.Sin(Sample * this.BinFrequencies[Bin + this.StartOfTopOctave] * Coefficient);
-                    this.CosTable[Bin, Sample] = (float)Math.Cos(Sample * this.BinFrequencies[Bin + this.StartOfTopOctave] * Coefficient);
+                    this.SinTable[Bin, Sample] = MathF.Sin(Sample * this.BinFrequencies[Bin + this.StartOfTopOctave] * Coefficient);
+                    this.CosTable[Bin, Sample] = MathF.Cos(Sample * this.BinFrequencies[Bin + this.StartOfTopOctave] * Coefficient);
                 }
             }
         }
@@ -222,7 +222,7 @@ namespace ColorChord.NET.NoteFinder
         {
             for (ushort Bin = 0; Bin < this.BinCount; Bin++)
             {
-                this.Magnitudes[Bin] = (float)Math.Sqrt((this.PrevSinSum[Bin] * this.PrevSinSum[Bin]) + (this.PrevCosSum[Bin] * this.PrevCosSum[Bin]));
+                this.Magnitudes[Bin] = MathF.Sqrt((this.PrevSinSum[Bin] * this.PrevSinSum[Bin]) + (this.PrevCosSum[Bin] * this.PrevCosSum[Bin]));
             }
         }
 
