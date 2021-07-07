@@ -35,10 +35,10 @@ namespace ColorChord.NET.Outputs.Display
         private readonly IDiscrete1D DataSource;
 
         /// <summary> Shader for rending the radar. </summary>
-        private Shader Shader;
+        private Shader? Shader;
 
         /// <summary> Storage for new colour data to be uploaded to the GPU. </summary>
-        private byte[] TextureData;
+        private byte[]? TextureData;
 
         /// <summary> The ID of the texture to store colour data in. </summary>
         private int LocationTexture;
@@ -54,7 +54,7 @@ namespace ColorChord.NET.Outputs.Display
         private int VertexBufferHandle, VertexArrayHandle;
 
         /// <summary> The vertex data to make the basic shape. </summary>
-        private float[] VertexData;
+        private float[]? VertexData;
 
         /// <summary> Where in the texture data the front of the sweep is currently located. </summary>
         private ushort RenderIndex = 0;
@@ -210,7 +210,7 @@ namespace ColorChord.NET.Outputs.Display
             // Some non-linearity to make the beats more apparent
             LowFreqData = MathF.Pow(LowFreqData, 5);
 
-            lock (this.TextureData)
+            lock (this.TextureData!)
             {
                 for (int Seg = 0; Seg < this.RadiusResolution; Seg++)
                 {
@@ -229,11 +229,11 @@ namespace ColorChord.NET.Outputs.Display
             if (!this.SetupDone) { return; }
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-            this.Shader.Use();
+            this.Shader!.Use();
 
             if (this.NewData)
             {
-                lock (this.TextureData)
+                lock (this.TextureData!)
                 {
                     if (this.RenderIndex + this.NewLines > this.Spokes) // We have more data than remaining space. Split the data into 2, and write to the end & beginning of the texture.
                     {
@@ -253,24 +253,23 @@ namespace ColorChord.NET.Outputs.Display
             }
 
             GL.BindVertexArray(this.VertexArrayHandle);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, this.VertexData.Length / 3);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, this.VertexData!.Length / 3);
         }
 
         public void Resize(int width, int height)
         {
             if (!this.SetupDone) { return; }
 
-            this.Shader.Use();
+            this.Shader!.Use();
             this.Projection = Matrix4.CreatePerspectiveFieldOfView(MathF.PI / 2, (float)this.HostWindow.Width / this.HostWindow.Height, 0.01F, 10F);
             GL.UniformMatrix4(this.LocationProjection, true, ref this.Projection);
         }
 
         public void Close()
         {
-            if (!this.SetupDone) { return; }
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.DeleteBuffer(this.VertexBufferHandle);
-            this.Shader.Dispose();
+            this.Shader?.Dispose();
         }
 
         public bool SupportsFormat(IVisualizerFormat format) => format is IDiscrete1D;
