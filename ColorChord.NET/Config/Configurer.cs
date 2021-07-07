@@ -18,16 +18,24 @@ namespace ColorChord.NET.Config
         /// <exception cref="NotImplementedException">If the attribute is one that is not yet supported.</exception>
         public static bool Configure(object targetObj, Dictionary<string, object> config)
         {
-
-            Log.Info("Reading config for " + targetObj?.GetType()?.Name + '.');
-            if (targetObj is not IConfigurableAttr Target)
+            Type? TargetType;
+            IConfigurableAttr? TargetInst = null; // Only valid for instances (non-static classes)
+            if (targetObj is Type) { TargetType = (Type?)targetObj; } // For configuring static classes
+            else
             {
-                Log.Warn("Tried to configure non-configurable object " + targetObj);
-                return false;
+                TargetType = targetObj?.GetType();
+                if (targetObj is not IConfigurableAttr Target)
+                {
+                    Log.Warn("Tried to configure non-configurable object " + targetObj);
+                    return false;
+                }
+                TargetInst = Target;
             }
+            if (TargetType == null) { Log.Error("Tried to configure object whose type cannot be determined."); return false; }
+            Log.Info("Reading config for " + TargetType.Name + '.');
 
-            FieldInfo[] Fields = Target.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-            PropertyInfo[] Properties = Target.GetType().GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            FieldInfo[] Fields = TargetType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            PropertyInfo[] Properties = TargetType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
 
             foreach(FieldInfo Field in Fields)
             {
@@ -45,7 +53,7 @@ namespace ColorChord.NET.Config
                     else if (Field.FieldType == typeof(sbyte))  { Field.SetValue(targetObj, (sbyte)Value); }
                     else if (Field.FieldType == typeof(long))   { Field.SetValue(targetObj, (long)Value); }
                     else if (Field.FieldType == typeof(ulong))  { Field.SetValue(targetObj, (ulong)Value); }
-                    else { throw new InvalidOperationException($"Field {IntAttr.Name} in {Target.GetType().FullName} used ConfigInt but is not a numeric type."); }
+                    else { throw new InvalidOperationException($"Field {IntAttr.Name} in {TargetType.FullName} used ConfigInt but is not a numeric type."); }
                     
                     config.Remove(IntAttr.Name);
                 }
@@ -54,7 +62,7 @@ namespace ColorChord.NET.Config
                     string Value = CheckString(config, StrAttr);
 
                     if (Field.FieldType == typeof(string)) { Field.SetValue(targetObj, Value); }
-                    else { throw new InvalidOperationException($"Field {StrAttr.Name} in {Target.GetType().FullName} used ConfigString but is not a string type."); }
+                    else { throw new InvalidOperationException($"Field {StrAttr.Name} in {TargetType.FullName} used ConfigString but is not a string type."); }
 
                     config.Remove(StrAttr.Name);
                 }
@@ -63,7 +71,7 @@ namespace ColorChord.NET.Config
                     bool Value = CheckBool(config, BoolAttr);
 
                     if (Field.FieldType == typeof(bool)) { Field.SetValue(targetObj, Value); }
-                    else { throw new InvalidOperationException($"Field {BoolAttr.Name} in {Target.GetType().FullName} used ConfigBool but is not a bool type."); }
+                    else { throw new InvalidOperationException($"Field {BoolAttr.Name} in {TargetType.FullName} used ConfigBool but is not a bool type."); }
 
                     config.Remove(BoolAttr.Name);
                 }
@@ -74,7 +82,7 @@ namespace ColorChord.NET.Config
                     if      (Field.FieldType == typeof(float))   { Field.SetValue(targetObj, Value); }
                     else if (Field.FieldType == typeof(double))  { Field.SetValue(targetObj, (double)Value); }
                     else if (Field.FieldType == typeof(decimal)) { Field.SetValue(targetObj, (decimal)Value); }
-                    else { throw new InvalidOperationException($"Field {FltAttr.Name} in {Target.GetType().FullName} used ConfigFloat but is not a float type."); }
+                    else { throw new InvalidOperationException($"Field {FltAttr.Name} in {TargetType.FullName} used ConfigFloat but is not a float type."); }
 
                     config.Remove(FltAttr.Name);
                 }
@@ -97,7 +105,7 @@ namespace ColorChord.NET.Config
                     else if (Prop.PropertyType == typeof(sbyte))  { Prop.SetValue(targetObj, (sbyte)Value); }
                     else if (Prop.PropertyType == typeof(long))   { Prop.SetValue(targetObj, (long)Value); }
                     else if (Prop.PropertyType == typeof(ulong))  { Prop.SetValue(targetObj, (ulong)Value); }
-                    else { throw new InvalidOperationException($"Property {IntAttr.Name} in {Target.GetType().FullName} used ConfigInt but is not a numeric type."); }
+                    else { throw new InvalidOperationException($"Property {IntAttr.Name} in {TargetType.FullName} used ConfigInt but is not a numeric type."); }
 
                     config.Remove(IntAttr.Name);
                 }
@@ -106,7 +114,7 @@ namespace ColorChord.NET.Config
                     string Value = CheckString(config, StrAttr);
 
                     if (Prop.PropertyType == typeof(string)) { Prop.SetValue(targetObj, Value); }
-                    else { throw new InvalidOperationException($"Property {StrAttr.Name} in {Target.GetType().FullName} used ConfigString but is not a string type."); }
+                    else { throw new InvalidOperationException($"Property {StrAttr.Name} in {TargetType.FullName} used ConfigString but is not a string type."); }
 
                     config.Remove(StrAttr.Name);
                 }
@@ -115,7 +123,7 @@ namespace ColorChord.NET.Config
                     bool Value = CheckBool(config, BoolAttr);
 
                     if (Prop.PropertyType == typeof(bool)) { Prop.SetValue(targetObj, Value); }
-                    else { throw new InvalidOperationException($"Field {BoolAttr.Name} in {Target.GetType().FullName} used ConfigBool but is not a bool type."); }
+                    else { throw new InvalidOperationException($"Field {BoolAttr.Name} in {TargetType.FullName} used ConfigBool but is not a bool type."); }
 
                     config.Remove(BoolAttr.Name);
                 }
@@ -126,7 +134,7 @@ namespace ColorChord.NET.Config
                     if      (Prop.PropertyType == typeof(float))   { Prop.SetValue(targetObj, Value); }
                     else if (Prop.PropertyType == typeof(double))  { Prop.SetValue(targetObj, (double)Value); }
                     else if (Prop.PropertyType == typeof(decimal)) { Prop.SetValue(targetObj, (decimal)Value); }
-                    else { throw new InvalidOperationException($"Field {FltAttr.Name} in {Target.GetType().FullName} used ConfigFloat but is not a float type."); }
+                    else { throw new InvalidOperationException($"Field {FltAttr.Name} in {TargetType.FullName} used ConfigFloat but is not a float type."); }
 
                     config.Remove(FltAttr.Name);
                 }
@@ -137,8 +145,8 @@ namespace ColorChord.NET.Config
             foreach (string Item in config.Keys)
             {
                 if (Item == "Type" || Item == "Name") { continue; }
-                if (Target is IOutput && (Item == "VisualizerName" || Item == "Modes")) { continue; }
-                Log.Warn($"Unknown config entry \"{Item}\" found while configuring {Target.GetType().FullName}.");
+                if (TargetInst is IOutput && (Item == "VisualizerName" || Item == "Modes")) { continue; }
+                Log.Warn($"Unknown config entry \"{Item}\" found while configuring {TargetType.FullName}.");
             }
 
             return true;

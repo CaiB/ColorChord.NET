@@ -66,7 +66,7 @@ namespace ColorChord.NET.Visualizers
         /// <summary> All outputs that need to be notified when new data is available. </summary>
         private readonly List<IOutput> Outputs = new();
 
-        private uint[] OutputDataDiscrete;
+        private uint[] OutputDataDiscrete = Array.Empty<uint>();
 
         private readonly ContinuousDataUnit[] OutputDataContinuous;
         private int OutputCountContinuous;
@@ -76,7 +76,7 @@ namespace ColorChord.NET.Visualizers
         private bool KeepGoing = true;
 
         /// <summary> The thread on which input note data is processed by this visualizer. </summary>
-        private Thread ProcessThread;
+        private Thread? ProcessThread;
 
         public Linear(string name, Dictionary<string, object> config)
         {
@@ -107,7 +107,7 @@ namespace ColorChord.NET.Visualizers
         public void Stop()
         {
             this.KeepGoing = false;
-            this.ProcessThread.Join();
+            this.ProcessThread?.Join();
         }
 
         public void AttachOutput(IOutput output) { if (output != null) { this.Outputs.Add(output); } }
@@ -134,9 +134,9 @@ namespace ColorChord.NET.Visualizers
         public int MaxPossibleUnits { get => BaseNoteFinder.NoteCount; }
 
         // These variables are only used to keep inter-frame info for Update(). Do not touch.
-        private float[] LastLEDColours;
-        private float[] LastLEDPositionsFiltered; // Only used when IsCircular is true.
-        private float[] LastLEDSaturations;
+        private float[] LastLEDColours = Array.Empty<float>();
+        private float[] LastLEDPositionsFiltered = Array.Empty<float>(); // Only used when IsCircular is true.
+        private float[] LastLEDSaturations = Array.Empty<float>();
         private int PrevAdvance;
         private readonly float[] LastVectorCenters = new float[BaseNoteFinder.NoteCount]; // Where the center-point of each block was last frame
 
@@ -147,6 +147,8 @@ namespace ColorChord.NET.Visualizers
             float[] NoteAmplitudesFast = new float[BIN_QTY]; // The amplitudes of each note, with minimal time-smoothing
             float[] NotePositions = new float[BIN_QTY]; // The locations of the notes, range 0 ~ 1.
             float AmplitudeSum = 0;
+
+            if (this.OutputDataDiscrete.Length != this.LEDCount) { UpdateSize(); }
 
             // Populate data from the NoteFinder.
             for (int i = 0; i < BIN_QTY; i++)

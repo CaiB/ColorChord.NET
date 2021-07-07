@@ -36,25 +36,25 @@ namespace ColorChord.NET.Visualizers
         private readonly List<IOutput> Outputs = new();
 
         /// <summary> The shared memory to read colour data from. </summary>
-        private MemoryMappedFile Map;
+        private MemoryMappedFile? Map;
 
         /// <summary> Used to read from the shared memory. </summary>
-        private MemoryMappedViewStream MapView;
+        private MemoryMappedViewStream? MapView;
 
         /// <summary> Reads colour data from the shared memory. </summary>
-        private BinaryReader MapReader;
+        private BinaryReader? MapReader;
 
         /// <summary> Used to synchronize writes/reads. </summary>
-        private Mutex MapMutex;
+        private Mutex? MapMutex;
 
         /// <summary> How many LEDs are in the source data. </summary>
         private int LEDCount;
 
         /// <summary> The colour data from the source. </summary>
-        private uint[] LEDData;
+        private uint[] LEDData = Array.Empty<uint>();
 
         /// <summary> The thread for receiving data from the shared memory. </summary>
-        private Thread ReceiveThread;
+        private Thread? ReceiveThread;
 
         private bool Stopping = false;
 
@@ -83,6 +83,7 @@ namespace ColorChord.NET.Visualizers
 
         private void DoReceive()
         {
+            if (this.MapMutex == null || this.MapReader == null) { Log.Warn("MemoryMapReceiver does not have a valid source to get data from."); return; }
             Stopwatch Timer = new();
             while (!this.Stopping)
             {
@@ -91,7 +92,7 @@ namespace ColorChord.NET.Visualizers
                 this.MapReader.BaseStream.Seek(0, SeekOrigin.Begin);
                 
                 this.LEDCount = (int)this.MapReader.ReadUInt32();
-                if (this.LEDData == null || this.LEDData.Length != this.LEDCount) { this.LEDData = new uint[this.LEDCount]; }
+                if (this.LEDData.Length != this.LEDCount) { this.LEDData = new uint[this.LEDCount]; }
                 for (int i = 0; i < this.LEDCount; i++)
                 {
                     uint Data = 0;
@@ -110,14 +111,14 @@ namespace ColorChord.NET.Visualizers
         public void Stop()
         {
             this.Stopping = true;
-            this.ReceiveThread.Join();
-            this.MapReader.Close();
+            this.ReceiveThread?.Join();
+            this.MapReader?.Close();
             this.MapReader = null;
-            this.MapView.Dispose();
+            this.MapView?.Dispose();
             this.MapView = null;
-            this.MapMutex.Dispose();
+            this.MapMutex?.Dispose();
             this.MapMutex = null;
-            this.Map.Dispose();
+            this.Map?.Dispose();
             this.Map = null;
         }
 

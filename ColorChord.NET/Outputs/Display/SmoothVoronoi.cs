@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace ColorChord.NET.Outputs.Display
 {
+    /*
     public class SmoothVoronoi : IDisplayMode
     {
         private readonly DisplayOpenGL HostWindow;
@@ -41,4 +42,5 @@ namespace ColorChord.NET.Outputs.Display
             throw new NotImplementedException();
         }
     }
+    */
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using ColorChord.NET.Config;
 using ColorChord.NET.NoteFinder;
 
 namespace ColorChord.NET
@@ -26,7 +27,7 @@ namespace ColorChord.NET
         private static bool KeepGoing = true;
 
         /// <summary> The thread doing the actual note data processing. </summary>
-        private static Thread ProcessThread;
+        private static Thread? ProcessThread;
 
         // Things that are always the same.
         #region Constants
@@ -69,48 +70,60 @@ namespace ColorChord.NET
         #region Configurable Constants
         /// <summary> The frequency at which the DFT output starts. </summary>
         /// <remarks> If this is changed, <see cref="SetSampleRate(int)"/> needs to be called in order to actaully apply the changes to the frequency list. </remarks>
+        [ConfigFloat("StartFreq", 0F, 20000F, 55F)]
         private static float MinimumFrequency = 55;
 
         /// <summary> Determines how much the previous frame's DFT data is used in the next frame. Smooths out rapid changes from frame-to-frame, but can cause delay if too strong. </summary>
         /// <remarks> Lower values will mean less inter-frame smoothing. Range: 0.0~1.0 </remarks>
+        [ConfigFloat("DFTIIR", 0F, 1F, 0.65F)]
         private static float DFTIIRMultiplier = 0.65F;
 
         /// <summary> Determines how much the raw DFT data is amplified before being used. </summary>
         /// <remarks> Range 0.0+ </remarks>
+        [ConfigFloat("DFTAmplify", 0F, 10000F, 2F)]
         private static float DFTDataAmplifier = 2F;
 
         /// <summary> The slope of the extra frequency-dependent amplification done to raw DFT data. Positive values increase sensitivity at higher frequencies. </summary>
         /// <remarks> Amplification is 1.0 at the minimum frequency, and 1.0 + (<see cref="DFTSensitivitySlope"/> * <see cref="DFTRawBinCount"/>) at the highest, increasing by <see cref="DFTSensitivitySlope"/> at each bin. </remarks>
+        [ConfigFloat("DFTSlope", -100F, 100F, 0.1F)]
         private static float DFTSensitivitySlope = 0.1F;
 
         /// <summary> How often to run the octave data filter. This smoothes out each bin with adjacent ones. </summary>
+        [ConfigInt("OctaveFilterIterations", 0, 10000, 2)]
         private static int OctaveFilterIterations = 2;
 
         /// <summary> How strong the octave data filter is. Higher values mean each bin is more aggresively averaged with adjacent bins. </summary>
         /// <remarks> Higher values mean less glitchy, but also less clear note peaks. Range: 0.0~1.0 </remarks>
+        [ConfigFloat("OctaveFilterStrength", 0F, 1F, 0.5F)]
         private static float OctaveFilterStrength = 0.5F;
 
         /// <summary> How close a note needs to be to a distribution peak in order to be merged. </summary>
+        [ConfigFloat("NoteInfluenceDist", 0F, 100F, 1.8F)]
         private static float MinNoteInfluenceDistance = 1.8F;
 
         /// <summary> How strongly the note merging filter affects the note frequency. Stronger filter means notes take longer to shift positions to move together. </summary>
         /// <remarks> Range: 0.0~1.0 </remarks>
+        [ConfigFloat("NoteAttachFreqIIR", 0F, 1F, 0.3F)]
         private static float NoteAttachFrequencyIIRMultiplier = 0.3F;
 
         /// <summary> How strongly the note merging filter affects the note amplitude. Stronger filter means notes take longer to merge fully in amplitude. </summary>
         /// <remarks> Range: 0.0~1.0 </remarks>
+        [ConfigFloat("NoteAttachAmpIIR", 0F, 1F, 0.35F)]
         private static float NoteAttachAmplitudeIIRMultiplier = 0.35F;
 
         /// <summary> This filter is applied to notes between cycles in order to smooth their amplitudes over time. </summary>
         /// <remarks> Higher values cause smoother but more delayed note amplitude transitions. Range: 0.0~1.0 </remarks>
+        [ConfigFloat("NoteAttachAmpIIR2", 0F, 1F, 0.25F)]
         private static float NoteAttachAmplitudeIIRMultiplier2 = 0.25F;
 
         /// <summary> How close two existing notes need to be in order to get combined into a single note. </summary>
         /// <remarks> A distance of 2 means that a perfect A can combine with a perfect Bb etc. </remarks>
+        [ConfigFloat("NoteCombineDistance", 0F, 100F, 0.5F)]
         private static float MinNoteCombineDistance = 0.5F;
 
         /// <summary> Notes below this value get zeroed in <see cref="Note.AmplitudeFinal"/>. </summary>
         /// <remarks> Increase if low-amplitude notes are causing noise in output. </remarks>
+        [ConfigFloat("NoteOutputChop", 0F, 100F, 0.05F)]
         private static float NoteOutputChop = 0.05F;
         #endregion
 
@@ -168,24 +181,9 @@ namespace ColorChord.NET
             if (period < ShortestPeriod) { ShortestPeriod = period; }
         }
 
-        public static ShinNoteFinderDFT DFT; // Experimental new DFT, not currently used.
-
-        public static void ApplyConfig(Dictionary<string, object> options)
+        public static void ApplyConfig(Dictionary<string, object> config)
         {
-            Log.Info("Reading config for NoteFinder.");
-            MinimumFrequency = ConfigTools.CheckFloat(options, "StartFreq", 0F, 20000F, MinimumFrequency, true); // See below
-            DFTIIRMultiplier = ConfigTools.CheckFloat(options, "DFTIIR", 0F, 1F, DFTIIRMultiplier, true);
-            DFTDataAmplifier = ConfigTools.CheckFloat(options, "DFTAmplify", 0F, 10000F, DFTDataAmplifier, true);
-            DFTSensitivitySlope = ConfigTools.CheckFloat(options, "DFTSlope", -100F, 100F, DFTSensitivitySlope, true);
-            OctaveFilterIterations = ConfigTools.CheckInt(options, "OctaveFilterIterations", 0, 10000, OctaveFilterIterations, true);
-            OctaveFilterStrength = ConfigTools.CheckFloat(options, "OctaveFilterStrength", 0F, 1F, OctaveFilterStrength, true);
-            MinNoteInfluenceDistance = ConfigTools.CheckFloat(options, "NoteInfluenceDist", 0F, 100F, MinNoteInfluenceDistance, true);
-            NoteAttachFrequencyIIRMultiplier = ConfigTools.CheckFloat(options, "NoteAttachFreqIIR", 0F, 1F, NoteAttachFrequencyIIRMultiplier, true);
-            NoteAttachAmplitudeIIRMultiplier = ConfigTools.CheckFloat(options, "NoteAttachAmpIIR", 0F, 1F, NoteAttachAmplitudeIIRMultiplier, true);
-            NoteAttachAmplitudeIIRMultiplier2 = ConfigTools.CheckFloat(options, "NoteAttachAmpIIR2", 0F, 1F, NoteAttachAmplitudeIIRMultiplier2, true);
-            MinNoteCombineDistance = ConfigTools.CheckFloat(options, "NoteCombineDistance", 0F, 100F, MinNoteCombineDistance, true);
-            NoteOutputChop = ConfigTools.CheckFloat(options, "NoteOutputChop", 0F, 100F, NoteOutputChop, true);
-            ConfigTools.WarnAboutRemainder(options, typeof(BaseNoteFinder));
+            Configurer.Configure(typeof(BaseNoteFinder), config);
 
             // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
             SetSampleRate(SampleRate);
@@ -203,7 +201,7 @@ namespace ColorChord.NET
         public static void Stop()
         {
             KeepGoing = false;
-            ProcessThread.Join();
+            ProcessThread?.Join();
         }
 
         /// <summary> Runs until <see cref="KeepGoing"/> becomes false, processing incoming audio data. </summary>

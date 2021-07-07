@@ -79,12 +79,7 @@ namespace ColorChord.NET
             ColorChord.Source.Start();
 
             // Note Finder
-            // TODO: allow swapping of note finders, requiring instantiation
-            if (!JSON.ContainsKey("NoteFinder")) { Log.Warn("Could not find valid \"NoteFinder\" definition. All defaults will be used."); }
-            else
-            {
-                BaseNoteFinder.ApplyConfig(ToDict(JSON["NoteFinder"]));
-            }
+            ReadAndApplyNoteFinder(JSON);
 
             // Visualizers
             ReadAndApplyVisualizers(JSON);
@@ -113,6 +108,14 @@ namespace ColorChord.NET
                 return Source;
             }
             return null;
+        }
+
+        private static void ReadAndApplyNoteFinder(JObject JSON)
+        {
+            // TODO: allow swapping of note finders, requiring instantiation
+            const string NOTEFINDER = "NoteFinder";
+            if (!JSON.ContainsKey(NOTEFINDER) || JSON[NOTEFINDER] == null) { Log.Warn($"Could not find valid \"{NOTEFINDER}\" definition. All defaults will be used."); }
+            else { BaseNoteFinder.ApplyConfig(ToDict(JSON[NOTEFINDER]!)); }
         }
 
         private static void ReadAndApplyVisualizers(JObject JSON)
@@ -170,6 +173,7 @@ namespace ColorChord.NET
             if (ObjType == null || !typeof(InterfaceType).IsAssignableFrom(ObjType)) { return default; } // Type doesn't exist, or does not implement the right interface.
 
             string? ObjName = configEntry.Value<string>(NAME);
+            if (typeof(InterfaceType) == typeof(IAudioSource) /* || typeof(InterfaceType) == typeof(INoteFinder) */) { ObjName = "NoName"; }
             if (ObjName == null) { return default; }
 
             object? Instance = Activator.CreateInstance(ObjType, ObjName, ToDict(configEntry, complexConfig));

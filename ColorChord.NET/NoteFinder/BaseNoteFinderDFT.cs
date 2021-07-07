@@ -11,7 +11,7 @@ namespace ColorChord.NET.NoteFinder
         private const byte DFTIIR = 6;
 
         /// <summary>Where we are currently writing new bin information to be passed out to the requestor.</summary>
-        private static float[] OutputBins;
+        private static float[]? OutputBins;
 
         /// <summary>Indicates whether <see cref="OctaveProcessingSchedule"/> has been set up.</summary>
         private static bool SetupDone = false;
@@ -180,8 +180,8 @@ namespace ColorChord.NET.NoteFinder
                 int Octave = i / BINSPEROCT;
 
                 float MagnitudeSquared = ((float)SinProductSum * SinProductSum) + ((float)CosProductSum * CosProductSum);
-                OutputBins[i] = MathF.Sqrt(MagnitudeSquared) / 65536.0F; // scale by 2^16
-                OutputBins[i] /= (78 << DFTIIR) * (1 << Octave); // 78 is an arbitrary number selected by experimentation, which provides "about the right amount of dampening"
+                OutputBins![i] = MathF.Sqrt(MagnitudeSquared) / 65536.0F; // scale by 2^16
+                OutputBins![i] /= (78 << DFTIIR) * (1 << Octave); // 78 is an arbitrary number selected by experimentation, which provides "about the right amount of dampening"
             }
         }
 

@@ -27,7 +27,7 @@ namespace ColorChord.NET.Visualizers
         private readonly List<IOutput> Outputs = new();
 
         /// <summary> The receiver for UDP packets. </summary>
-        private UdpClient Receiver;
+        private UdpClient? Receiver;
 
         /// <summary> If true, we will no longer attempt to listen for new packets. </summary>
         private bool Stopping;
@@ -55,15 +55,15 @@ namespace ColorChord.NET.Visualizers
 
         private void HandleUDPData(IAsyncResult result)
         {
-            UdpClient Listener;
-            byte[] PacketData = null;
-            IPEndPoint Endpoint;
+            UdpClient? Listener;
+            byte[]? PacketData = null;
+            IPEndPoint? Endpoint;
 
             try
             {
-                Listener = (UdpClient)result.AsyncState;
+                Listener = (UdpClient?)result.AsyncState;
                 Endpoint = new IPEndPoint(IPAddress.Any, 0);
-                PacketData = Listener.EndReceive(result, ref Endpoint);
+                PacketData = Listener?.EndReceive(result, ref Endpoint);
             }
             catch(Exception e)
             {
@@ -98,7 +98,7 @@ namespace ColorChord.NET.Visualizers
                 foreach (IOutput output in this.Outputs) { output.Dispatch(); }
             }
 
-            if (!this.Stopping) { this.Receiver.BeginReceive(HandleUDPData, this.Receiver); }
+            if (!this.Stopping) { this.Receiver?.BeginReceive(HandleUDPData, this.Receiver); }
         }
 
         public int GetCountDiscrete() => this.Data.Length;

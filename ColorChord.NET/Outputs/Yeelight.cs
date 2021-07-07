@@ -26,9 +26,9 @@ namespace ColorChord.NET.Outputs
 
         private readonly IVisualizer Source;
 
-        private TcpListener TCPServer;
+        private TcpListener? TCPServer;
 
-        private Thread ClientAcceptor;
+        private Thread? ClientAcceptor;
         
         private readonly List<TcpClient> Clients = new();
 
@@ -53,7 +53,9 @@ namespace ColorChord.NET.Outputs
         public Yeelight(string name, Dictionary<string, object> config)
         {
             this.Name = name;
-            this.Source = Configurer.FindVisualizer(this, config);
+            IVisualizer? Source = Configurer.FindVisualizer(this, config);
+            if (Source == null) { throw new Exception($"{GetType().Name} \"{name}\" could not find requested visualizer."); }
+            this.Source = Source;
             Configurer.Configure(this, config);
 
             this.Source.AttachOutput(this);
@@ -125,11 +127,11 @@ namespace ColorChord.NET.Outputs
             string[] Lines = Response.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
 
             ulong ID = 0;
-            string ControlAddress = null;
-            string Model = null;
-            string FirmwareVersion = null;
-            string Support = null;
-            string Name = null;
+            string? ControlAddress = null;
+            string? Model = null;
+            string? FirmwareVersion = null;
+            string? Support = null;
+            string? Name = null;
 
             foreach(string Line in Lines)
             {
@@ -148,7 +150,7 @@ namespace ColorChord.NET.Outputs
         public void Stop()
         {
             this.Stopping = true; // TODO: This probably won't stop until a client joins. Interrupt the thread?
-            this.ClientAcceptor.Join();
+            this.ClientAcceptor?.Join();
         }
     }
 }

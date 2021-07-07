@@ -30,10 +30,10 @@ namespace ColorChord.NET.Outputs.Display
         private IDiscrete1D DataSource;
 
         /// <summary> Shader for rending the tube. </summary>
-        private Shader TubeShader;
+        private Shader? TubeShader;
 
         /// <summary> Storage for new colour data to be uploaded to the GPU. </summary>
-        private byte[] TextureData;
+        private byte[]? TextureData;
 
         /// <summary> The ID of the texture to store colour data in. </summary>
         private int LocationTexture;
@@ -64,7 +64,7 @@ namespace ColorChord.NET.Outputs.Display
         private int VertexBufferHandle, VertexArrayHandle;
 
         /// <summary> The vertex data to make the basic tube shape. </summary>
-        private float[] VertexData;
+        private float[]? VertexData;
 
         /// <summary> Where in the texture data the front of the tube is currently located. </summary>
         private ushort TubeRenderIndex = 0;
@@ -96,7 +96,7 @@ namespace ColorChord.NET.Outputs.Display
             if (!this.SetupDone) { return; }
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.DeleteBuffer(this.VertexBufferHandle);
-            this.TubeShader.Dispose();
+            this.TubeShader?.Dispose();
         }
 
         private float HistoricalLFData;
@@ -128,10 +128,10 @@ namespace ColorChord.NET.Outputs.Display
 
             for (int seg = 0; seg < TubeResolution; seg++)
             {
-                this.TextureData[(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 0] = (byte)(this.DataSource.GetDataDiscrete()[seg] >> 16); // R
-                this.TextureData[(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 1] = (byte)(this.DataSource.GetDataDiscrete()[seg] >> 8); // G
-                this.TextureData[(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 2] = (byte)(this.DataSource.GetDataDiscrete()[seg]); // B
-                this.TextureData[(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 3] = (byte)(LowFreqData * 20); // A
+                this.TextureData![(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 0] = (byte)(this.DataSource.GetDataDiscrete()[seg] >> 16); // R
+                this.TextureData![(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 1] = (byte)(this.DataSource.GetDataDiscrete()[seg] >> 8); // G
+                this.TextureData![(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 2] = (byte)(this.DataSource.GetDataDiscrete()[seg]); // B
+                this.TextureData![(this.NewLines * (4 * TubeResolution)) + (seg * 4) + 3] = (byte)(LowFreqData * 20); // A
             }
             this.NewLines++;
             this.NewData = true;
@@ -245,7 +245,7 @@ namespace ColorChord.NET.Outputs.Display
             if (!this.SetupDone) { return; }
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-            this.TubeShader.Use();
+            this.TubeShader!.Use();
 
             if(this.NewData)
             {
@@ -264,7 +264,7 @@ namespace ColorChord.NET.Outputs.Display
             GL.UniformMatrix4(this.LocationView, true, ref this.View);
 
             GL.BindVertexArray(this.VertexArrayHandle);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, this.VertexData.Length / 3);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, this.VertexData!.Length / 3);
         }
 
         public void UpdateFrame(FrameEventArgs evt)
@@ -290,7 +290,7 @@ namespace ColorChord.NET.Outputs.Display
         {
             if (!this.SetupDone) { return; }
 
-            this.TubeShader.Use();
+            this.TubeShader?.Use();
             this.Projection = Matrix4.CreatePerspectiveFieldOfView(MathF.PI / 2, (float)this.HostWindow.Width / this.HostWindow.Height, 0.01F, 10F);
             GL.UniformMatrix4(this.LocationProjection, true, ref this.Projection);
         }

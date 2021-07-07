@@ -8,6 +8,7 @@ using OpenTK.Graphics.ES30;
 
 namespace ColorChord.NET.Outputs.Display
 {
+    /*
     public class ShinNoteFinderDebug : IDisplayMode
     {
         private readonly DisplayOpenGL HostWindow;
@@ -118,4 +119,5 @@ namespace ColorChord.NET.Outputs.Display
         public bool SupportsFormat(IVisualizerFormat format) => true;
         public void Dispatch() { } // We gat data every frame since this is not attached to a visualizer
     }
+    */
 }

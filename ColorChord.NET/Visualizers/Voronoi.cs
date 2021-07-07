@@ -67,7 +67,7 @@ namespace ColorChord.NET.Visualizers
 
         private readonly DiscreteVoronoiNote[] DiscreteNotes;
 
-        private Thread ProcessThread;
+        private Thread? ProcessThread;
         private bool KeepGoing = true;
 
         public Voronoi(string name, Dictionary<string, object> config)
@@ -89,7 +89,7 @@ namespace ColorChord.NET.Visualizers
         public void Stop()
         {
             this.KeepGoing = false;
-            this.ProcessThread.Join();
+            this.ProcessThread?.Join();
         }
 
         public void AttachOutput(IOutput output) { if (output != null) { this.Outputs.Add(output); } }

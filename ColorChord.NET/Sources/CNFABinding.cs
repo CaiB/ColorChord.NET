@@ -31,12 +31,15 @@ namespace ColorChord.NET.Sources
         [ConfigString("DeviceOutput", "default")]
         private string DevicePlay = "default";
 
-        public CNFABinding(string name, Dictionary<string, object> config) { Configurer.Configure(this, config); }
+        public CNFABinding(string name, Dictionary<string, object> config)
+        {
+            Configurer.Configure(this, config);
+            this.Callback = SoundCallback;
+            this.CallbackHandle = GCHandle.Alloc(this.Callback);
+        }
         
         public void Start()
         {
-            this.Callback = SoundCallback;
-            this.CallbackHandle = GCHandle.Alloc(this.Callback);
             this.DriverPtr = Initialize(this.DriverMode.ToUpper() == "AUTO" ? null : this.DriverMode.ToUpper(), "ColorChord.NET", Marshal.GetFunctionPointerForDelegate(this.Callback), this.SuggestedSampleRate, this.SuggestedSampleRate, this.SuggestedChannelCount, this.SuggestedChannelCount, this.SuggestedBufferSize, this.DevicePlay, this.DeviceRecord, IntPtr.Zero);
             this.Driver = Marshal.PtrToStructure<CNFAConfig>(this.DriverPtr);
             BaseNoteFinder.SetSampleRate(this.Driver.SampleRateRecord);
@@ -46,7 +49,6 @@ namespace ColorChord.NET.Sources
         {
             this.Driver.Close(this.DriverPtr);
             this.CallbackHandle.Free();
-            this.Callback = null;
         }
 
         /// <summary> Called by CNFA when audio data is ready for sending/receiving. </summary>
@@ -111,7 +113,7 @@ namespace ColorChord.NET.Sources
         internal delegate int StatusFunction(IntPtr driver);
 
         [DllImport("CNFA", CallingConvention = CallingConvention.Cdecl, EntryPoint = "CNFAInit", CharSet = CharSet.Ansi)]
-        internal static extern IntPtr Initialize(string driverName, string ourName, IntPtr callback, int requestedSampleRatePlay, int requestedSampleRateRecord, int requestedChannelsPlay, int requestedChannelRecord, int suggestedBufferSize, string outputSelect, string inputSelect, IntPtr notUsed);
+        internal static extern IntPtr Initialize(string? driverName, string ourName, IntPtr callback, int requestedSampleRatePlay, int requestedSampleRateRecord, int requestedChannelsPlay, int requestedChannelRecord, int suggestedBufferSize, string outputSelect, string inputSelect, IntPtr notUsed);
 
         /// <summary> The delegate for the function you must implement to receive sound callbacks from CNFA. </summary>
         /// <param name="driver"> The <see cref="CNFAConfig"/> for the driver. </param>
