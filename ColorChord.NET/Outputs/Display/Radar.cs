@@ -22,8 +22,8 @@ namespace ColorChord.NET.Outputs.Display
         [ConfigBool("Is3D", false)]
         private readonly bool Use3DView = false;
 
-        [ConfigFloat("FalloffAfter", 0.0f, 1.0f, 0.99f)]
-        private readonly float falloffAfter = 1.0f;
+        [ConfigFloat("FalloffAfter", 0.0F, 1.0F, 0.9F)]
+        private readonly float FalloffAfter = 0.9F;
 
         /// <summary> How many floats comprise one vertex of data sent to the GPU. </summary>
         private const byte DATA_PER_VERTEX = 9;
@@ -124,7 +124,8 @@ namespace ColorChord.NET.Outputs.Display
             GL.UniformMatrix4(this.LocationProjection, true, ref this.Projection);
 
             this.LocationFrontOffset = this.Shader.GetUniformLocation("frontOffset");
-            GL.Uniform1(this.Shader.GetUniformLocation("falloffAfter"), this.falloffAfter);
+
+            GL.Uniform1(this.Shader.GetUniformLocation("falloffAfter"), this.FalloffAfter); // only set once
 
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
@@ -248,7 +249,7 @@ namespace ColorChord.NET.Outputs.Display
                     this.NewData = false;
                     this.NewLines = 0;
                 }
-                GL.Uniform1(this.LocationFrontOffset, (float)(this.RenderIndex) / this.Spokes);
+                GL.Uniform1(this.LocationFrontOffset, (float)this.RenderIndex / this.Spokes);
             }
 
             GL.BindVertexArray(this.VertexArrayHandle);

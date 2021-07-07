@@ -38,10 +38,10 @@ void main()
     float SmoothingCutoff = 0.07;
     vertexColour = TexOut * (1.0 - step(SmoothingCutoff, HueDifference)) + FromTex * step(SmoothingCutoff, HueDifference);
 
-    float diffToFront = mod(1.0 - (frontOffset - TexY), 1.0);
-    float falloff = 1.0 - falloffAfter;
-    float falloffGradient = diffToFront * (1.0 / falloff);
-    vertexColour *= step(falloff, diffToFront) + (falloffGradient * (1.0 - step(falloff, diffToFront)));
+    float DiffToFront = mod(1.0 - (frontOffset - TexY), 1.0);
+    float Falloff = 1.0 - falloffAfter;
+    float FalloffGradient = DiffToFront * (1.0 / Falloff);
+    vertexColour *= step(Falloff, DiffToFront) + (FalloffGradient * (1.0 - step(Falloff, DiffToFront)));
 
     float AlphaVal = FromTex.a * (1.0 - step(0.5, aSegmentSide)) + FromTexLast.a * step(0.5, aSegmentSide);
     vec3 HeightOffset = (aNormal * AlphaVal) / 10;
