@@ -8,6 +8,8 @@ out vec4 vertexColour;
 
 uniform sampler2D tex;
 uniform mat4 projection;
+uniform float frontOffset;
+uniform float falloffAfter;
 
 // All components are in the range [0…1], including hue.
 vec3 rgb2hsv(vec3 c)
@@ -24,7 +26,7 @@ vec3 rgb2hsv(vec3 c)
 void main()
 {
     ivec2 TexSize = textureSize(tex, 0);
-    float TexY = mod(1.0 - (aTextureLoc.y - 0.0), 1.0);
+    float TexY = mod(1.0 - (aTextureLoc.y), 1.0);
     vec4 FromTex = texture(tex, vec2(aTextureLoc.x, TexY));
     vec4 FromTexLast = texture(tex, vec2(aTextureLoc.x, mod(TexY - (1.0 / TexSize.y), 1.0)));
 
@@ -35,6 +37,11 @@ void main()
     vec4 TexOut = FromTex * (1.0 - step(0.5, aSegmentSide)) + FromTexLast * step(0.5, aSegmentSide);
     float SmoothingCutoff = 0.07;
     vertexColour = TexOut * (1.0 - step(SmoothingCutoff, HueDifference)) + FromTex * step(SmoothingCutoff, HueDifference);
+
+    float diffToFront = mod(1.0 - (frontOffset - TexY), 1.0);
+    float falloff = 1.0 - falloffAfter;
+    float falloffGradient = diffToFront * (1.0 / falloff);
+    vertexColour *= step(falloff, diffToFront) + (falloffGradient * (1.0 - step(falloff, diffToFront)));
 
     float AlphaVal = FromTex.a * (1.0 - step(0.5, aSegmentSide)) + FromTexLast.a * step(0.5, aSegmentSide);
     vec3 HeightOffset = (aNormal * AlphaVal) / 10;

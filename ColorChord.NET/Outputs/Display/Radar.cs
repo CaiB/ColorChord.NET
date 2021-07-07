@@ -22,6 +22,9 @@ namespace ColorChord.NET.Outputs.Display
         [ConfigBool("Is3D", false)]
         private readonly bool Use3DView = false;
 
+        [ConfigFloat("FalloffAfter", 0.0f, 1.0f, 0.99f)]
+        private readonly float falloffAfter = 1.0f;
+
         /// <summary> How many floats comprise one vertex of data sent to the GPU. </summary>
         private const byte DATA_PER_VERTEX = 9;
 
@@ -55,6 +58,9 @@ namespace ColorChord.NET.Outputs.Display
 
         /// <summary> Where in the texture data the front of the sweep is currently located. </summary>
         private ushort RenderIndex = 0;
+
+        /// <summary> Location of the depth offset uniform (for storing <see cref="RenderIndex"/>). </summary>
+        private int LocationFrontOffset;
 
         /// <summary> Whether we are ready to send data & render frames. </summary>
         private bool SetupDone = false;
@@ -116,6 +122,9 @@ namespace ColorChord.NET.Outputs.Display
             this.Projection = Matrix4.CreatePerspectiveFieldOfView(MathF.PI / 2, 1, 0.01F, 10F);
             this.LocationProjection = this.Shader.GetUniformLocation("projection");
             GL.UniformMatrix4(this.LocationProjection, true, ref this.Projection);
+
+            this.LocationFrontOffset = this.Shader.GetUniformLocation("frontOffset");
+            GL.Uniform1(this.Shader.GetUniformLocation("falloffAfter"), this.falloffAfter);
 
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
@@ -238,8 +247,8 @@ namespace ColorChord.NET.Outputs.Display
                     this.RenderIndex = (ushort)((this.RenderIndex + this.NewLines) % this.Spokes);
                     this.NewData = false;
                     this.NewLines = 0;
-                    //GL.Uniform1(this.LocationDepthOffset, (float)(this.RenderIndex) / this.Spokes);
                 }
+                GL.Uniform1(this.LocationFrontOffset, (float)(this.RenderIndex) / this.Spokes);
             }
 
             GL.BindVertexArray(this.VertexArrayHandle);
