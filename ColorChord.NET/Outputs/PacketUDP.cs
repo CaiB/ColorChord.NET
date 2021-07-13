@@ -3,8 +3,10 @@ using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
 namespace ColorChord.NET.Outputs
 {
@@ -82,6 +84,20 @@ namespace ColorChord.NET.Outputs
         [ConfigString("IP", "127.0.0.1")]
         private readonly string IPFromConfig = "127.0.0.1";
 
+        [ConfigInt("Universe", 1, 63999, 1)]
+        private readonly ushort Universe = 1;
+
+        // Note only the lower 16 bytes are used.
+        [ConfigString("UUID", "9E917B13714044CFB46F7A8298692DE3")]
+        private readonly string UUIDFromConfig = "9E917B13714044CFB46F7A8298692DE3";
+
+        /// <summary>Unique sender ID used in E1.31 mode.</summary>
+        private readonly byte[] UUID = new byte[16];
+
+        private readonly byte[] E131Template;
+
+        private byte E131Sequence = 0;
+
         /// <summary> Where the packets will be sent. </summary>
         private readonly IPEndPoint Destination;
 
@@ -101,12 +117,102 @@ namespace ColorChord.NET.Outputs
             if (this.PortFromConfig < 1024) { Log.Warn("It is not recommended to use ports below 1024, as they are reserved. UDP sender is operating on port " + this.PortFromConfig + "."); }
             this.Destination = new IPEndPoint(IPAddress.Parse(this.IPFromConfig), this.PortFromConfig);
             ReadLEDPattern(this.LEDPatternFromConfig);
+            this.UUID = ParseUUID(this.UUIDFromConfig);
+
+            this.E131Template = new byte[]
+            {
+                // Root Layer
+                0x00, 0x10, // Preamble Size
+                0x00, 0x00, // Postamble Size
+                0x41, 0x53, 0x43, 0x2D, 0x45, 0x31, 0x2E, 0x31, 0x37, 0x00, 0x00, 0x00, // ACN Packet Identifier
+                0xFF, 0xFF, // Flags and Length (replaced)
+                0x00, 0x00, 0x00, 0x04, // Vector
+                0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // Unique Sender ID (CID) (replaced)
+
+                // E1.31 Framing Layer
+                0xFF, 0xFF, // Flags and Length (replaced)
+                0x00, 0x00, 0x00, 0x02, // Vector
+                0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // ^
+                0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // |
+                0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // |-- User Assigned Source Name (UTF8-encoded, null terminated) (replaced)
+                0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // v
+                0x64, // Priority
+                0x00, 0x00, // Synchronization Address: none, act immediately
+                0xFF, // Sequence number (replaced)
+                0x00, // Options (replaced): Set bit 6 for termination, or bit 7 for preview-only. Otherwise 0.
+                0xFF, 0xFF, // Universe (replaced)
+
+                // DMP Layer
+                0xFF, 0xFF, // Flags and Length (replaced)
+                0x02, // Vector
+                0xA1, // Address Type & Data Type
+                0x00, 0x00, // Start Address
+                0x00, 0x01, // Address Increment
+                0xFF, 0xFF, // Property Value Count (LED data length + 1) (replaced)
+                0x00 // Start code
+                // Insert up to 512 bytes of data here
+            };
+
+            // Insert sender ID (UUID)
+            for (int i = 0; i < 16; i++) { this.E131Template[22 + i] = this.UUID[i]; }
+
+            // Insert sender name
+            byte[] SenderName = ToNetworkString(this.Name, 64);
+            for (int i = 0; i < 64; i++) { this.E131Template[44 + i] = SenderName[i]; }
 
             this.Source.AttachOutput(this);
         }
 
         public void Start() { }
         public void Stop() { }
+
+        /// <summary>Takes a string, and converts it to a null-terminated UTF8 representation, within a length bound.</summary>
+        /// <remarks>The array will be of length maxBytes, even if the string is shorter, and the remaining space will be filled with 0x00s.</remarks>
+        /// <param name="input">The string to convert.</param>
+        /// <param name="maxBytes">The maximum number of bytes, including the null terminator, that the output can be.</param>
+        /// <returns>A UTF8-formatted string, safely truncated if necessary, with at least 1 null termination byte.</returns>
+        /// <exception cref="ArgumentException">If maxBytes is < 1</exception>
+        private static byte[] ToNetworkString(string input, int maxBytes)
+        {
+            if (maxBytes < 1) { throw new ArgumentException("maxBytes cannot be less than 1", nameof(maxBytes)); }
+            Encoding Encoding = Encoding.UTF8;
+
+            byte[] Output = new byte[maxBytes];
+            byte[] Converted;
+            if (Encoding.GetByteCount(input) < maxBytes) { Converted = Encoding.GetBytes(input); }
+            else
+            {
+                StringBuilder Builder = new();
+                int Bytes = 0;
+                TextElementEnumerator Enumerator = StringInfo.GetTextElementEnumerator(input);
+                while (Enumerator.MoveNext())
+                {
+                    string TextElement = Enumerator.GetTextElement();
+                    Bytes += Encoding.GetByteCount(TextElement);
+                    if (Bytes < maxBytes) { Builder.Append(TextElement); }
+                    else { break; }
+                }
+                Converted = Encoding.GetBytes(Builder.ToString());
+            }
+            Array.Copy(Converted, Output, Converted.Length);
+            if (Output[maxBytes - 1] != 0x00) { throw new Exception("An error occured while converting a string and the null termination was not added correctly."); }
+
+            return Output;
+        }
+
+        /// <summary>Parses a 32-char hexadecimal string into a byte array.</summary>
+        /// <param name="uuid">The hex string to parse. Must have length divisible by 2. Can be less than 32 chars, output will be padded with 0x00s.</param>
+        /// <returns>16-length byte array representation of the hex string.</returns>
+        private static byte[] ParseUUID(string uuid)
+        {
+            byte[] Output = new byte[16];
+            for (int i = 0; i < Math.Min(uuid.Length / 2, Output.Length); i++)
+            {
+                string ByteVal = uuid.Substring(i * 2, 2);
+                Output[i] = byte.Parse(ByteVal, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            }
+            return Output;
+        }
 
         /// <summary> Gets the default port for the given protocol. </summary>
         /// <param name="mode"> The protocol being used for sending. </param>
@@ -117,6 +223,7 @@ namespace ColorChord.NET.Outputs
             {
                 SendMode.RAW => 7777,
                 SendMode.TPM2NET => 65506,
+                SendMode.E131 => 5568,
                 _ => 7777,
             };
         }
@@ -152,6 +259,7 @@ namespace ColorChord.NET.Outputs
             {
                 "raw" => SendMode.RAW,
                 "tpm2.net" => SendMode.TPM2NET,
+                "e1.31" => SendMode.E131,
                 _ => throw new Exception("Invalid protocol specified for UDP sender: \"" + protocolName + "\""),
             };
         }
@@ -164,6 +272,7 @@ namespace ColorChord.NET.Outputs
             {
                 case SendMode.RAW: SendRaw(); break;
                 case SendMode.TPM2NET: SendTPM2Net(); break;
+                case SendMode.E131: SendE131(); break;
                 default: break;
             }
         }
@@ -316,6 +425,83 @@ namespace ColorChord.NET.Outputs
             }
         }
 
+        private void SendE131()
+        {
+            if (this.Source is not IDiscrete1D Src) { return; }
+
+            int SourceLength = Src.GetCountDiscrete() * this.LEDLength;
+            if (SourceLength > 512) { throw new Exception($"E1.31 can only handle packets with up to 512 bytes of content, you have {SourceLength} bytes of data to send."); }
+            byte[] Output = new byte[SourceLength + this.E131Template.Length];
+            uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
+
+            Buffer.BlockCopy(this.E131Template, 0, Output, 0, this.E131Template.Length);
+
+            int DMPLength = SourceLength + 1 + 10; // data length, 1 for start code, 10 for all other DMP header data.
+            int FrameLength = 77 + DMPLength; // 77 for frame header
+            int RootLength = 22 + FrameLength; // 22 for root header (excluding size and before)
+
+            ushort FlagsAndLengthRoot = (ushort)(0x7000U | (RootLength & 0x0FFFU));
+            ushort FlagsAndLengthFrame = (ushort)(0x7000U | (FrameLength & 0x0FFFU));
+            ushort FlagsAndLengthDMP = (ushort)(0x7000U | (DMPLength & 0x0FFFU));
+
+            Output[16] = (byte)(FlagsAndLengthRoot >> 8);
+            Output[17] = (byte)(FlagsAndLengthRoot & 0xFF);
+
+            Output[38] = (byte)(FlagsAndLengthFrame >> 8);
+            Output[39] = (byte)(FlagsAndLengthFrame & 0xFF);
+            
+            Output[111] = this.E131Sequence;
+            Output[113] = (byte)(this.Universe >> 8);
+            Output[114] = (byte)(this.Universe & 0xFF);
+
+            Output[115] = (byte)(FlagsAndLengthDMP >> 8);
+            Output[116] = (byte)(FlagsAndLengthDMP & 0xFF);
+            Output[123] = (byte)((SourceLength + 1) >> 8);
+            Output[124] = (byte)((SourceLength + 1) & 0xFF);
+
+            int Index = this.E131Template.Length;
+
+            for (int LED = 0; LED < Src.GetCountDiscrete(); LED++)
+            {
+                // Transform the index depending on LED matrix shape
+                int InDataIndex = TransformIndex(this.MatrixSizeX, this.MatrixSizeY, LED, this.RotateOutput, this.MirrorOutput, this.ArrayIsZigZag);
+
+                // Extract RGB
+                byte Red = (byte)((SourceData[InDataIndex] >> 16) & 0xFF);
+                byte Green = (byte)((SourceData[InDataIndex] >> 8) & 0xFF);
+                byte Blue = (byte)(SourceData[InDataIndex] & 0xFF);
+
+                // Calculate other channels if needed
+                byte Yellow = 0;
+                if (this.UsesChannelY) // Calculate Yellow
+                {
+                    // Lower of the two: (Red / 2), Green
+                    Yellow = Red / 2 > Green ? Green : (byte)(Red / 2);
+
+                    Red = (Red - Yellow) > 0 ? (byte)(Red - Yellow) : (byte)0;
+                    Green = (Green - Yellow) > 0 ? (byte)(Green - Yellow) : (byte)0;
+                }
+
+                // Copy each component to the output in the order specified in config.
+                for (int Component = 0; Component < this.LEDLength; Component++)
+                {
+                    byte Insert = ((Channel)this.LEDValueMapping[Component]) switch
+                    {
+                        Channel.Red => Red,
+                        Channel.Green => Green,
+                        Channel.Blue => Blue,
+                        Channel.Yellow => Yellow,
+                        _ => 0,
+                    };
+
+                    Output[Index++] = Insert;
+                }
+            }
+
+            this.Sender.Send(Output, Output.Length, this.Destination);
+            this.E131Sequence++;
+        }
+
         /// <summary> Transforms a data array index to map physical LED matrix locations to data indeces. </summary>
         /// <param name="sizeX"> The width of the LED array. </param>
         /// <param name="sizeY"> The height of the LED array. </param>
@@ -349,7 +535,8 @@ namespace ColorChord.NET.Outputs
         public enum SendMode
         {
             RAW,
-            TPM2NET
+            TPM2NET,
+            E131
         }
     }
 }
