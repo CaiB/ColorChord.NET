@@ -16,7 +16,7 @@ namespace ColorChord.NET
     public class ColorChord
     {
         private static string ConfigFile = "config.json";
-        public static bool Debug = false;
+        public static bool Debug = true;
 
         public static readonly Dictionary<string, IVisualizer> VisualizerInsts = new();
         public static readonly Dictionary<string, IOutput> OutputInsts = new();
