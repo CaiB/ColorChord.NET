@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Config;
+using ColorChord.NET.NoteFinder;
 using ColorChord.NET.Outputs;
 using ColorChord.NET.Sources;
 using ColorChord.NET.Visualizers;
@@ -16,20 +17,21 @@ namespace ColorChord.NET
     public class ColorChord
     {
         private static string ConfigFile = "config.json";
-        public static bool Debug = true;
+        public static bool Debug = false;
 
+        public static IAudioSource? Source { get; private set; }
+        public static NoteFinderCommon? NoteFinder { get; private set; }
         public static readonly Dictionary<string, IVisualizer> VisualizerInsts = new();
         public static readonly Dictionary<string, IOutput> OutputInsts = new();
-        //public static Dictionary<string, IController> Controllers;
-        public static IAudioSource? Source;
+        //public static readonly Dictionary<string, IController> Controllers = new();
 
         public static void Main(string[] args)
         {
-            if (args != null && args.Length > 0)
+            for(int i = 0; i < args.Length; i++)
             {
-                if (args[0].Equals("config", StringComparison.InvariantCultureIgnoreCase) && args.Length >= 2) { ConfigFile = args[1]; }
+                if (args[i] == "config" && args.Length > i + 1) { ConfigFile = args[++i]; }
+                if (args[i] == "debug") { Debug = true; }
             }
-            BaseNoteFinder.Start();
 
             if (!File.Exists(ConfigFile)) // No config file
             {
@@ -68,6 +70,11 @@ namespace ColorChord.NET
             using (StreamReader Reader = File.OpenText(ConfigFile)) { JSON = JObject.Parse(Reader.ReadToEnd()); }
             Log.Info("Reading and applying configuration file \"" + ConfigFile + "\"...");
 
+            // Note Finder
+            NoteFinderCommon? NoteFinder = ReadAndApplyNoteFinder(JSON);
+            ColorChord.NoteFinder = NoteFinder;
+            ColorChord.NoteFinder?.Start();
+
             // Audio Source
             IAudioSource? Source = ReadSource(JSON);
             if(Source == null)
@@ -77,9 +84,6 @@ namespace ColorChord.NET
             }
             ColorChord.Source = Source;
             ColorChord.Source.Start();
-
-            // Note Finder
-            ReadAndApplyNoteFinder(JSON);
 
             // Visualizers
             ReadAndApplyVisualizers(JSON);
@@ -110,12 +114,32 @@ namespace ColorChord.NET
             return null;
         }
 
-        private static void ReadAndApplyNoteFinder(JObject JSON)
+        private static NoteFinderCommon? ReadAndApplyNoteFinder(JObject JSON)
         {
-            // TODO: allow swapping of note finders, requiring instantiation
             const string NOTEFINDER = "NoteFinder";
+            Type DefaultType = typeof(BaseNoteFinder); // Defined once more below as well.
+            NoteFinderCommon? NoteFinder;
+
             if (!JSON.ContainsKey(NOTEFINDER) || JSON[NOTEFINDER] == null) { Log.Warn($"Could not find valid \"{NOTEFINDER}\" definition. All defaults will be used."); }
-            else { BaseNoteFinder.ApplyConfig(ToDict(JSON[NOTEFINDER]!)); }
+            else
+            {
+                JToken NFToken = JSON[NOTEFINDER]!;
+                string? NFType = NFToken.Value<string?>(TYPE);
+                if (NFType == null)
+                {
+                    NFType = DefaultType.Name;
+                    Log.Warn($"{NOTEFINDER} {TYPE} was not defined, using the default ({NFType}).");
+                }
+
+                NoteFinder = CreateObject<NoteFinderCommon>("ColorChord.NET.NoteFinder." + NFType, NFToken);
+                if (NoteFinder == null) { Log.Error($"Failed to create note finder. Check to make sure the type \"{NFType}\" is spelled correctly."); return null; }
+                Log.Info("Created audio source of type \"" + NoteFinder.GetType().FullName + "\".");
+                return NoteFinder;
+            }
+
+            NoteFinder = new BaseNoteFinder(NOTEFINDER, new Dictionary<string, object>());
+            Log.Info("Created audio source of type \"" + NoteFinder.GetType().FullName + "\".");
+            return NoteFinder;
         }
 
         private static void ReadAndApplyVisualizers(JObject JSON)
@@ -173,7 +197,7 @@ namespace ColorChord.NET
             if (ObjType == null || !typeof(InterfaceType).IsAssignableFrom(ObjType)) { return default; } // Type doesn't exist, or does not implement the right interface.
 
             string? ObjName = configEntry.Value<string>(NAME);
-            if (typeof(InterfaceType) == typeof(IAudioSource) /* || typeof(InterfaceType) == typeof(INoteFinder) */) { ObjName = "NoName"; }
+            if (typeof(InterfaceType) == typeof(IAudioSource) || typeof(InterfaceType) == typeof(NoteFinderCommon)) { ObjName = "NoName"; }
             if (ObjName == null) { return default; }
 
             object? Instance = Activator.CreateInstance(ObjType, ObjName, ToDict(configEntry, complexConfig));

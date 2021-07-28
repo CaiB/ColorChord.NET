@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Config;
+using ColorChord.NET.NoteFinder;
 using ColorChord.NET.Outputs;
 using ColorChord.NET.Visualizers.Formats;
 using System;
@@ -60,7 +61,7 @@ namespace ColorChord.NET.Visualizers
         private readonly List<IOutput> Outputs = new();
 
         /// <summary> Output data for the continuous voronoi mode. </summary>
-        public VoronoiPoint[] OutputData = new VoronoiPoint[BaseNoteFinder.NoteCount];
+        public VoronoiPoint[] OutputData;
 
         /// <summary> Output data for the discrete (pixel matrix) voronoi mode. </summary>
         private readonly uint[,] OutputDataDiscrete;
@@ -70,12 +71,17 @@ namespace ColorChord.NET.Visualizers
         private Thread? ProcessThread;
         private bool KeepGoing = true;
 
+        private readonly int NoteCount, BinsPerOctave;
+
         public Voronoi(string name, Dictionary<string, object> config)
         {
             this.Name = name;
             Configurer.Configure(this, config);
+            this.NoteCount = ColorChord.NoteFinder!.NoteCount;
+            this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
             this.OutputDataDiscrete = new uint[this.LEDCountX, this.LEDCountY];
-            this.DiscreteNotes = new DiscreteVoronoiNote[BaseNoteFinder.NoteCount];
+            this.DiscreteNotes = new DiscreteVoronoiNote[this.NoteCount];
+            this.OutputData = new VoronoiPoint[this.NoteCount];
         }
 
         public void Start()
@@ -83,7 +89,7 @@ namespace ColorChord.NET.Visualizers
             this.KeepGoing = true;
             this.ProcessThread = new Thread(DoProcessing) { Name = "Voronoi " + this.Name };
             this.ProcessThread.Start();
-            BaseNoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
+            ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
         }
 
         public void Stop()
@@ -133,36 +139,36 @@ namespace ColorChord.NET.Visualizers
             int TotalLEDCount = this.LEDCountX * this.LEDCountY; //tleds
             float AmplitudeSum = 0F; // totalexp
 
-            for (byte i = 0; i < BaseNoteFinder.NoteCount; i++)
+            for (byte i = 0; i < this.NoteCount; i++)
             {
-                float Amplitude = MathF.Pow(BaseNoteFinder.Notes[i].AmplitudeFiltered, this.AmplifyPower) - this.NoteCutoff;
+                float Amplitude = MathF.Pow(NoteFinderCommon.Notes[i].AmplitudeFiltered, this.AmplifyPower) - this.NoteCutoff;
                 if (Amplitude < 0) { Amplitude = 0F; }
                 this.DiscreteNotes[i].Value = Amplitude;
                 AmplitudeSum += Amplitude;
 
                 if (this.CentersFromSides)
                 {
-                    float Angle = (BaseNoteFinder.Notes[i].Position / BaseNoteFinder.OctaveBinCount) * MathF.PI * 2;
+                    float Angle = (NoteFinderCommon.Notes[i].Position / this.BinsPerOctave) * MathF.PI * 2;
                     float CenterX = this.LEDCountX / 2F;
                     float CenterY = this.LEDCountY / 2F;
                     float NewX = (MathF.Sin(Angle) * CenterX) + CenterX;
                     float NewY = (MathF.Cos(Angle) * CenterY) + CenterY;
-                    bool NotePresent = (BaseNoteFinder.PersistentNoteIDs[i] != 0);
+                    bool NotePresent = (NoteFinderCommon.PersistentNoteIDs[i] != 0);
                     this.DiscreteNotes[i].X = NotePresent ? (this.DiscreteNotes[i].X * 0.9F) + (NewX * 0.1F) : CenterX;
                     this.DiscreteNotes[i].Y = NotePresent ? (this.DiscreteNotes[i].Y * 0.9F) + (NewY * 0.1F) : CenterY;
                 }
                 else
                 {
                     // Base colorchord uses a random number generator with the note ID as seed. I didn't see a good way to do that here, so I instead used a simplified hash function from SO.
-                    uint RandX = (((uint)BaseNoteFinder.PersistentNoteIDs[i] >> 16) ^ (uint)BaseNoteFinder.PersistentNoteIDs[i]) * 0x45D9F3B;
+                    uint RandX = (((uint)NoteFinderCommon.PersistentNoteIDs[i] >> 16) ^ (uint)NoteFinderCommon.PersistentNoteIDs[i]) * 0x45D9F3B;
                     this.DiscreteNotes[i].X = ((RandX >> 16) ^ RandX) % this.LEDCountX;
-                    uint RandY = (((uint)BaseNoteFinder.PersistentNoteIDs[i] >> 16) ^ (uint)BaseNoteFinder.PersistentNoteIDs[i]) * 0x119DE1F3;
+                    uint RandY = (((uint)NoteFinderCommon.PersistentNoteIDs[i] >> 16) ^ (uint)NoteFinderCommon.PersistentNoteIDs[i]) * 0x119DE1F3;
                     this.DiscreteNotes[i].Y = ((RandY >> 16) ^ RandY) % this.LEDCountY;
                 }
             }
 
             // Determine number of LEDs/blocks for each note
-            for (byte i = 0; i < BaseNoteFinder.NoteCount; i++)
+            for (byte i = 0; i < this.DiscreteNotes.Length; i++)
             {
                 this.DiscreteNotes[i].LEDCount = this.DiscreteNotes[i].Value * TotalLEDCount / AmplitudeSum;
                 this.DiscreteNotes[i].Value /= AmplitudeSum;
@@ -179,7 +185,7 @@ namespace ColorChord.NET.Visualizers
                     int BestMatch = -1;
                     float BestMatchValue = 0F;
 
-                    for (byte PeakInd = 0; PeakInd < BaseNoteFinder.NoteCount; PeakInd++)
+                    for (byte PeakInd = 0; PeakInd < this.DiscreteNotes.Length; PeakInd++)
                     {
                         float DistX = OffsetX - this.DiscreteNotes[PeakInd].X;
                         float DistY = OffsetY - this.DiscreteNotes[PeakInd].Y;
@@ -200,9 +206,9 @@ namespace ColorChord.NET.Visualizers
                     uint Colour = 0;
                     if (BestMatch != -1)
                     {
-                        float Saturation = BaseNoteFinder.Notes[BestMatch].AmplitudeFinal * this.SaturationAmplifier;
+                        float Saturation = NoteFinderCommon.Notes[BestMatch].AmplitudeFinal * this.SaturationAmplifier;
                         if (Saturation > 1F) { Saturation = 1F; }
-                        float Note = BaseNoteFinder.Notes[BestMatch].Position / BaseNoteFinder.OctaveBinCount;
+                        float Note = NoteFinderCommon.Notes[BestMatch].Position / this.BinsPerOctave;
                         Colour = VisualizerTools.CCtoHEX(Note, 1F, MathF.Pow(Saturation, this.OutGamma));
                     }
                     this.OutputDataDiscrete[X, Y] = Colour;

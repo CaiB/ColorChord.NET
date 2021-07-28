@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Config;
+using ColorChord.NET.NoteFinder;
 using ColorChord.NET.Outputs;
 using ColorChord.NET.Visualizers.Formats;
 using System;
@@ -66,6 +67,8 @@ namespace ColorChord.NET.Visualizers
         /// <summary> The thread on which input note data is processed by this visualizer. </summary>
         private Thread? ProcessThread;
 
+        private readonly int NoteCount, BinsPerOctave;
+
         public Cells(string name, Dictionary<string, object> config)
         {
             this.Name = name;
@@ -73,6 +76,8 @@ namespace ColorChord.NET.Visualizers
             this.OutputData = new uint[this.LEDCount]; // TODO: Properly handle LEDCount changing during runtime.
             this.LEDBinMapping = new int[this.LEDCount];
             this.LastChangeTime = new double[this.LEDCount];
+            this.NoteCount = ColorChord.NoteFinder!.NoteCount;
+            this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
         }
 
         public void Start()
@@ -80,7 +85,7 @@ namespace ColorChord.NET.Visualizers
             this.KeepGoing = true;
             this.ProcessThread = new Thread(DoProcessing);
             this.ProcessThread.Start();
-            BaseNoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
+            ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
         }
 
         public void Stop()
@@ -114,10 +119,8 @@ namespace ColorChord.NET.Visualizers
 
         private void Update()
         {
-            const int BinCount = BaseNoteFinder.NoteCount;
-
             // Determine how many LEDs of each colour there currently are on from the previous cycle.
-            float[] LEDsPerBin = new float[BinCount];
+            float[] LEDsPerBin = new float[NoteCount];
             for (int i = 0; i < this.LEDCount; i++)
             {
                 int Bin = this.LEDBinMapping[i];
@@ -125,17 +128,17 @@ namespace ColorChord.NET.Visualizers
             }
 
             // Determine the colour and value for each note present in new input data, then figure out how many LEDs should be on in that colour.
-            float[] BinColours = new float[BinCount]; // Range of 0-1, colour of each bin
-            float[] BinValuesSlow = new float[BinCount]; // Note amplitude, slightly smoothed to reduce flicker.
-            float[] BinValues = new float[BinCount]; // Note amplitude, not smoothed.
+            float[] BinColours = new float[NoteCount]; // Range of 0-1, colour of each bin
+            float[] BinValuesSlow = new float[NoteCount]; // Note amplitude, slightly smoothed to reduce flicker.
+            float[] BinValues = new float[NoteCount]; // Note amplitude, not smoothed.
             float BinValuesSum = 0;
-            float[] LEDsDesired = new float[BinCount];
+            float[] LEDsDesired = new float[NoteCount];
             float TotalDesiredCount = 0; // How many LEDs we'd want on, taking into account the quantity for each colour
-            for (int i = 0; i < BinCount; i++)
+            for (int i = 0; i < NoteCount; i++)
             {
-                BinColours[i] = BaseNoteFinder.Notes[i].Position / BaseNoteFinder.OctaveBinCount;
-                BinValuesSlow[i] = MathF.Pow(BaseNoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
-                BinValues[i] = MathF.Pow(BaseNoteFinder.Notes[i].Amplitude, this.LightSiding);
+                BinColours[i] = NoteFinderCommon.Notes[i].Position / this.BinsPerOctave;
+                BinValuesSlow[i] = MathF.Pow(NoteFinderCommon.Notes[i].AmplitudeFiltered, this.LightSiding);
+                BinValues[i] = MathF.Pow(NoteFinderCommon.Notes[i].Amplitude, this.LightSiding);
                 BinValuesSum += BinValuesSlow[i];
 
                 float DesiredCount = BinValuesSlow[i] * this.QtyAmp; // How many LEDs we'd like on for this colour
@@ -147,15 +150,15 @@ namespace ColorChord.NET.Visualizers
             if (TotalDesiredCount > this.LEDCount)
             {
                 float ScaleFactor = this.LEDCount / TotalDesiredCount;
-                for (int i = 0; i < BinCount; i++) { LEDsDesired[i] *= ScaleFactor; }
+                for (int i = 0; i < NoteCount; i++) { LEDsDesired[i] *= ScaleFactor; }
             }
 
             // Determine how many LEDs we'd like to turn on (+) or off (-) based on how many we want on, and how many are on.
-            float[] DesiredChange = new float[BinCount];
-            for (int i = 0; i < BinCount; i++) { DesiredChange[i] = LEDsDesired[i] - LEDsPerBin[i]; }
+            float[] DesiredChange = new float[NoteCount];
+            for (int i = 0; i < NoteCount; i++) { DesiredChange[i] = LEDsDesired[i] - LEDsPerBin[i]; }
 
             // Find LEDs to turn off.
-            for (int BinInd = 0; BinInd < BinCount; BinInd++)
+            for (int BinInd = 0; BinInd < NoteCount; BinInd++)
             {
                 while (DesiredChange[BinInd] < -0.5) // We want to reduce LED count of this colour.
                 {
@@ -184,7 +187,7 @@ namespace ColorChord.NET.Visualizers
             }
 
             // Find LEDs to turn on. Pattern depends on whether snakey is on.
-            for (int BinInd = 0; BinInd < BinCount; BinInd++)
+            for (int BinInd = 0; BinInd < NoteCount; BinInd++)
             {
                 while (DesiredChange[BinInd] > 0.5) // We want to increase LED count of this colour.
                 {

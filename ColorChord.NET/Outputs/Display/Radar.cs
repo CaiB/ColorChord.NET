@@ -1,4 +1,5 @@
 using ColorChord.NET.Config;
+using ColorChord.NET.NoteFinder;
 using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
 using OpenTK.Graphics.OpenGL4;
@@ -75,6 +76,7 @@ namespace ColorChord.NET.Outputs.Display
                 Log.Error("Radar cannot use the provided visualizer, as it does not output 1D discrete data.");
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IDiscrete1D.");
             }
+            if (ColorChord.NoteFinder is not BaseNoteFinder) { throw new Exception("Radar currently only supports BaseNoteFinder."); }
             Configurer.Configure(this, config);
             this.HostWindow = parent;
             this.DataSource = (IDiscrete1D)visualizer;

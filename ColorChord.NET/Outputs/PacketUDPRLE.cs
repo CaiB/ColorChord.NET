@@ -92,7 +92,7 @@ namespace ColorChord.NET.Outputs
             if (!this.Enabled) { return; }
             if (this.Source is not IDiscrete1D Src) { return; }
 
-            byte[] Output = new byte[BaseNoteFinder.NoteCount * this.LEDLength];
+            byte[] Output = new byte[ColorChord.NoteFinder!.NoteCount * this.LEDLength];
             uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
 
             // Data Content

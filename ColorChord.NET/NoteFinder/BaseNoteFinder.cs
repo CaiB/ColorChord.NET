@@ -6,23 +6,11 @@ using System.Threading;
 using ColorChord.NET.Config;
 using ColorChord.NET.NoteFinder;
 
-namespace ColorChord.NET
+namespace ColorChord.NET.NoteFinder
 {
     /// <summary> Equivalent to the note finder found in the base C colorchord implementation, by cnlohr. </summary>
-    public static class BaseNoteFinder
+    public sealed class BaseNoteFinder : NoteFinderCommon
     {
-        /// <summary> The buffer for audio data gathered from a system device. Circular buffer, with the current write position stored in <see cref="AudioBufferHeadWrite"/>. </summary>
-        public static float[] AudioBuffer = new float[8192]; // TODO: Make buffer size adjustable or auto-set based on sample rate (might be too short for super-high rates)
-
-        /// <summary> Where in the <see cref="AudioBuffer"/> we are currently adding new audio data. </summary>
-        public static int AudioBufferHeadWrite = 0;
-
-        /// <summary> When data was last added to the buffer. Used to detect idle state. </summary>
-        public static DateTime LastDataAdd;
-
-        /// <summary> The speed (in ms between runs) at which the note finder needs to run, set by the fastest visualizer. </summary>
-        public static uint ShortestPeriod { get; private set; } = 100;
-
         /// <summary> Whether to keep processing, or shut down operations.  </summary>
         private static bool KeepGoing = true;
 
@@ -32,37 +20,37 @@ namespace ColorChord.NET
         // Things that are always the same.
         #region Constants
         /// <summary> How many bins compose one octave in the raw DFT data. </summary>
-        public const int OctaveBinCount = 24;
+        private const int BINS_PER_OCTAVE = 24;
 
-        /// <summary> Over how many octaves the raw DFT data will be processed. </summary>
-        public const int OctaveCount = 5;
+        /// <summary> Over how many octaves the audio data will be processed. </summary>
+        private const int OCTAVES = 5;
 
         /// <summary> How many bins the DFT will class sound frequency data into. </summary>
-        public const int DFTRawBinCount = OctaveBinCount * OctaveCount;
+        private const int TOTAL_DFT_BINS = BINS_PER_OCTAVE * OCTAVES;
 
         /// <summary> How many note peaks are attempted to be extracted from the frequency data. </summary>
-        public const int NoteCount = OctaveBinCount / 2;
+        private const int NOTE_QTY = BINS_PER_OCTAVE / 2;
 
         /// <summary> This is a required parameter for the DFT, but the desktop version doesn't use it. </summary>
         private const int DFT_Q = 20;
 
         /// <summary> This is a required parameter for the DFT, but the desktop version doesn't use it. </summary>
-        private const int DFT_Speedup = 1000;
+        private const int DFT_SPEEDUP = 1000;
 
         /// <summary> The sigma value to use for <see cref="NoteDistribution"/> by default. </summary>
-        private const float DefaultDistributionSigma = 1.4F;
+        private const float DEFAULT_DISTRIBUTION_SIGMA = 1.4F;
 
         /// <summary> Used in normalizing all peak amplitudes. </summary>
-        private const float PeakCompressCoefficient = 1F;
+        private const float PEAK_COMPRESS_COEFF = 1F;
 
         /// <summary> Used in normalizing all peak amplitudes. </summary>
-        private const float PeakCompressExponent = 0.5F;
+        private const float PEAK_COMPRESS_EXP = 0.5F;
 
         /// <summary> How large a note needs to be to not be considered dead (and therefore re-assigned). </summary>
-        private const float MinNoteAmplitude = 0.001F;
+        private const float MIN_NOTE_SURVIVAL_AMPLITUDE = 0.001F;
 
         /// <summary> How large a distribution needs to be in order to be turned into a brand new note. </summary>
-        private const float MinDistributionValueNewNote = 0.02F;
+        private const float MIN_NOTE_CREATION_AMPLITUDE = 0.02F;
         #endregion
 
         // Things that are set by config at startup, then constant.
@@ -84,7 +72,7 @@ namespace ColorChord.NET
         private static float DFTDataAmplifier = 2F;
 
         /// <summary> The slope of the extra frequency-dependent amplification done to raw DFT data. Positive values increase sensitivity at higher frequencies. </summary>
-        /// <remarks> Amplification is 1.0 at the minimum frequency, and 1.0 + (<see cref="DFTSensitivitySlope"/> * <see cref="DFTRawBinCount"/>) at the highest, increasing by <see cref="DFTSensitivitySlope"/> at each bin. </remarks>
+        /// <remarks> Amplification is 1.0 at the minimum frequency, and 1.0 + (<see cref="DFTSensitivitySlope"/> * <see cref="TOTAL_DFT_BINS"/>) at the highest, increasing by <see cref="DFTSensitivitySlope"/> at each bin. </remarks>
         [ConfigFloat("DFTSlope", -100F, 100F, 0.1F)]
         private static float DFTSensitivitySlope = 0.1F;
 
@@ -132,17 +120,21 @@ namespace ColorChord.NET
         #region CycleData
         /// <summary> The frequency in Hz, that each of the raw bins from the DFT corresponds to. </summary>
         /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
-        private static readonly float[] RawBinFrequencies = new float[DFTRawBinCount];
+        private static readonly float[] RawBinFrequencies = new float[TOTAL_DFT_BINS];
 
         /// <summary> The frequency spectrum, folded to overlap into a single octave length. </summary>
         /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
-        private static readonly float[] OctaveBinValues = new float[OctaveBinCount];
+        private static readonly float[] OctaveBinValues = new float[BINS_PER_OCTAVE];
 
         private static int CurrentNoteID = 1;
 
         /// <summary> The individual note distributions (peaks) detected this cycle. </summary>
         /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
-        public static readonly NoteDistribution[] NoteDistributions = new NoteDistribution[NoteCount];
+        public static readonly NoteDistribution[] NoteDistributions = new NoteDistribution[NOTE_QTY];
+
+        /// <summary> The non-folded frequency bins, used inter-frame to do smoothing, then folded to form the spectrum. </summary>
+        /// <remarks> Data contained from previous cycles is re-used during next cycle to do smoothing. </remarks>
+        private static readonly float[] FrequencyBinValues = new float[TOTAL_DFT_BINS];
 
         public static float LastLowFreqSum = 0;
 
@@ -150,25 +142,25 @@ namespace ColorChord.NET
 
         #endregion
 
-        /// <summary> The non-folded frequency bins, used inter-frame to do smoothing, then folded to form the spectrum. </summary>
-        /// <remarks> Data contained from previous cycles is re-used during next cycle to do smoothing. </remarks>
-        private static readonly float[] FrequencyBinValues = new float[DFTRawBinCount];
+        // Info for other systems:
+        public override int NoteCount { get => NOTE_QTY; }
+        public override int BinsPerOctave { get => BINS_PER_OCTAVE; } // TODO: This is only really necessary because we don't scale the note output values. Consider doing that.
 
-        // Our output data:
-
-        /// <summary> Used to keep track of locations of notes that stay between frames in <see cref="Notes"/>, as that array's order may change. </summary>
-        public static readonly int[] PersistentNoteIDs = new int[NoteCount];
-
-        /// <summary> The notes found during this cycle. This is our output to the visulizers. </summary>
-        public static readonly Note[] Notes = new Note[NoteCount];
+        public BaseNoteFinder(string name, Dictionary<string, object> config)
+        {
+            Configurer.Configure(this, config);
+            SetSampleRate(SampleRate); // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
+            Notes = new Note[NOTE_QTY];
+            PersistentNoteIDs = new int[NOTE_QTY];
+        }
 
         /// <summary> Updates the sample rate if the audio source has changed. </summary>
-        public static void SetSampleRate(int sampleRate)
+        public override void SetSampleRate(int sampleRate)
         {
             SampleRate = sampleRate;
-            for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
+            for (int RawBinIndex = 0; RawBinIndex < TOTAL_DFT_BINS; RawBinIndex++)
             {
-                RawBinFrequencies[RawBinIndex] = (sampleRate / MinimumFrequency) / MathF.Pow(2, (float)RawBinIndex / OctaveBinCount);
+                RawBinFrequencies[RawBinIndex] = (sampleRate / MinimumFrequency) / MathF.Pow(2, (float)RawBinIndex / BINS_PER_OCTAVE);
             }
         }
 
@@ -176,21 +168,13 @@ namespace ColorChord.NET
 
         /// <summary> Adjusts the note finder run interval if the newly added visualizer/output needs it to run faster, otherwise does nothing. </summary>
         /// <param name="period"> The period, in milliseconds, that you need the note finder to run at or faster than. </param>
-        public static void AdjustOutputSpeed(uint period)
+        public override void AdjustOutputSpeed(uint period)
         {
             if (period < ShortestPeriod) { ShortestPeriod = period; }
         }
 
-        public static void ApplyConfig(Dictionary<string, object> config)
-        {
-            Configurer.Configure(typeof(BaseNoteFinder), config);
-
-            // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
-            SetSampleRate(SampleRate);
-        }
-
         /// <summary> Starts the processing thread. </summary>
-        public static void Start()
+        public override void Start()
         {
             KeepGoing = true;
             ProcessThread = new Thread(DoProcessing);
@@ -198,7 +182,7 @@ namespace ColorChord.NET
         }
 
         /// <summary> Stops the processing thread. </summary>
-        public static void Stop()
+        public override void Stop()
         {
             KeepGoing = false;
             ProcessThread?.Join();
@@ -220,7 +204,7 @@ namespace ColorChord.NET
         private static void Cycle()
         {
             // DFT outputs only a small number of bins, we'll need to process this data a lot to get smooth note positions.
-            float[] DFTBinData = new float[DFTRawBinCount];
+            float[] DFTBinData = new float[TOTAL_DFT_BINS];
 
             // This will read all buffer data from where it was called last up to [AudioBufferHeadWrite] in order to catch up.
             BaseNoteFinderDFT.DoDFTProgressive32(ref DFTBinData, RawBinFrequencies, AudioBuffer, AudioBufferHeadWrite);
@@ -232,7 +216,7 @@ namespace ColorChord.NET
             LastLowFreqCount++;
 
             // Pre-process input DFT data.
-            for (int RawBinIndex = 0; RawBinIndex < DFTRawBinCount; RawBinIndex++)
+            for (int RawBinIndex = 0; RawBinIndex < TOTAL_DFT_BINS; RawBinIndex++)
             {
                 float NewData = DFTBinData[RawBinIndex]; // The raw DFT data for this bin
                 NewData *= DFTDataAmplifier; // Amplify incoming data by a constant
@@ -244,31 +228,31 @@ namespace ColorChord.NET
 
             // Taper off the first and last octave.
             // This is to prevent frequency content at the edges of our bin set from creating discontinuities in the folded bins.
-            for (int OctaveBinIndex = 0; OctaveBinIndex < OctaveBinCount; OctaveBinIndex++)
+            for (int OctaveBinIndex = 0; OctaveBinIndex < BINS_PER_OCTAVE; OctaveBinIndex++)
             {
-                FrequencyBinValues[OctaveBinIndex] *= (OctaveBinIndex + 1F) / OctaveBinCount; // Taper the first octave
-                FrequencyBinValues[DFTRawBinCount - OctaveBinIndex - 1] *= (OctaveBinIndex + 1F) / OctaveBinCount; // Taper the last octave
+                FrequencyBinValues[OctaveBinIndex] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the first octave
+                FrequencyBinValues[TOTAL_DFT_BINS - OctaveBinIndex - 1] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the last octave
             }
 
             // Fold the bins to make one single octave-length array, where all like notes (e.g. C2, C3, C4) are combined, regardless of their original octave.
-            for (int BinIndex = 0; BinIndex < OctaveBinCount; BinIndex++)
+            for (int BinIndex = 0; BinIndex < BINS_PER_OCTAVE; BinIndex++)
             {
                 float Amplitude = 0;
-                for (int Octave = 0; Octave < OctaveCount; Octave++) { Amplitude += FrequencyBinValues[(Octave * OctaveBinCount) + BinIndex]; }
+                for (int Octave = 0; Octave < OCTAVES; Octave++) { Amplitude += FrequencyBinValues[(Octave * BINS_PER_OCTAVE) + BinIndex]; }
                 OctaveBinValues[BinIndex] = Amplitude;
             }
 
             // Do some filtering on the now-folded bins to remove meaningless peaks.
             // Averages out each bin a little bit with adjacent bins.
             // Runs [OctaveFilterIterations] times, averaging with strength [OctaveFilterStrength].
-            float[] OctaveBinValuesPre = new float[OctaveBinCount];
+            float[] OctaveBinValuesPre = new float[BINS_PER_OCTAVE];
             for (int Iteration = 0; Iteration < OctaveFilterIterations; Iteration++)
             {
-                Array.Copy(OctaveBinValues, OctaveBinValuesPre, OctaveBinCount); // COpy the octave data into our temporary array.
-                for (int BinIndex = 0; BinIndex < OctaveBinCount; BinIndex++)
+                Array.Copy(OctaveBinValues, OctaveBinValuesPre, BINS_PER_OCTAVE); // COpy the octave data into our temporary array.
+                for (int BinIndex = 0; BinIndex < BINS_PER_OCTAVE; BinIndex++)
                 {
-                    int IndexRight = (BinIndex + OctaveBinCount + 1) % OctaveBinCount; // The next bin to the right (wrapping around if needed).
-                    int IndexLeft = (BinIndex + OctaveBinCount - 1) % OctaveBinCount; // The next bin to the left (wrapping around if needed).
+                    int IndexRight = (BinIndex + BINS_PER_OCTAVE + 1) % BINS_PER_OCTAVE; // The next bin to the right (wrapping around if needed).
+                    int IndexLeft = (BinIndex + BINS_PER_OCTAVE - 1) % BINS_PER_OCTAVE; // The next bin to the left (wrapping around if needed).
                     float ValueRight = OctaveBinValuesPre[IndexRight];
                     float ValueLeft = OctaveBinValuesPre[IndexLeft];
 
@@ -280,7 +264,7 @@ namespace ColorChord.NET
             }
 
             // Reset all note distributions to off state.
-            for (int NoteIndex = 0; NoteIndex < NoteCount; NoteIndex++) { NoteDistributions[NoteIndex].HasNote = false; }
+            for (int NoteIndex = 0; NoteIndex < NOTE_QTY; NoteIndex++) { NoteDistributions[NoteIndex].HasNote = false; }
 
             // Find note distributions.
             // NOTE: This is decompose.c/DecomposeHistogram in TURBO_DECOMPOSE mode (single iteration).
@@ -288,10 +272,10 @@ namespace ColorChord.NET
 
             int DistributionsFound = 0;
 
-            for (int BinIndex = 0; BinIndex < OctaveBinCount; BinIndex++)
+            for (int BinIndex = 0; BinIndex < BINS_PER_OCTAVE; BinIndex++)
             {
-                int IndexLeft = (BinIndex - 1 + OctaveBinCount) % OctaveBinCount;
-                int IndexRight = (BinIndex + 1) % OctaveBinCount;
+                int IndexLeft = (BinIndex - 1 + BINS_PER_OCTAVE) % BINS_PER_OCTAVE;
+                int IndexRight = (BinIndex + 1) % BINS_PER_OCTAVE;
                 float ValueLeft = OctaveBinValues[IndexLeft];
                 float ValueHere = OctaveBinValues[BinIndex];
                 float ValueRight = OctaveBinValues[IndexRight];
@@ -313,17 +297,17 @@ namespace ColorChord.NET
                 // Output the distribution information.
                 NoteDistributions[DistributionsFound].Mean = BinIndex + InternalOffset;
                 NoteDistributions[DistributionsFound].Amplitude = ValueHere * 4;
-                NoteDistributions[DistributionsFound].Sigma = DefaultDistributionSigma;
+                NoteDistributions[DistributionsFound].Sigma = DEFAULT_DISTRIBUTION_SIGMA;
 
                 DistributionsFound++;
             }
 
             // Clear out the distributions that are not currently active.
-            for (int DistrIndex = DistributionsFound; DistrIndex < NoteCount; DistrIndex++)
+            for (int DistrIndex = DistributionsFound; DistrIndex < NOTE_QTY; DistrIndex++)
             {
                 NoteDistributions[DistrIndex].Mean = -1F;
                 NoteDistributions[DistrIndex].Amplitude = 0F;
-                NoteDistributions[DistrIndex].Sigma = DefaultDistributionSigma;
+                NoteDistributions[DistrIndex].Sigma = DEFAULT_DISTRIBUTION_SIGMA;
             }
 
             // Normalize distribution amplitudes.
@@ -332,7 +316,7 @@ namespace ColorChord.NET
             for (int DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++) { AmplitudeSum += NoteDistributions[DistrIndex].Amplitude; }
 
             // Find coefficient to multiply all by.
-            float AmplitudeCoefficient = PeakCompressCoefficient / MathF.Pow(AmplitudeSum * PeakCompressCoefficient, PeakCompressExponent);
+            float AmplitudeCoefficient = PEAK_COMPRESS_COEFF / MathF.Pow(AmplitudeSum * PEAK_COMPRESS_COEFF, PEAK_COMPRESS_EXP);
 
             // Scale peaks.
             for (int DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++) { NoteDistributions[DistrIndex].Amplitude *= AmplitudeCoefficient; }
@@ -341,18 +325,18 @@ namespace ColorChord.NET
             Array.Sort(NoteDistributions);
 
             // Stores whether the given note peak has been associated and influenced by a distribution this cycle.
-            bool[] NotesAssociated = new bool[NoteCount];
+            bool[] NotesAssociated = new bool[NOTE_QTY];
 
             // Try to find peaks that are close together (in respect to frequency).
             // This modifies [Notes] by using new data from [NoteDistributions].
-            for (int PeakIndex = 0; PeakIndex < NoteCount; PeakIndex++)
+            for (int PeakIndex = 0; PeakIndex < NOTE_QTY; PeakIndex++)
             {
                 // For each note peak, check if a distribution is close by. If so, adjust the peak location and amplitude to use this new information.
                 for (byte DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++)
                 {
                     if (!NoteDistributions[DistrIndex].HasNote && // If this distribution is not already influencing another note.
                         !NotesAssociated[PeakIndex] && // If this note is not already being influenced by another distribution
-                        LoopDistance(Notes[PeakIndex].Position, NoteDistributions[DistrIndex].Mean, OctaveBinCount) < MinNoteInfluenceDistance && // The locations are close enough to merge
+                        LoopDistance(Notes[PeakIndex].Position, NoteDistributions[DistrIndex].Mean, BINS_PER_OCTAVE) < MinNoteInfluenceDistance && // The locations are close enough to merge
                         NoteDistributions[DistrIndex].Amplitude > 0.00001F) // The new data is significant
                     {
                         // note_peaks_to_dists_mapping can be implemented here if needed.
@@ -360,7 +344,7 @@ namespace ColorChord.NET
                         NoteDistributions[DistrIndex].HasNote = true; // Don't let this distribution affect other notes.
                         if (PersistentNoteIDs[PeakIndex] == 0) { PersistentNoteIDs[PeakIndex] = CurrentNoteID++; }
                         NotesAssociated[PeakIndex] = true; // This note has been influenced by a distribution, so is still active.
-                        Notes[PeakIndex].Position = LoopAverageWeighted(Notes[PeakIndex].Position, (1F - NoteAttachFrequencyIIRMultiplier), NoteDistributions[DistrIndex].Mean, NoteAttachFrequencyIIRMultiplier, OctaveBinCount);
+                        Notes[PeakIndex].Position = LoopAverageWeighted(Notes[PeakIndex].Position, (1F - NoteAttachFrequencyIIRMultiplier), NoteDistributions[DistrIndex].Mean, NoteAttachFrequencyIIRMultiplier, BINS_PER_OCTAVE);
 
                         float NewAmplitude = Notes[PeakIndex].Amplitude;
                         NewAmplitude *= (1F - NoteAttachAmplitudeIIRMultiplier);
@@ -371,13 +355,13 @@ namespace ColorChord.NET
             }
 
             // Combine notes if they are close enough.
-            for (int NoteIndex1 = 0; NoteIndex1 < NoteCount; NoteIndex1++)
+            for (int NoteIndex1 = 0; NoteIndex1 < NOTE_QTY; NoteIndex1++)
             {
-                for (int NoteIndex2 = 0; NoteIndex2 < NoteCount; NoteIndex2++)
+                for (int NoteIndex2 = 0; NoteIndex2 < NOTE_QTY; NoteIndex2++)
                 {
                     if (NoteIndex1 == NoteIndex2) { continue; } // Don't try to compare a note with itself.
 
-                    if (LoopDistance(Notes[NoteIndex1].Position, Notes[NoteIndex2].Position, OctaveBinCount) < MinNoteCombineDistance && // The two notes are close enough
+                    if (LoopDistance(Notes[NoteIndex1].Position, Notes[NoteIndex2].Position, BINS_PER_OCTAVE) < MinNoteCombineDistance && // The two notes are close enough
                         Notes[NoteIndex1].Amplitude > 0 && // v
                         Notes[NoteIndex2].Amplitude > 0) // Both notes need to be significant to be combined.
                     {
@@ -385,7 +369,7 @@ namespace ColorChord.NET
                         int IndexPrimary = Is1Bigger ? NoteIndex1 : NoteIndex2; // The index of the larger note.
                         int IndexSecondary = Is1Bigger ? NoteIndex2 : NoteIndex1; // The index of the smaller note.
 
-                        float NewPosition = LoopAverageWeighted(Notes[IndexPrimary].Position, Notes[IndexPrimary].Amplitude, Notes[IndexSecondary].Position, Notes[IndexSecondary].Amplitude, OctaveBinCount);
+                        float NewPosition = LoopAverageWeighted(Notes[IndexPrimary].Position, Notes[IndexPrimary].Amplitude, Notes[IndexSecondary].Position, Notes[IndexSecondary].Amplitude, BINS_PER_OCTAVE);
 
                         // Merge secondary into primary at new position
                         Notes[IndexPrimary].Amplitude += Notes[IndexSecondary].Amplitude;
@@ -400,9 +384,9 @@ namespace ColorChord.NET
             }
 
             // Note slots that are empty should be assigned to not yet used distributions, if there are any.
-            for (int NoteIndex = 0; NoteIndex < NoteCount; NoteIndex++)
+            for (int NoteIndex = 0; NoteIndex < NOTE_QTY; NoteIndex++)
             {
-                if (Notes[NoteIndex].Amplitude < MinNoteAmplitude)
+                if (Notes[NoteIndex].Amplitude < MIN_NOTE_SURVIVAL_AMPLITUDE)
                 {
                     PersistentNoteIDs[NoteIndex] = 0;
 
@@ -410,7 +394,7 @@ namespace ColorChord.NET
                     for (int DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++)
                     {
                         if (!NoteDistributions[DistrIndex].HasNote && // Hasn't already been turned into a note.
-                            NoteDistributions[DistrIndex].Amplitude > MinDistributionValueNewNote) // The distribution is large enough to be worth turning into a new note.
+                            NoteDistributions[DistrIndex].Amplitude > MIN_NOTE_CREATION_AMPLITUDE) // The distribution is large enough to be worth turning into a new note.
                         {
                             // Create a new note with information from this distribution.
                             PersistentNoteIDs[NoteIndex] = CurrentNoteID++;
@@ -424,7 +408,7 @@ namespace ColorChord.NET
             }
 
             // Decay inactive notes.
-            for (int NoteIndex = 0; NoteIndex < NoteCount; NoteIndex++)
+            for (int NoteIndex = 0; NoteIndex < NOTE_QTY; NoteIndex++)
             {
                 // Any notes that do not have a corresponding distribution this cycle should be decayed.
                 if (!NotesAssociated[NoteIndex]) { Notes[NoteIndex].Amplitude *= (1F - NoteAttachAmplitudeIIRMultiplier); }
@@ -434,7 +418,7 @@ namespace ColorChord.NET
                 NewFiltered += Notes[NoteIndex].Amplitude * NoteAttachAmplitudeIIRMultiplier2;
                 Notes[NoteIndex].AmplitudeFiltered = NewFiltered; // A combination of the previous filtered value, pushed towards the current value.
 
-                if (Notes[NoteIndex].AmplitudeFiltered < MinNoteAmplitude) // The amplitude is very small, just cut it to avoid noise.
+                if (Notes[NoteIndex].AmplitudeFiltered < MIN_NOTE_SURVIVAL_AMPLITUDE) // The amplitude is very small, just cut it to avoid noise.
                 {
                     Notes[NoteIndex].Amplitude = 0;
                     Notes[NoteIndex].AmplitudeFiltered = 0;
@@ -442,7 +426,7 @@ namespace ColorChord.NET
             }
 
             // Nudge down amplitude of all notes, zeroing out ones that don't make the cut.
-            for (int NoteIndex = 0; NoteIndex < NoteCount; NoteIndex++)
+            for (int NoteIndex = 0; NoteIndex < NOTE_QTY; NoteIndex++)
             {
                 Notes[NoteIndex].AmplitudeFinal = Notes[NoteIndex].Amplitude - NoteOutputChop; // Reduce all notes by a small amount.
                 if (Notes[NoteIndex].AmplitudeFinal < 0) { Notes[NoteIndex].AmplitudeFinal = 0; } // If this note is too small, zero it.
@@ -491,7 +475,7 @@ namespace ColorChord.NET
             public float Amplitude;
 
             /// <summary> The mean (location) of the note in the frequency spectrum. </summary>
-            /// <remarks> Range: 0.0 to <see cref="OctaveBinCount"/>. Fractional part shows where in the bin the peak is. </remarks>
+            /// <remarks> Range: 0.0 to <see cref="BINS_PER_OCTAVE"/>. Fractional part shows where in the bin the peak is. </remarks>
             public float Mean;
 
             /// <summary> The sigma (spread) of the note. </summary>
@@ -509,22 +493,6 @@ namespace ColorChord.NET
                 else if (this.Amplitude < other.Amplitude) { return 1; }
                 else { return 0; }
             }
-        }
-
-        /// <summary> A note after filtering, stabilization and denoising of the raw DFT output. </summary>
-        public struct Note
-        {
-            /// <summary> Where on the scale this note is. Range: 0~<see cref="OctaveBinCount"/>. </summary>
-            public float Position;
-
-            /// <summary> The note amplitude as of the previous cycle, with minimal filtering. </summary>
-            public float Amplitude;
-
-            /// <summary> The note amplitude, with some inter-frame smoothing applied. </summary>
-            public float AmplitudeFiltered;
-
-            /// <summary> The note amplitude, zeroed if very low amplitude. Based on <see cref="Amplitude"/>, so minimal inter-frame smoothing is applied. </summary>
-            public float AmplitudeFinal;
         }
     }
 }

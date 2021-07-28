@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Config;
+using ColorChord.NET.NoteFinder;
 using ColorChord.NET.Visualizers.Formats;
 using OpenTK.Graphics.OpenGL4;
 using System;
@@ -54,6 +55,7 @@ namespace ColorChord.NET.Outputs.Display
                 Log.Error("NoiseField cannot be used with this visualizer, as it does not output 1D continuous data.");
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IContinuous1D.");
             }
+            if (ColorChord.NoteFinder is not BaseNoteFinder) { throw new Exception("NoiseField currently only supports BaseNoteFinder."); }
             this.HostWindow = parent;
             this.DataSource = (IContinuous1D)visualizer;
             Configurer.Configure(this, config);

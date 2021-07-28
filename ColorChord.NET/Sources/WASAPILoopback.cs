@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Config;
+using ColorChord.NET.NoteFinder;
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -117,7 +118,7 @@ namespace ColorChord.NET.Sources
             Log.Info(string.Format("Default transaction period is {0} ticks, minimum is {1} ticks.", DefaultInterval, MinimumInterval));
             this.BytesPerFrame = this.MixFormat.nChannels * (this.MixFormat.wBitsPerSample / 8);
 
-            BaseNoteFinder.SetSampleRate((int)this.MixFormat.nSamplesPerSec);
+            ColorChord.NoteFinder?.SetSampleRate((int)this.MixFormat.nSamplesPerSec);
 
             uint StreamFlags;
             if (DeviceIsCapture == true) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST | AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_EVENTCALLBACK; }
@@ -244,13 +245,13 @@ namespace ColorChord.NET.Sources
                         float Sample = 0;
                         // TODO: Make multi-channel downmixing toggleable, maybe some stereo visualizations?
                         for (ushort Chn = 0; Chn < this.MixFormat.nChannels; Chn++) { Sample += BitConverter.ToSingle(AudioData, (Frame * this.BytesPerFrame) + ((this.MixFormat.wBitsPerSample / 8) * Chn)); }
-                        BaseNoteFinder.AudioBuffer[BaseNoteFinder.AudioBufferHeadWrite] = Sample / this.MixFormat.nChannels; // Use the average of the channels.
-                        BaseNoteFinder.AudioBufferHeadWrite = (BaseNoteFinder.AudioBufferHeadWrite + 1) % BaseNoteFinder.AudioBuffer.Length;
+                        NoteFinderCommon.AudioBuffer[NoteFinderCommon.AudioBufferHeadWrite] = Sample / this.MixFormat.nChannels; // Use the average of the channels.
+                        NoteFinderCommon.AudioBufferHeadWrite = (NoteFinderCommon.AudioBufferHeadWrite + 1) % NoteFinderCommon.AudioBuffer.Length;
                         ReadyData[Frame] = Sample / this.MixFormat.nChannels;
                         //BaseNoteFinder.DFT.AddSample(ReadyData[Frame]);
                     }
                     //BaseNoteFinder.DFT.AddSamples(ReadyData);
-                    BaseNoteFinder.LastDataAdd = DateTime.UtcNow;
+                    NoteFinderCommon.LastDataAdd = DateTime.UtcNow;
                 }
 
                 ErrorCode = this.CaptureClient.ReleaseBuffer(FramesAvailable);

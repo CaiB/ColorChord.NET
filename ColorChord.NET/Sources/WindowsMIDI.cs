@@ -11,6 +11,12 @@ namespace ColorChord.NET.Sources
         private readonly GCHandle CallbackHandle;
         private IntPtr DeviceHandle;
 
+        [ConfigString("Device", "default")]
+        private readonly string DeviceName = "default";
+
+        [ConfigBool("ShowDeviceInfo", true)]
+        private readonly bool ShowDeviceInfo = true;
+
         public WindowsMIDI(string name, Dictionary<string, object> config)
         {
             this.Callback = MIDICallback;
@@ -21,7 +27,15 @@ namespace ColorChord.NET.Sources
         public void Start()
         {
             uint DeviceCount = GetDeviceCount();
-            Log.Info($"There are {DeviceCount} MIDI input devices connected:");
+            Log.Info($"There {(DeviceCount != 1 ? "are" : "is")} {DeviceCount} MIDI input {(DeviceCount != 1 ? "devices" : "device")} connected.");
+            if (DeviceCount == 0)
+            {
+                Log.Error("No MIDI devices were found. No audio will be received by ColorChord.NET!");
+                return;
+            }
+
+            uint DeviceToUse = 0;
+            string DeviceToUseName = "N/A";
             for (uint i = 0; i < DeviceCount; i++)
             {
                 MIDIINCAPS? DeviceInfoPerhaps = GetDeviceInfo(i);
@@ -29,10 +43,18 @@ namespace ColorChord.NET.Sources
                 else
                 {
                     MIDIINCAPS DeviceInfo = DeviceInfoPerhaps.Value;
-                    Log.Info($"  [{i}] \"{DeviceInfo.ProductName}\" Manufacturer {DeviceInfo.ManufacturerID:X2}, Product {DeviceInfo.ProductID:X2}, Driver {DeviceInfo.DriverVersion}");
+                    if (this.ShowDeviceInfo) { Log.Info($"  [{i}] \"{DeviceInfo.ProductName}\" Manufacturer {DeviceInfo.ManufacturerID:X2}, Product {DeviceInfo.ProductID:X2}, Driver {DeviceInfo.DriverVersion}"); }
+                    if (this.DeviceName != "default" && this.DeviceName == DeviceInfo.ProductName)
+                    {
+                        DeviceToUse = i;
+                        DeviceToUseName = DeviceInfo.ProductName;
+                    }
+                    if (this.DeviceName == "default" && i == 0) { DeviceToUseName = DeviceInfo.ProductName; }
                 }
             }
-            bool Opened = OpenDevice(0, this.Callback);
+
+            Log.Info($"Using device ID {DeviceToUse}, \"{DeviceToUseName}\".");
+            bool Opened = OpenDevice(DeviceToUse, this.Callback);
             if (!Opened) { return; }
             bool Started = StartReceiver(this.DeviceHandle);
             Log.Info(Started ? "Started MIDI receiver." : "Failed to start MIDI receiver.");
@@ -64,19 +86,8 @@ namespace ColorChord.NET.Sources
         /// <returns>Whether opening the device succeeded.</returns>
         private bool OpenDevice(uint deviceID, MIDIInProc callback)
         {
-            const string MIDI_ERR = "Could not open MIDI input device as";
-
             uint Result = midiInOpen(out IntPtr DeviceHandle, deviceID, Marshal.GetFunctionPointerForDelegate(callback), IntPtr.Zero, 0x00030000);
-            switch(Result) // TODO: Factor this out to make all errors nice
-            {
-                case 0: break;
-                case 2: Log.Error($"{MIDI_ERR} it doesn't exist. Either it was removed, or something went wrong when checking for devices."); break;
-                case 4: Log.Error($"{MIDI_ERR} it was already allocated. Make sure other applications are not using it."); break;
-                case 7: Log.Error($"{MIDI_ERR} getting memory to open the device failed. Make sure you have sufficient RAM."); break;
-                case 10: Log.Error($"{MIDI_ERR} invalid flags were provided. This should never happen, please report it to the ColorChord.NET developers."); break;
-                case 11: Log.Error($"{MIDI_ERR} an invalid parameter was passed."); break;
-                default: Log.Error($"{MIDI_ERR} an unknown error occured: MMSYSERR ID {Result}. Please report this to the ColorChord.NET developers."); break;
-            }
+            LogError("open", Result);
             this.DeviceHandle = DeviceHandle;
             return Result == 0;
         }
@@ -87,6 +98,7 @@ namespace ColorChord.NET.Sources
         private static bool StartReceiver(IntPtr deviceHandle)
         {
             uint Result = midiInStart(deviceHandle);
+            LogError("start", Result);
             return Result == 0;
         }
 
@@ -96,6 +108,7 @@ namespace ColorChord.NET.Sources
         private static bool StopReceiver(IntPtr deviceHandle)
         {
             uint Result = midiInStop(deviceHandle);
+            LogError("stop", Result);
             return Result == 0;
         }
 
@@ -105,7 +118,29 @@ namespace ColorChord.NET.Sources
         private static bool CloseDevice(IntPtr deviceHandle)
         {
             uint Result = midiInClose(deviceHandle);
+            LogError("close", Result);
             return Result == 0;
+        }
+
+        /// <summary>Logs readable error info from various MIDI device operations.</summary>
+        /// <param name="verb">What was attempted that created the error.</param>
+        /// <param name="error">The error code (nothing is output if 0).</param>
+        private static void LogError(string verb, uint error)
+        {
+            switch (error)
+            {
+                case 0: break;
+                case 2: Log.Error($"Could not {verb} MIDI input device as it doesn't exist. Either it was removed, or something went wrong when checking for devices."); break;
+                case 3: Log.Error($"Could not {verb} MIDI input device as its driver failed to enable it. Make sure the device is working and drivers are installed."); break;
+                case 4: Log.Error($"Could not {verb} MIDI input device as it was already allocated. Make sure other applications are not using it."); break;
+                case 5: Log.Error($"Could not {verb} MIDI input device as the handle was invalid. Please try restarting ColorCHord.NET."); break;
+                case 6: Log.Error($"Could not {verb} MIDI input device as the driver is not present. Please make sure the driver is installed and up to date."); break;
+                case 7: Log.Error($"Could not {verb} MIDI input device as getting memory to open the device failed. Make sure you have sufficient RAM."); break;
+                case 8: Log.Error($"Could not {verb} MIDI input device as it doesn't support this function."); break;
+                case 10: Log.Error($"Could not {verb} MIDI input device as invalid flags were provided. This should never happen, please report it to the ColorChord.NET developers."); break;
+                case 11: Log.Error($"Could not {verb} MIDI input device as an invalid parameter was passed. Please report it to the ColorChord.NET developers."); break;
+                default: Log.Error($"Could not {verb} MIDI input device as an unknown error occured: MMSYSERR ID {error}. Please report this to the ColorChord.NET developers."); break;
+            }
         }
 
         /// <summary>Receives MIDI data and passes it onto the next processing step.</summary>

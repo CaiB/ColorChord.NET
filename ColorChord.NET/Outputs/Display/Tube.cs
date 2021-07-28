@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.Visualizers;
+﻿using ColorChord.NET.NoteFinder;
+using ColorChord.NET.Visualizers;
 using ColorChord.NET.Visualizers.Formats;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Input;
@@ -85,6 +86,7 @@ namespace ColorChord.NET.Outputs.Display
                 Log.Error("Tube cannot use the provided visualizer, as it does not output 1D discrete data.");
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IDiscrete1D.");
             }
+            if (ColorChord.NoteFinder is not BaseNoteFinder) { throw new Exception("Tube currently only supports BaseNoteFinder."); }
             this.HostWindow = parent;
             this.DataSource = (IDiscrete1D)visualizer;
             this.TubeResolution = this.DataSource.GetCountDiscrete(); // TODO: Handle this changing

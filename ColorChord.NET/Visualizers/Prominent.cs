@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Config;
+using ColorChord.NET.NoteFinder;
 using ColorChord.NET.Outputs;
 using ColorChord.NET.Visualizers.Formats;
 using System;
@@ -45,6 +46,8 @@ namespace ColorChord.NET.Visualizers
         /// <summary> The thread on which input note data is processed by this visualizer. </summary>
         private Thread? ProcessThread;
 
+        private readonly int NoteCount, BinsPerOctave;
+
         /// <summary> A very simple visualizer that simply sets all LEDs to the most prominent note's colour. </summary>
         /// <param name="name"> The unique name for this instance. </param>
         public Prominent(string name, Dictionary<string, object> config)
@@ -52,6 +55,8 @@ namespace ColorChord.NET.Visualizers
             this.Name = name;
             Configurer.Configure(this, config);
             this.OutputDataDiscrete = new uint[this.LEDCount];
+            this.NoteCount = ColorChord.NoteFinder!.NoteCount;
+            this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
         }
 
         public void Start()
@@ -60,7 +65,7 @@ namespace ColorChord.NET.Visualizers
             this.KeepGoing = true;
             this.ProcessThread = new Thread(DoProcessing) { Name = "Prominent " + this.Name };
             this.ProcessThread.Start();
-            BaseNoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
+            ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
         }
 
         public void Stop()
@@ -93,10 +98,10 @@ namespace ColorChord.NET.Visualizers
             float OutNote = 0F;
 
             // Find strongest note
-            for(int Bin = 0; Bin < BaseNoteFinder.NoteCount; Bin++)
+            for(int Bin = 0; Bin < this.NoteCount; Bin++)
             {
-                float ThisNote = BaseNoteFinder.Notes[Bin].Position / BaseNoteFinder.OctaveBinCount;
-                float ThisAmplitude = BaseNoteFinder.Notes[Bin].AmplitudeFiltered * this.SaturationAmplifier;
+                float ThisNote = NoteFinderCommon.Notes[Bin].Position / this.BinsPerOctave;
+                float ThisAmplitude = NoteFinderCommon.Notes[Bin].AmplitudeFiltered * this.SaturationAmplifier;
                 if(ThisAmplitude > OutAmplitude)
                 {
                     OutAmplitude = ThisAmplitude;

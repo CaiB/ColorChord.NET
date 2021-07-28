@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.Config;
+using ColorChord.NET.NoteFinder;
 using ColorChord.NET.Outputs;
 using ColorChord.NET.Visualizers.Formats;
 using System;
@@ -78,11 +79,16 @@ namespace ColorChord.NET.Visualizers
         /// <summary> The thread on which input note data is processed by this visualizer. </summary>
         private Thread? ProcessThread;
 
+        private readonly int NoteCount, BinsPerOctave;
+
         public Linear(string name, Dictionary<string, object> config)
         {
             this.Name = name;
             Configurer.Configure(this, config);
-            this.OutputDataContinuous = new ContinuousDataUnit[BaseNoteFinder.NoteCount];
+            this.NoteCount = ColorChord.NoteFinder!.NoteCount;
+            this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
+            this.OutputDataContinuous = new ContinuousDataUnit[this.NoteCount];
+            this.LastVectorCenters = new float[this.NoteCount];
             for (int i = 0; i < this.OutputDataContinuous.Length; i++) { this.OutputDataContinuous[i] = new ContinuousDataUnit(); }
         }
 
@@ -101,7 +107,7 @@ namespace ColorChord.NET.Visualizers
             this.KeepGoing = true;
             this.ProcessThread = new Thread(DoProcessing) { Name = "Linear " + this.Name };
             this.ProcessThread.Start();
-            BaseNoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
+            ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
         }
 
         public void Stop()
@@ -131,37 +137,36 @@ namespace ColorChord.NET.Visualizers
         public int GetCountContinuous() => this.OutputCountContinuous;
         public ContinuousDataUnit[] GetDataContinuous() => this.OutputDataContinuous;
         public float GetAdvanceContinuous() => this.OutputAdvanceContinuous;
-        public int MaxPossibleUnits { get => BaseNoteFinder.NoteCount; }
+        public int MaxPossibleUnits { get => this.NoteCount; }
 
         // These variables are only used to keep inter-frame info for Update(). Do not touch.
         private float[] LastLEDColours = Array.Empty<float>();
         private float[] LastLEDPositionsFiltered = Array.Empty<float>(); // Only used when IsCircular is true.
         private float[] LastLEDSaturations = Array.Empty<float>();
         private int PrevAdvance;
-        private readonly float[] LastVectorCenters = new float[BaseNoteFinder.NoteCount]; // Where the center-point of each block was last frame
+        private readonly float[] LastVectorCenters; // Where the center-point of each block was last frame
 
         public void Update()
         {
-            const int BIN_QTY = BaseNoteFinder.NoteCount; // Number of bins present
-            float[] NoteAmplitudes = new float[BIN_QTY]; // The amplitudes of each note, time-smoothed
-            float[] NoteAmplitudesFast = new float[BIN_QTY]; // The amplitudes of each note, with minimal time-smoothing
-            float[] NotePositions = new float[BIN_QTY]; // The locations of the notes, range 0 ~ 1.
+            float[] NoteAmplitudes = new float[this.NoteCount]; // The amplitudes of each note, time-smoothed
+            float[] NoteAmplitudesFast = new float[this.NoteCount]; // The amplitudes of each note, with minimal time-smoothing
+            float[] NotePositions = new float[this.NoteCount]; // The locations of the notes, range 0 ~ 1.
             float AmplitudeSum = 0;
 
             if (this.OutputDataDiscrete.Length != this.LEDCount) { UpdateSize(); }
 
             // Populate data from the NoteFinder.
-            for (int i = 0; i < BIN_QTY; i++)
+            for (int i = 0; i < this.NoteCount; i++)
             {
-                NotePositions[i] = BaseNoteFinder.Notes[i].Position / BaseNoteFinder.OctaveBinCount;
-                NoteAmplitudes[i] = MathF.Pow(BaseNoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
-                NoteAmplitudesFast[i] = MathF.Pow(BaseNoteFinder.Notes[i].Amplitude, this.LightSiding);
+                NotePositions[i] = NoteFinderCommon.Notes[i].Position / this.BinsPerOctave;
+                NoteAmplitudes[i] = MathF.Pow(NoteFinderCommon.Notes[i].AmplitudeFiltered, this.LightSiding);
+                NoteAmplitudesFast[i] = MathF.Pow(NoteFinderCommon.Notes[i].Amplitude, this.LightSiding);
                 AmplitudeSum += NoteAmplitudes[i];
             }
 
             // Adjust AmplitudeSum to remove notes that are too weak to be included.
             float AmplitudeSumAdj = 0;
-            for (int i = 0; i < BIN_QTY; i++)
+            for (int i = 0; i < this.NoteCount; i++)
             {
                 NoteAmplitudes[i] -= this.LEDFloor * AmplitudeSum;
                 if (NoteAmplitudes[i] / AmplitudeSum < 0) // Note too weak, remove it from consideration.
@@ -181,10 +186,10 @@ namespace ColorChord.NET.Visualizers
             int LEDsFilled = 0; // How many LEDs have been assigned a colour.
             float VectorPosition = 0; // Where in the continuous line we are (continuous equivalent of LEDsFilled).
             this.OutputCountContinuous = 0;
-            float[] VectorCenters = new float[BIN_QTY];
+            float[] VectorCenters = new float[this.NoteCount];
 
             // Fill the LED slots with available notes.
-            for (int NoteIndex = 0; NoteIndex < BIN_QTY; NoteIndex++)
+            for (int NoteIndex = 0; NoteIndex < this.NoteCount; NoteIndex++)
             {
                 // How many of the LEDs should be taken up by this colour.
                 int LEDCountColour = (int)((NoteAmplitudes[NoteIndex] / AmplitudeSum) * this.LEDCount);
@@ -274,7 +279,7 @@ namespace ColorChord.NET.Visualizers
 
                 // For continuous output mode
                 float VectorCenterOffset = 0;
-                for(int NoteIndex = 0; NoteIndex < BIN_QTY; NoteIndex++)
+                for(int NoteIndex = 0; NoteIndex < this.NoteCount; NoteIndex++)
                 {
                     VectorCenterOffset += (VectorCenters[NoteIndex] - LastVectorCenters[NoteIndex]) * NoteAmplitudes[NoteIndex]; // TODO: CONSIDER USINGBLOCK SIZE INSTEAD OF AMPLITUDE
                 }
@@ -313,7 +318,7 @@ namespace ColorChord.NET.Visualizers
                 {
                     LastLEDPositionsFiltered[i] = (LastLEDPositionsFiltered[i] * 0.9F) + (LastLEDColours[i] * 0.1F);
                 }
-                for (int i = 0; i < BIN_QTY; i++) { LastVectorCenters[i] = VectorCenters[i]; }
+                for (int i = 0; i < this.NoteCount; i++) { LastVectorCenters[i] = VectorCenters[i]; }
             }
         }
 
