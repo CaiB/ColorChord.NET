@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using Vannatech.CoreAudio.Constants;
 using Vannatech.CoreAudio.Enumerations;
 using Vannatech.CoreAudio.Structures;
 using static ColorChord.NET.AudioTools;
@@ -83,12 +84,14 @@ namespace Vannatech.CoreAudio.Constants
     public class AdditionalComIIDs
     {
         public const string IAudioClient2IID = "726778CD-F60A-4eda-82DE-E47610CD78AA";
-        public const string IAudioCLient3IID = "7ED4EE07-8E67-4CD4-8C1A-2B7A5987AD42";
+        public const string IAudioClient3IID = "7ED4EE07-8E67-4CD4-8C1A-2B7A5987AD42";
     }
 }
 
 namespace Vannatech.CoreAudio.Interfaces
 {
+    [Guid(AdditionalComIIDs.IAudioClient3IID)]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     public partial interface IAudioClient3
     {
         #region IAudioClient Methods

@@ -34,7 +34,7 @@ namespace ColorChord.NET.Sources
         private Thread? ProcessThread;
 
         private IMMDeviceEnumerator? DeviceEnumerator;
-        private IAudioClient? Client;
+        private IAudioClient3? Client;
         private IAudioCaptureClient? CaptureClient;
         private AudioTools.WAVEFORMATEX MixFormat;
         private readonly AutoResetEvent AudioEvent = new(false);
@@ -103,7 +103,7 @@ namespace ColorChord.NET.Sources
 
             ErrorCode = Device.Activate(new Guid(ComIIDs.IAudioClientIID), (uint)CLSCTX_ALL, IntPtr.Zero, out object ClientObj);
             if (IsErrorAndOut(ErrorCode, "Could not get audio client.")) { return; }
-            this.Client = (IAudioClient)ClientObj;
+            this.Client = (IAudioClient3)ClientObj;
 
             ErrorCode = this.Client.GetMixFormat(out IntPtr MixFormatPtr);
             if (IsErrorAndOut(ErrorCode, "Could not get mix format.")) { return; }
