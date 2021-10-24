@@ -8,12 +8,15 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace ColorChord.NET.Outputs
 {
     public class DisplayOpenGL : GameWindow, IOutput
     {
+        private static readonly DebugProc DebugCallbackRef = DebugCallback; // Needed to prevent GC
+
         public IVisualizer Source { get; private set; }
 
         public readonly string Name;
@@ -78,7 +81,12 @@ namespace ColorChord.NET.Outputs
             this.IsVisible = true;
             Run();
         }
-        public void Stop() { } // TODO: Stop
+
+        public void Stop()
+        {
+            this.Loaded = false;
+            this.Display?.Close();
+        }
 
         private IDisplayMode? CreateMode(string fullName, Dictionary<string, object> config)
         {
@@ -106,7 +114,7 @@ namespace ColorChord.NET.Outputs
         protected override void OnLoad()
         {
             this.VSync = VSyncMode.On;
-            GL.DebugMessageCallback(DebugCallback, IntPtr.Zero);
+            //GL.DebugMessageCallback(DebugCallbackRef, IntPtr.Zero);
             GL.ClearColor(0.2F, 0.2F, 0.2F, 1.0F);
 
             this.Display?.Load();
@@ -137,17 +145,17 @@ namespace ColorChord.NET.Outputs
 
         protected override void OnUnload()
         {
-            this.Display?.Close();
+            Stop();
             base.OnUnload();
         }
 
-        protected override void OnClosed()
+        protected override void OnClosing(CancelEventArgs e)
         {
-            Environment.Exit(0);
-            base.OnClosed();
+            base.OnClosing(e);
+            ColorChord.Stop();
         }
 
-        protected void DebugCallback(DebugSource source, DebugType type, int id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam)
+        protected static void DebugCallback(DebugSource source, DebugType type, int id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam)
         {
             Log.Warn("OpenGL Output: Type \"" + type + "\", Severity \"" + severity + "\", Message \"" + Marshal.PtrToStringAnsi(message) + "\".");
         }

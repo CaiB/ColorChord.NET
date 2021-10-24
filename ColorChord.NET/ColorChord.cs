@@ -96,6 +96,16 @@ namespace ColorChord.NET
             Log.Info("Finished processing config file.");
         }
 
+        public static void Stop()
+        {
+            Log.Info("Exiting...");
+            Source?.Stop();
+            NoteFinder?.Stop();
+            foreach (IVisualizer Visualizer in VisualizerInsts.Values) { Visualizer.Stop(); }
+            foreach (IOutput Output in OutputInsts.Values) { Output.Stop(); }
+            //foreach(IController Controller in ControllerInsts.Values) { Controller.Stop(); }
+        }
+
         private static IAudioSource? ReadSource(JObject JSON)
         {
             const string SOURCE = "Source";
