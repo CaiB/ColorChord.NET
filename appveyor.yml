@@ -39,6 +39,6 @@ deploy:
   release: Automatic Build v$(appveyor_build_version)
   description: This is an automatic build of the latest commits. Usage is at your own risk. Unless you are actively debugging, it is recommended to use a regular release instead.
   auth_token:
-    secure: GVyDvu1oRIFcaipBySErsm8tNaX/dFtqemRShlOkPOaVKCOOHuI2k/8p46FY87F8
+    secure: fIgQpdctIp9szYmG0dfhfD0Cc4/eKQYO7aGXOOYULOB4Bu5SIg6GE+ZRw9kTFNRZ
   artifact: autobuild-v$(appveyor_build_version).zip
   prerelease: true
