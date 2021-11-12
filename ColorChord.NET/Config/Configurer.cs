@@ -175,7 +175,8 @@ namespace ColorChord.NET.Config
         public static IVisualizer? FindVisualizer(IOutput target, Dictionary<string, object> config, Type acceptableFormat)
         {
             IVisualizer? Visualizer = FindVisualizer(target, config);
-            if (!target.GetType().IsAssignableFrom(acceptableFormat)) { Log.Error($"{target.GetType()?.Name} only supports {acceptableFormat.Name} visualizers, cannot use {target.GetType()?.Name}"); }
+            if (Visualizer == null) { return null; }
+            if (!acceptableFormat.IsAssignableFrom(Visualizer.GetType())) { Log.Error($"{target.GetType()?.Name} only supports {acceptableFormat.Name} visualizers, cannot use {Visualizer.GetType()?.Name}"); }
             return Visualizer;
         }
 
