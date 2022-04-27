@@ -6,6 +6,7 @@
 #define INSIDE 0.6
 #define OUTSIDE 0.9
 
+in vec2 TexCoord;
 out vec4 FragColor;
 
 uniform vec2 Resolution;
@@ -29,10 +30,9 @@ vec3 AngleToRGB(float angle, float val)
 
 void main()
 {
-    vec2 Coords = ((gl_FragCoord.xy / Resolution) * 2.0) - vec2(1.0);
-    float Angle = (atan(-Coords.x, -Coords.y) + 3.1415926535) / 6.2831853071795864;
+    float Angle = (atan(-TexCoord.x, -TexCoord.y) + 3.1415926535) / 6.2831853071795864;
     Angle = mod(Angle + Advance, 1.0);
-    float Radius = distance(vec2(0.0), Coords);
+    float Radius = distance(vec2(0.0), TexCoord);
     
     float OnePixelDist = 2.0 / Resolution.x;
 

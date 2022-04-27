@@ -21,15 +21,14 @@ namespace ColorChord.NET.Outputs.Display
         private int LocationResolutionRing;
         private int LocationAdvanceRing;
 
-        /// <summary> Just a full-size rectangle, with only XY info. </summary>
-        private static readonly float[] RingShaderGeometry = new float[] // {[X,Y]} x 6
+        private float[] RingShaderGeometry = new float[] // {[X,Y]} x 6
         { // X   Y 
-            -1,  1, // Top-Left
-            -1, -1, // Bottom-Left
-             1, -1, // Bottom-Right
-             1, -1, // Bottom-Right
-             1,  1, // Top-Right
-            -1,  1  // Top-Left
+            -1,  1, -1,  1, // Top-Left
+            -1, -1, -1, -1, // Bottom-Left
+             1, -1,  1, -1, // Bottom-Right
+             1, -1,  1, -1, // Bottom-Right
+             1,  1,  1,  1, // Top-Right
+            -1,  1, -1,  1  // Top-Left
         };
 
         private int VertexBufferHandleRing, VertexArrayHandleRing;
@@ -68,7 +67,7 @@ namespace ColorChord.NET.Outputs.Display
             GL.Enable(EnableCap.Blend);
 
             // Create objects
-            this.RingShader = new("Passthrough2.vert", "CloudChamberRing.frag");
+            this.RingShader = new("Passthrough2Textured.vert", "CloudChamberRing.frag");
             this.RingShader.Use();
             this.VertexBufferHandleRing = GL.GenBuffer();
             this.VertexArrayHandleRing = GL.GenVertexArray();
@@ -82,8 +81,10 @@ namespace ColorChord.NET.Outputs.Display
             GL.BindVertexArray(this.VertexArrayHandleRing);
             GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferHandleRing);
             GL.BufferData(BufferTarget.ArrayBuffer, RingShaderGeometry.Length * sizeof(float), RingShaderGeometry, BufferUsageHint.DynamicDraw);
-            GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 2 * sizeof(float), 0);
+            GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), 0);
             GL.EnableVertexAttribArray(0);
+            GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), 2 * sizeof(float));
+            GL.EnableVertexAttribArray(1);
 
             this.SetupDone = true;
         }
@@ -106,11 +107,33 @@ namespace ColorChord.NET.Outputs.Display
 
         public void Resize(int width, int height)
         {
-            this.Resolution = new Vector2(width, height);
+            int MinLength = Math.Min(width, height);
+            this.Resolution = new(MinLength, MinLength);
 
             if (!this.SetupDone) { return; }
             this.RingShader!.Use();
             GL.Uniform2(this.LocationResolutionRing, ref this.Resolution);
+
+            this.RingShaderGeometry = GenGeometry(width, height);
+            GL.BindVertexArray(this.VertexArrayHandleRing);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, this.VertexBufferHandleRing);
+            GL.BufferData(BufferTarget.ArrayBuffer, this.RingShaderGeometry.Length * sizeof(float), this.RingShaderGeometry, BufferUsageHint.DynamicDraw);
+            Console.WriteLine($"W{width}xH{height}, geo {this.RingShaderGeometry[4]} {this.RingShaderGeometry[1]}");
+        }
+
+        private static float[] GenGeometry(int width, int height)
+        {
+            float Y = (float)width / Math.Max(width, height);
+            float X = (float)height / Math.Max(width, height);
+            return new[]
+            { // X   Y 
+                -X,  Y, -1,  1, // Top-Left
+                -X, -Y, -1, -1, // Bottom-Left
+                 X, -Y,  1, -1, // Bottom-Right
+                 X, -Y,  1, -1, // Bottom-Right
+                 X,  Y,  1,  1, // Top-Right
+                -X,  Y, -1,  1  // Top-Left
+            };
         }
 
         public void Close()
