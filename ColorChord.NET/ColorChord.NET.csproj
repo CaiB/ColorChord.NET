@@ -26,13 +26,14 @@
     <None Include="..\.editorconfig">
       <Link>.editorconfig</Link>
     </None>
+    <EmbeddedResource Include="Outputs\Display\Shaders\CloudChamberRing.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\NoiseField.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.frag" />
-    <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.vert" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircleFinish.frag" />
@@ -60,6 +61,7 @@
     <EmbeddedResource Remove="MainForm.resx" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="Outputs\Display\Shaders\CloudChamberRing.frag" />
     <None Remove="Outputs\Display\Shaders\NoiseField.frag" />
     <None Remove="Outputs\Display\Shaders\Radar.frag" />
     <None Remove="Outputs\Display\Shaders\Radar.vert" />

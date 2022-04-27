@@ -212,9 +212,9 @@ namespace ColorChord.NET.Outputs.Display
             GL.DepthFunc(DepthFunction.Lequal);
 
             // Create objects
-            this.CircleShader = new Shader("SmoothCircle.vert", "SmoothCircle.frag");
+            this.CircleShader = new Shader("Passthrough2.vert", "SmoothCircle.frag");
             this.HistoryShader = new Shader("Passthrough2Textured.vert", "Passthrough2Textured.frag");
-            this.CircleFinishShader = new Shader("SmoothCircle.vert", "SmoothCircleFinish.frag");
+            this.CircleFinishShader = new Shader("Passthrough2.vert", "SmoothCircleFinish.frag");
 
             this.BufferA = new FrameBuffer(this.HostWindow.Width, this.HostWindow.Height);
             this.BufferB = new FrameBuffer(this.HostWindow.Width, this.HostWindow.Height);
