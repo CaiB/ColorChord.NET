@@ -27,6 +27,7 @@
       <Link>.editorconfig</Link>
     </None>
     <EmbeddedResource Include="Outputs\Display\Shaders\CloudChamberRing.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\CloudChamberTrails.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\NoiseField.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.vert" />
@@ -62,6 +63,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Remove="Outputs\Display\Shaders\CloudChamberRing.frag" />
+    <None Remove="Outputs\Display\Shaders\CloudChamberTrails.frag" />
     <None Remove="Outputs\Display\Shaders\NoiseField.frag" />
     <None Remove="Outputs\Display\Shaders\Radar.frag" />
     <None Remove="Outputs\Display\Shaders\Radar.vert" />

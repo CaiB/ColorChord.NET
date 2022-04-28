@@ -24,9 +24,17 @@ namespace ColorChord.NET.Visualizers.Formats
 
     public class ContinuousDataUnit : IComparable<ContinuousDataUnit>
     {
+        /// <summary>Where this section of output begins. The first one will always be 0.</summary>
         public float Location;
+
+        /// <summary>How large this chunk of colour is.</summary>
         public float Size;
+
+        /// <summary>The colour of this section.</summary>
         public byte R, G, B;
+
+        /// <summary>The colour of this section, represented in ColorChord hue.</summary>
+        public float Colour;
 
         public int CompareTo(ContinuousDataUnit? other)
         {

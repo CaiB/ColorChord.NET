@@ -1,14 +1,13 @@
 ﻿#version 330 core
 
 #define NOTE_QTY 12
-#define SQRT2PI 2.506628253
-#define BASE_BRIGHT 1.0
-#define INSIDE 0.85
-#define OUTSIDE 0.95
+#define RING_LOC 0.9
 
 in vec2 TexCoord;
 out vec4 FragColor;
 
+uniform float Amplitudes[NOTE_QTY];
+uniform float Locations[NOTE_QTY];
 uniform vec2 Resolution;
 uniform float Advance;
 
@@ -30,15 +29,21 @@ vec3 AngleToRGB(float angle, float val)
 
 void main()
 {
-    float Angle = (atan(-TexCoord.x, -TexCoord.y) + 3.1415926535) / 6.2831853071795864;
-    Angle = mod(Angle + Advance, 1.0);
+    // Information about this pixel
+    //float Angle = (atan(-TexCoord.x, -TexCoord.y) + 3.1415926535) / 6.2831853071795864;
+    //Angle = mod(Angle + Advance, 1.0);
     float Radius = distance(vec2(0.0), TexCoord);
-    
-    float OnePixelDist = 2.0 / Resolution.x;
 
-    vec3 Colour = AngleToRGB(Angle, BASE_BRIGHT * (1 - smoothstep(0.98, 0.98 + OnePixelDist, Radius)));
+    vec3 Colour = vec3(0.0);
 
-    float RegionMult = 1.0 - smoothstep(OUTSIDE, OUTSIDE + OnePixelDist, Radius);
-    Colour *= RegionMult;
-    FragColor = vec4(Colour, smoothstep(INSIDE - OnePixelDist, INSIDE, Radius)); // Black outside, transparent inside
+    for (int i = 0; i < NOTE_QTY; i++)
+    {
+        vec2 LineStart = vec2(sin(Locations[i] * 6.2831853071795864), cos(Locations[i] * 6.2831853071795864)) * RING_LOC;
+        vec2 LineEnd = -LineStart;
+        vec2 LineDir = normalize(LineStart);
+        float Distance = distance(vec2(0.0), LineDir * dot(TexCoord, LineDir));
+        Colour += AngleToRGB(Locations[i], 1.0) * max(0.5 - sqrt(Distance), 0.0) * Amplitudes[i] * 2.5;
+    }
+
+    FragColor = vec4(Colour, 1.0);
 }

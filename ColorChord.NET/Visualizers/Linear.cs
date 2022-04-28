@@ -125,7 +125,7 @@ namespace ColorChord.NET.Visualizers
             {
                 Timer.Restart();
                 Update();
-                foreach(IOutput Output in this.Outputs) { Output.Dispatch(); }
+                foreach(IOutput Output in this.Outputs) { Output.Dispatch(); } // TODO: If an output gets added while this is running, this crashes.
                 int WaitTime = (int)(this.FramePeriod - Timer.ElapsedMilliseconds);
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
             }
@@ -217,6 +217,7 @@ namespace ColorChord.NET.Visualizers
                 this.OutputDataContinuous[this.OutputCountContinuous].R = (byte)((Colour >> 16) & 0xff);
                 this.OutputDataContinuous[this.OutputCountContinuous].G = (byte)((Colour >> 8) & 0xff);
                 this.OutputDataContinuous[this.OutputCountContinuous].B = (byte)((Colour) & 0xff);
+                this.OutputDataContinuous[this.OutputCountContinuous].Colour = NotePositions[NoteIndex];
 
                 VectorPosition += VectorSizeColour;
                 this.OutputCountContinuous++;
