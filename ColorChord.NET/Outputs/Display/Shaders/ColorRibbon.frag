@@ -8,5 +8,5 @@ out vec4 outColour;
 
 void main()
 {
-	outColour = texture(TextureUnit, TexCoord) * Brightness;
+	outColour = vec4(texture(TextureUnit, TexCoord).rgb, Brightness);
 }
