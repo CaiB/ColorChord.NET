@@ -140,6 +140,8 @@ namespace ColorChord.NET.NoteFinder
 
         public static int LastLowFreqCount = 0;
 
+        public static float LastBinSum = 0;
+
         #endregion
 
         // Info for other systems:
@@ -241,6 +243,9 @@ namespace ColorChord.NET.NoteFinder
                 for (int Octave = 0; Octave < OCTAVES; Octave++) { Amplitude += FrequencyBinValues[(Octave * BINS_PER_OCTAVE) + BinIndex]; }
                 OctaveBinValues[BinIndex] = Amplitude;
             }
+
+            LastBinSum = 0;
+            for (int i = 0; i < OctaveBinValues.Length; i++) { LastBinSum += OctaveBinValues[i]; }
 
             // Do some filtering on the now-folded bins to remove meaningless peaks.
             // Averages out each bin a little bit with adjacent bins.

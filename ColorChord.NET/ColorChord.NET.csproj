@@ -28,9 +28,12 @@
     </None>
     <EmbeddedResource Include="Outputs\Display\Shaders\CloudChamberRing.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\CloudChamberTrails.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\ColorRibbon.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\ColorRibbon.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\NoiseField.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Colour.vert" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough3Textured.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.frag" />
@@ -64,7 +67,10 @@
   <ItemGroup>
     <None Remove="Outputs\Display\Shaders\CloudChamberRing.frag" />
     <None Remove="Outputs\Display\Shaders\CloudChamberTrails.frag" />
+    <None Remove="Outputs\Display\Shaders\ColorRibbon.frag" />
+    <None Remove="Outputs\Display\Shaders\ColorRibbon.vert" />
     <None Remove="Outputs\Display\Shaders\NoiseField.frag" />
+    <None Remove="Outputs\Display\Shaders\Passthrough3Textured.vert" />
     <None Remove="Outputs\Display\Shaders\Radar.frag" />
     <None Remove="Outputs\Display\Shaders\Radar.vert" />
     <None Remove="Outputs\Display\Shaders\SmoothRadialBright.frag" />
