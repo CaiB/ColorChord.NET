@@ -9,6 +9,7 @@ uniform mat4 Projection;
 uniform mat4 View;
 uniform mat4 Model;
 uniform sampler2D Texture;
+uniform float LEDCount;
 
 out vec2 TexCoord;
 out vec3 Colour;
@@ -16,7 +17,7 @@ out vec3 Colour;
 void main()
 {
 	TexCoord = InTexCoord;
-	Colour = texture(Texture, vec2(InLEDIndex / 20.0, 0.5)).rgb;
+	Colour = texture(Texture, vec2(InLEDIndex / LEDCount, 0.5)).rgb;
 
 	//vec3 TransformedPos = InStarPosition + (CameraRight * InVertPosition.x) + (CameraUp * InVertPosition.y);
 	//gl_Position = vec4(TransformedPos, 1.0) * Projection;

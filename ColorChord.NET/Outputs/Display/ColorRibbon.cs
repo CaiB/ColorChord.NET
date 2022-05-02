@@ -181,7 +181,10 @@ namespace ColorChord.NET.Outputs.Display
             GL.UniformMatrix4(this.LocationStarProjection, true, ref Projection);
 
             this.StarTextureHandle = GL.GenTexture();
-            GL.Uniform1(this.StarShader.GetUniformLocation("TextureUnit"), 0);
+            GL.Uniform1(this.StarShader.GetUniformLocation("Texture"), 0);
+
+            int LEDCountLoc = this.StarShader.GetUniformLocation("LEDCount");
+            GL.Uniform1(LEDCountLoc, (float)this.RibbonWidth);
 
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, this.StarTextureHandle);
