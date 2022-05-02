@@ -64,7 +64,7 @@ namespace ColorChord.NET.Outputs.Display
         public void Load()
         {
             GL.ClearColor(0.0F, 0.0F, 0.0F, 1.0F);
-            this.Shader = new Shader("SmoothCircle.vert", "NoiseField.frag");
+            this.Shader = new Shader("Passthrough2.vert", "NoiseField.frag");
             this.Shader.Use();
             this.VertexBufferHandle = GL.GenBuffer();
             this.VertexArrayHandle = GL.GenVertexArray();
