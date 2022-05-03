@@ -6,6 +6,7 @@ using OpenTK.Graphics.ES30;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
+using OpenTK.Windowing.GraphicsLibraryFramework;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -131,6 +132,17 @@ namespace ColorChord.NET.Outputs
 
             this.Context.SwapBuffers();
             base.OnRenderFrame(evt);
+        }
+
+        protected override void OnKeyDown(KeyboardKeyEventArgs e)
+        {
+            if (e.Key == Keys.F11 || e.Key == Keys.F)
+            {
+                this.WindowState = (this.WindowState != WindowState.Fullscreen) ? WindowState.Fullscreen : WindowState.Normal;
+                this.VSync = VSyncMode.On;
+                OnResize(new(this.Width, this.Height));
+            }
+            base.OnKeyDown(e);
         }
 
         protected override void OnResize(ResizeEventArgs evt)

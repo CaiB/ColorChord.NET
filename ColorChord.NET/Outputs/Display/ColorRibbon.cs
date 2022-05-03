@@ -225,6 +225,8 @@ namespace ColorChord.NET.Outputs.Display
             GL.EnableVertexAttribArray(3);
             GL.VertexAttribDivisor(3, 1);
 
+            GenerateAndUploadProjection(this.HostWindow.Width, this.HostWindow.Height);
+
             this.SetupDone = true;
         }
 
@@ -389,7 +391,21 @@ namespace ColorChord.NET.Outputs.Display
             this.TimeOffset += 0.05F;
         }
 
-        public void Resize(int width, int height) { }
+        private void GenerateAndUploadProjection(int width, int height)
+        {
+            if (this.RibbonShader is null || this.StarShader is null) { return; }
+            Matrix4 Projection = Matrix4.CreatePerspectiveFieldOfView(MathF.PI / 3F, (float)width / height, 0.01F, 100F);
+
+            this.RibbonShader.Use();
+            GL.UniformMatrix4(this.LocationProjection, true, ref Projection);
+
+            this.StarShader.Use();
+            GL.UniformMatrix4(this.LocationStarProjection, true, ref Projection);
+
+            GL.Viewport(0, 0, width, height);
+        }
+
+        public void Resize(int width, int height) => GenerateAndUploadProjection(width, height);
 
 
         public void Close()
