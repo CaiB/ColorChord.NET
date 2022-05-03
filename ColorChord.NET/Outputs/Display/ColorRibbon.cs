@@ -29,6 +29,9 @@ namespace ColorChord.NET.Outputs.Display
         [ConfigInt("RibbonLength", 2, 10000, 120)]
         private int RibbonLength = 120;
 
+        [ConfigFloat("RibbonScale", 0F, 100F, 0.3F)]
+        private float RibbonScale = 0.3F;
+
         [ConfigInt("StarCount", 0, 100000, 1000)]
         private int StarCount = 1000;
 
@@ -78,6 +81,9 @@ namespace ColorChord.NET.Outputs.Display
         private float HistoricalLFData = 0;
         private float CurrentLFData = 0;
         private float SpeedBoost = 0;
+
+        private const float AMPLITUDE_PREK_DETECT_IIR = 0.99F;
+        private float RecentPeakTotalAmplitude = 0F;
 
         public ColorRibbon(DisplayOpenGL hostWindow, IVisualizer visualizer, Dictionary<string, object> config)
         {
@@ -257,26 +263,28 @@ namespace ColorChord.NET.Outputs.Display
                     this.StarTextureData[i] = ColourData[i]; // TODO: Just use array.copy
                 }
                 this.NewLines = (this.NewLines + 1) % this.RibbonLength;
-                this.AmplitudeData[this.AmplitudeDataIndex] = BaseNoteFinder.LastBinSum;
+                float AmplitudeNow = BaseNoteFinder.LastBinSum;
+                this.AmplitudeData[this.AmplitudeDataIndex] = AmplitudeNow;
                 this.AmplitudeDataIndex = (this.AmplitudeDataIndex + 1) % this.RibbonLength;
                 this.NewTexData = true;
+
+                if (this.RecentPeakTotalAmplitude < 0.001F) { this.RecentPeakTotalAmplitude = AmplitudeNow; }
+                this.RecentPeakTotalAmplitude = (AMPLITUDE_PREK_DETECT_IIR * this.RecentPeakTotalAmplitude) + ((1F - AMPLITUDE_PREK_DETECT_IIR) * AmplitudeNow);
 
                 for (int Section = 0; Section < this.RibbonLength; Section++) // TODO: The section that has the ends of the texture on either side interpolated the entire texture into its length. Fix!
                 {
                     const float WAVE_PERIOD = 6F;
                     const float RIBBON_LENGTH = 3F;
                     const float BASE_AMPLITUDE = 0.25F;
-                    const float AMP_DIV = 4F;
 
                     int ThisAmplitudeIndex = (this.AmplitudeDataIndex - Section + this.RibbonLength) % this.RibbonLength;
                     int PrevAmplitudeIndex = (this.AmplitudeDataIndex - Section - 1 + this.RibbonLength) % this.RibbonLength;
                     float Top = ((float)Section / this.RibbonLength) * RIBBON_LENGTH;
                     float Bottom = (Section == 0) ? -1F : ((float)(Section - 1) / this.RibbonLength) * RIBBON_LENGTH;
-                    float WidthBack = this.AmplitudeData[PrevAmplitudeIndex] / AMP_DIV;
-                    float WidthFront = (Section == 0) ? WidthBack : this.AmplitudeData[ThisAmplitudeIndex] / AMP_DIV;
+                    float WidthBack = this.AmplitudeData[PrevAmplitudeIndex] * this.RibbonScale / this.RecentPeakTotalAmplitude;
+                    float WidthFront = (Section == 0) ? WidthBack : this.AmplitudeData[ThisAmplitudeIndex] * this.RibbonScale / this.RecentPeakTotalAmplitude;
                     float ZTop = MathF.Cos((Section * MathF.PI * WAVE_PERIOD / this.RibbonLength) - this.TimeOffset) * (BASE_AMPLITUDE - ((float)Section / this.RibbonLength) * 0.1F);
                     float ZBot = MathF.Cos(((Section - 1) * MathF.PI * WAVE_PERIOD / this.RibbonLength) - this.TimeOffset) * (BASE_AMPLITUDE - ((float)(Section - 1) / this.RibbonLength) * 0.1F);
-
 
                     float[] NewSection = new float[]
                     { //          X       Y     Z   U  V
