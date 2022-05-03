@@ -157,7 +157,7 @@ namespace ColorChord.NET.Outputs.Display
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, this.TextureHandle);
 
-            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.RibbonWidth, this.RibbonLength, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.RibbonWidth, this.RibbonLength, 0, PixelFormat.Bgra, PixelType.UnsignedByte, this.TextureData);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
@@ -189,7 +189,7 @@ namespace ColorChord.NET.Outputs.Display
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, this.StarTextureHandle);
 
-            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.RibbonWidth, 1, 0, PixelFormat.Rgba, PixelType.UnsignedByte, new uint[this.RibbonWidth]);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.RibbonWidth, 1, 0, PixelFormat.Bgra, PixelType.UnsignedByte, new uint[this.RibbonWidth]);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
@@ -316,7 +316,7 @@ namespace ColorChord.NET.Outputs.Display
             GL.BufferData(BufferTarget.ArrayBuffer, BYTES_PER_INSTANCE_STAR * this.StarCount, this.StarInstances, BufferUsageHint.StreamDraw);
 
             GL.BindTexture(TextureTarget.Texture2D, this.TextureHandle);
-            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.RibbonWidth, 1, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.StarTextureData);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.RibbonWidth, 1, 0, PixelFormat.Bgra, PixelType.UnsignedByte, this.StarTextureData);
 
             Matrix4 StarModel = Matrix4.LookAt(Vector3.Zero, CameraPos, Vector3.UnitZ);
             GL.UniformMatrix4(this.LocationStarView, true, ref Rotations);
@@ -356,10 +356,10 @@ namespace ColorChord.NET.Outputs.Display
                         int LinesAfterWrap = (int)(this.NewLines - LinesBeforeWrap);
                         uint[,] TextureDataAfterWrap = new uint[LinesAfterWrap, this.RibbonWidth];
                         Array.Copy(this.TextureData, LinesBeforeWrap * this.RibbonWidth, TextureDataAfterWrap, 0, LinesAfterWrap * this.RibbonWidth);
-                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.LastUploadedPosition, this.RibbonWidth, LinesBeforeWrap, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData); // Before (at end of texture)
-                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, this.RibbonWidth, LinesAfterWrap, PixelFormat.Rgba, PixelType.UnsignedByte, TextureDataAfterWrap); // After (at start of texture)
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.LastUploadedPosition, this.RibbonWidth, LinesBeforeWrap, PixelFormat.Bgra, PixelType.UnsignedByte, this.TextureData); // Before (at end of texture)
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, this.RibbonWidth, LinesAfterWrap, PixelFormat.Bgra, PixelType.UnsignedByte, TextureDataAfterWrap); // After (at start of texture)
                     }
-                    else { GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.LastUploadedPosition, this.RibbonWidth, (int)this.NewLines, PixelFormat.Rgba, PixelType.UnsignedByte, this.TextureData); }
+                    else { GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.LastUploadedPosition, this.RibbonWidth, (int)this.NewLines, PixelFormat.Bgra, PixelType.UnsignedByte, this.TextureData); }
 
                     this.NewTexData = false;
                     this.LastUploadedPosition += this.NewLines;
