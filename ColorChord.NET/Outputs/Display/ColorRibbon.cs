@@ -315,7 +315,7 @@ namespace ColorChord.NET.Outputs.Display
             GL.BindBuffer(BufferTarget.ArrayBuffer, this.StarInstanceBufferHandle);
             GL.BufferData(BufferTarget.ArrayBuffer, BYTES_PER_INSTANCE_STAR * this.StarCount, this.StarInstances, BufferUsageHint.StreamDraw);
 
-            GL.BindTexture(TextureTarget.Texture2D, this.TextureHandle);
+            GL.BindTexture(TextureTarget.Texture2D, this.StarTextureHandle);
             GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.RibbonWidth, 1, 0, PixelFormat.Bgra, PixelType.UnsignedByte, this.StarTextureData);
 
             Matrix4 StarModel = Matrix4.LookAt(Vector3.Zero, CameraPos, Vector3.UnitZ);
