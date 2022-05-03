@@ -38,6 +38,8 @@ namespace ColorChord.NET.Outputs
             set => this.ClientRectangle = new Box2i(this.ClientRectangle.Min, new Vector2i(this.ClientRectangle.Max.X, this.ClientRectangle.Min.Y + value));
         }
 
+        private int DefaultWidth, DefaultHeight;
+
         private readonly IDisplayMode? Display;
         private bool Loaded = false;
 
@@ -50,6 +52,8 @@ namespace ColorChord.NET.Outputs
             this.Source = Visualizer;
 
             Configurer.Configure(this, config);
+            this.DefaultWidth = this.Width;
+            this.DefaultHeight = this.Height;
 
             if (config.ContainsKey("Modes")) // Make sure that everything else is configured before creating the modes!
             {
@@ -138,7 +142,13 @@ namespace ColorChord.NET.Outputs
         {
             if (e.Key == Keys.F11 || e.Key == Keys.F)
             {
-                this.WindowState = (this.WindowState != WindowState.Fullscreen) ? WindowState.Fullscreen : WindowState.Normal;
+                if (this.WindowState != WindowState.Fullscreen) { this.WindowState = WindowState.Fullscreen; }
+                else
+                {
+                    this.WindowState = WindowState.Normal;
+                    this.Width = this.DefaultWidth;
+                    this.Height = this.DefaultHeight;
+                }
                 this.VSync = VSyncMode.On;
                 OnResize(new(this.Width, this.Height));
             }
