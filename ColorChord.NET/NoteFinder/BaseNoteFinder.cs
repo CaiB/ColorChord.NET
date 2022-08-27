@@ -100,7 +100,7 @@ namespace ColorChord.NET.NoteFinder
         private static float NoteAttachAmplitudeIIRMultiplier = 0.35F;
 
         /// <summary> This filter is applied to notes between cycles in order to smooth their amplitudes over time. </summary>
-        /// <remarks> Higher values cause smoother but more delayed note amplitude transitions. Range: 0.0~1.0 </remarks>
+        /// <remarks> Lower values cause smoother but more delayed note amplitude transitions. Range: 0.0~1.0 </remarks>
         [ConfigFloat("NoteAttachAmpIIR2", 0F, 1F, 0.25F)]
         private static float NoteAttachAmplitudeIIRMultiplier2 = 0.25F;
 
