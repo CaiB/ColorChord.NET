@@ -78,6 +78,15 @@ namespace ColorChord.NET.Outputs
         [ConfigInt("SizeY", 1, 100000, 1)]
         public int MatrixSizeY { get; set; } = 1;
 
+        /// <summary> Where in the visualizer data we start reading data to output over the network. </summary>
+        [ConfigInt("StartIndex", 0, int.MaxValue, 0)]
+        public int StartIndex = 0;
+
+        /// <summary> Where in the visualizer data we stop reading data to output over the network. </summary>
+        /// <remarks> -1 means read to the end of the data available. </remarks>
+        [ConfigInt("EndIndex", -1, int.MaxValue, -1)]
+        public int EndIndex = -1;
+
         [ConfigInt("Port", 1, 65535, 7777)]
         private readonly ushort PortFromConfig = 7777;
 
@@ -288,7 +297,11 @@ namespace ColorChord.NET.Outputs
         {
             if (this.Source is not IDiscrete1D Src) { return; }
 
-            byte[] Output = new byte[(Src.GetCountDiscrete() * this.LEDLength) + this.FrontPadding + this.BackPadding];
+            int SourceLEDCount = Src.GetCountDiscrete();
+            int ReadStart = this.StartIndex;
+            int ReadEnd = this.EndIndex < 0 ? SourceLEDCount : Math.Min(this.EndIndex, SourceLEDCount);
+            int LEDCount = ReadEnd - ReadStart;
+            byte[] Output = new byte[(LEDCount * this.LEDLength) + this.FrontPadding + this.BackPadding];
             uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
 
             int Index;
@@ -297,7 +310,7 @@ namespace ColorChord.NET.Outputs
             for (Index = 0; Index < this.FrontPadding; Index++) { Output[Index] = this.PaddingContent; }
 
             // Data Content
-            for (int LED = 0; LED < Src.GetCountDiscrete(); LED++)
+            for (int LED = ReadStart; LED < ReadEnd; LED++)
             {
                 // Transform the index depending on LED matrix shape
                 int InDataIndex = TransformIndex(this.MatrixSizeX, this.MatrixSizeY, LED, this.RotateOutput, this.MirrorOutput, this.ArrayIsZigZag);
@@ -352,7 +365,10 @@ namespace ColorChord.NET.Outputs
         {
             if (this.Source is not IDiscrete1D Src) { return; }
 
-            int LEDCount = Src.GetCountDiscrete();
+            int SourceLEDCount = Src.GetCountDiscrete();
+            int ReadStart = this.StartIndex;
+            int ReadEnd = this.EndIndex < 0 ? SourceLEDCount : Math.Min(this.EndIndex, SourceLEDCount);
+            int LEDCount = ReadEnd - ReadStart;
             uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
 
             int LEDsPerPacket = 1490 / this.LEDLength; // 1490 is the maximum number of data bytes allowed by TPM2.net
@@ -368,13 +384,13 @@ namespace ColorChord.NET.Outputs
             Output[1] = 0xDA; // Data frame
             Output[5] = PacketQty; // Number of packets for this frame
 
-            int LEDIndex = 0; // The overall LED index (not reset per packet)
+            int LEDIndex = ReadStart; // The overall LED index (not reset per packet)
             for(int PacketNum = 0; PacketNum < PacketQty; PacketNum++)
             {
                 Output[4] = (byte)(PacketNum + 1); // Packet numbers are 1-indexed.
 
                 int DataIndex = 6;
-                for(int LED = 0; LED < LEDsPerPacket && LEDIndex < LEDCount; LED++)
+                for(int LED = 0; LED < LEDsPerPacket && LEDIndex < ReadEnd; LED++)
                 {
                     // Transform the index depending on LED matrix shape
                     int InDataIndex = TransformIndex(this.MatrixSizeX, this.MatrixSizeY, LEDIndex, this.RotateOutput, this.MirrorOutput, this.ArrayIsZigZag);
@@ -429,7 +445,11 @@ namespace ColorChord.NET.Outputs
         {
             if (this.Source is not IDiscrete1D Src) { return; }
 
-            int SourceLength = Src.GetCountDiscrete() * this.LEDLength;
+            int SourceLEDCount = Src.GetCountDiscrete();
+            int ReadStart = this.StartIndex;
+            int ReadEnd = this.EndIndex < 0 ? SourceLEDCount : Math.Min(this.EndIndex, SourceLEDCount);
+            int LEDCount = ReadEnd - ReadStart;
+            int SourceLength = LEDCount * this.LEDLength;
             if (SourceLength > 512) { throw new Exception($"E1.31 can only handle packets with up to 512 bytes of content, you have {SourceLength} bytes of data to send."); }
             byte[] Output = new byte[SourceLength + this.E131Template.Length];
             uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
@@ -461,7 +481,7 @@ namespace ColorChord.NET.Outputs
 
             int Index = this.E131Template.Length;
 
-            for (int LED = 0; LED < Src.GetCountDiscrete(); LED++)
+            for (int LED = ReadStart; LED < ReadEnd; LED++)
             {
                 // Transform the index depending on LED matrix shape
                 int InDataIndex = TransformIndex(this.MatrixSizeX, this.MatrixSizeY, LED, this.RotateOutput, this.MirrorOutput, this.ArrayIsZigZag);
