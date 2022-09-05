@@ -10,12 +10,13 @@ using Vannatech.CoreAudio.Constants;
 using Vannatech.CoreAudio.Enumerations;
 using Vannatech.CoreAudio.Externals;
 using Vannatech.CoreAudio.Interfaces;
-using static ColorChord.NET.AudioTools;
+using Vannatech.CoreAudio.Structures;
 
 namespace ColorChord.NET.Sources
 {
     public class WASAPILoopback : IAudioSource
     {
+        private static WAVEFORMATEX? WaveFormatFromPointer(IntPtr Pointer) => (WAVEFORMATEX?)Marshal.PtrToStructure(Pointer, typeof(WAVEFORMATEX));
         private const CLSCTX CLSCTX_ALL = CLSCTX.CLSCTX_INPROC_SERVER | CLSCTX.CLSCTX_INPROC_HANDLER | CLSCTX.CLSCTX_LOCAL_SERVER | CLSCTX.CLSCTX_REMOTE_SERVER;
         private static readonly Guid FriendlyNamePKEY = new(0xa45c254e, 0xdf1c, 0x4efd, 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0);
         private const int FriendlyNamePKEY_PID = 14;
@@ -38,7 +39,7 @@ namespace ColorChord.NET.Sources
         private IMMDeviceEnumerator? DeviceEnumerator;
         private IAudioClient3? Client;
         private IAudioCaptureClient? CaptureClient;
-        private AudioTools.WAVEFORMATEX MixFormat;
+        private WAVEFORMATEX MixFormat;
         private readonly AutoResetEvent AudioEvent = new(false);
         private static GCHandle AudioEventHandle;
 
@@ -109,7 +110,7 @@ namespace ColorChord.NET.Sources
 
             ErrorCode = this.Client.GetMixFormat(out IntPtr MixFormatPtr);
             if (IsErrorAndOut(ErrorCode, "Could not get mix format.")) { return; }
-            WAVEFORMATEX? Format = AudioTools.FormatFromPointer(MixFormatPtr);
+            WAVEFORMATEX? Format = WaveFormatFromPointer(MixFormatPtr);
             if (Format == null) { Log.Error("Mix format was null"); return; }
             else { this.MixFormat = (WAVEFORMATEX)Format; }
 
