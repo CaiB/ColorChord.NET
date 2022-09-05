@@ -141,19 +141,22 @@ namespace ColorChord.NET.Outputs
 
         protected override void OnKeyDown(KeyboardKeyEventArgs e)
         {
-            if (e.Key == Keys.F11 || e.Key == Keys.F)
-            {
-                if (this.WindowState != WindowState.Fullscreen) { this.WindowState = WindowState.Fullscreen; }
-                else
-                {
-                    this.WindowState = WindowState.Normal;
-                    this.Width = this.DefaultWidth;
-                    this.Height = this.DefaultHeight;
-                }
-                this.VSync = VSyncMode.On;
-                OnResize(new(this.Width, this.Height));
-            }
+            if (e.Key == Keys.F11 || e.Key == Keys.F) { ToggleFullscreen(); }
+            if (e.Key == Keys.Escape && this.WindowState == WindowState.Fullscreen) { ToggleFullscreen(); }
             base.OnKeyDown(e);
+        }
+
+        private void ToggleFullscreen()
+        {
+            if (this.WindowState != WindowState.Fullscreen) { this.WindowState = WindowState.Fullscreen; }
+            else
+            {
+                this.WindowState = WindowState.Normal;
+                this.Width = this.DefaultWidth;
+                this.Height = this.DefaultHeight;
+            }
+            this.VSync = VSyncMode.On;
+            OnResize(new(this.Width, this.Height));
         }
 
         protected override void OnResize(ResizeEventArgs evt)
