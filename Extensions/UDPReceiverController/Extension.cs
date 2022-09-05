@@ -3,13 +3,13 @@ using ColorChord.NET.API.Extensions;
 
 namespace ColorChord.NET.Extensions.UDPReceiverController;
 
-public class UDPReceiverController : IExtension
+public class Extension : IExtension
 {
     public string Name => "UDP Receiver Controller";
     public string Description => "Allows you to control ColorChord.NET components via plain UDP packets";
     public uint APIVersion => ColorChordAPI.APIVersion;
 
-    public UDPReceiverController()
+    public Extension()
     {
         Console.WriteLine("EXT UDPRC: Ctor!");
     }

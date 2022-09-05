@@ -1,8 +1,10 @@
 ﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.Controllers;
 using ColorChord.NET.Extensions;
 using ColorChord.NET.NoteFinder;
 using Newtonsoft.Json.Linq;
@@ -23,7 +25,7 @@ namespace ColorChord.NET
         public static NoteFinderCommon? NoteFinder { get; private set; }
         public static readonly Dictionary<string, IVisualizer> VisualizerInsts = new();
         public static readonly Dictionary<string, IOutput> OutputInsts = new();
-        //public static readonly Dictionary<string, IController> Controllers = new();
+        public static readonly Dictionary<string, Controller> ControllerInsts = new();
 
         public static void Main(string[] args)
         {
@@ -94,7 +96,7 @@ namespace ColorChord.NET
             ReadAndApplyOutputs(JSON);
 
             // Controllers
-            // Not yet implemented...
+            ReadAndApplyControllers(JSON);
             Log.Info("Finished processing config file.");
         }
 
@@ -106,7 +108,7 @@ namespace ColorChord.NET
             NoteFinder?.Stop();
             foreach (IVisualizer Visualizer in VisualizerInsts.Values) { Visualizer.Stop(); }
             foreach (IOutput Output in OutputInsts.Values) { Output.Stop(); }
-            //foreach(IController Controller in ControllerInsts.Values) { Controller.Stop(); }
+            foreach (Controller Controller in ControllerInsts.Values) { Controller.Stop(); }
         }
 
         private static IAudioSource? ReadSource(JObject JSON)
@@ -119,8 +121,8 @@ namespace ColorChord.NET
                 string? SourceType = SourceToken.Value<string?>(TYPE);
                 if (SourceType == null) { Log.Error($"{SOURCE} section in config did not contain valid \"{TYPE}\" definition"); return null; }
                 
-                IAudioSource? Source = CreateObject<IAudioSource>("ColorChord.NET.Sources." + SourceType, SourceToken);
-                if (Source == null) { Log.Error($"Failed to create audio source. Check to make sure the type \"{SourceType}\" is spelled correctly."); return null; }
+                IAudioSource? Source = CreateObject<IAudioSource>(SourceType.StartsWith('#') ? SourceType : "ColorChord.NET.Sources." + SourceType, SourceToken);
+                if (Source == null) { Log.Error($"Failed to create audio source. Check to make sure the type \"{SourceType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); return null; }
                 Log.Info("Created audio source of type \"" + Source.GetType().FullName + "\".");
                 return Source;
             }
@@ -144,8 +146,8 @@ namespace ColorChord.NET
                     Log.Warn($"{NOTEFINDER} {TYPE} was not defined, using the default ({NFType}).");
                 }
 
-                NoteFinder = CreateObject<NoteFinderCommon>("ColorChord.NET.NoteFinder." + NFType, NFToken);
-                if (NoteFinder == null) { Log.Error($"Failed to create note finder. Check to make sure the type \"{NFType}\" is spelled correctly."); return null; }
+                NoteFinder = CreateObject<NoteFinderCommon>(NFType.StartsWith('#') ? NFType : "ColorChord.NET.NoteFinder." + NFType, NFToken);
+                if (NoteFinder == null) { Log.Error($"Failed to create note finder. Check to make sure the type \"{NFType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); return null; }
                 Log.Info("Created audio source of type \"" + NoteFinder.GetType().FullName + "\".");
                 return NoteFinder;
             }
@@ -170,8 +172,8 @@ namespace ColorChord.NET
                 if (VisType == null) { Log.Error($"A visualizer is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
                 if (VisName == null) { Log.Error($"A visualizer is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
 
-                IVisualizer? Vis = CreateObject<IVisualizer>("ColorChord.NET.Visualizers." + VisType, Entry);
-                if (Vis == null) { Log.Error($"Could not create visualizer \"{VisName}\". Check to make sure the type \"{VisType}\" is spelled correctly."); continue; }
+                IVisualizer? Vis = CreateObject<IVisualizer>(VisType.StartsWith('#') ? VisType : "ColorChord.NET.Visualizers." + VisType, Entry);
+                if (Vis == null) { Log.Error($"Could not create visualizer \"{VisName}\". Check to make sure the type \"{VisType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
                 Vis.Start();
                 VisualizerInsts.Add(VisName, Vis);
             }
@@ -181,7 +183,7 @@ namespace ColorChord.NET
         {
             const string OUTPUTS = "Outputs";
             if (!JSON.ContainsKey(OUTPUTS) || JSON[OUTPUTS] == null || !JSON[OUTPUTS]!.HasValues) { Log.Warn($"Could not find valid \"{OUTPUTS}\" definition. No outputs will be configured."); return; }
-            if (!typeof(JArray).IsAssignableFrom(JSON[OUTPUTS]!.GetType())) { Log.Error($"{OUTPUTS} definition needs to be an array, but it was not. No visualizers will load."); return; }
+            if (!typeof(JArray).IsAssignableFrom(JSON[OUTPUTS]!.GetType())) { Log.Error($"{OUTPUTS} definition needs to be an array, but it was not. No outputs will load."); return; }
             JArray OutputEntries = (JArray)JSON[OUTPUTS]!;
             if (OutputEntries.Count <= 0) { Log.Warn("No outputs were defined in the config file. Check to make sure the formatting is correct."); }
 
@@ -192,29 +194,59 @@ namespace ColorChord.NET
                 if (OutType == null) { Log.Error($"An output is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
                 if (OutName == null) { Log.Error($"An output is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
 
-                IOutput? Out = CreateObject<IOutput>("ColorChord.NET.Outputs." + OutType, Entry, true);
-                if (Out == null) { Log.Error($"Could not create output \"{OutName}\". Check to make sure the type \"{OutType}\" is spelled correctly."); continue; }
+                IOutput? Out = CreateObject<IOutput>(OutType.StartsWith('#') ? OutType : "ColorChord.NET.Outputs." + OutType, Entry, true);
+                if (Out == null) { Log.Error($"Could not create output \"{OutName}\". Check to make sure the type \"{OutType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
                 Out.Start();
                 OutputInsts.Add(OutName, Out);
             }
         }
 
+        private static void ReadAndApplyControllers(JObject JSON)
+        {
+            const string CONTROLLERS = "Controllers";
+            if (!JSON.ContainsKey(CONTROLLERS) || JSON[CONTROLLERS] == null || !JSON[CONTROLLERS]!.HasValues) { Log.Warn($"Could not find valid \"{CONTROLLERS}\" definition. No controllers will be configured."); return; }
+            if (!typeof(JArray).IsAssignableFrom(JSON[CONTROLLERS]!.GetType())) { Log.Error($"{CONTROLLERS} definition needs to be an array, but it was not. No controllers will load."); return; }
+            JArray ControllerEntries = (JArray)JSON[CONTROLLERS]!;
+            
+            foreach (JToken Entry in ControllerEntries)
+            {
+                string? ControlType = Entry.Value<string>(TYPE);
+                string? ControlName = Entry.Value<string>(NAME);
+                if (ControlType == null) { Log.Error($"A controller is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
+                if (ControlName == null) { Log.Error($"A controller is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
+
+                Controller? Ctrl = CreateObject<Controller>(ControlType.StartsWith('#') ? ControlType : "ColorChord.NET.Controllers." + ControlType, Entry, true, true);
+                if (Ctrl == null) { Log.Error($"Could not create controller \"{ControlName}\". Check to make sure the type \"{ControlType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
+                Ctrl.Start();
+                ControllerInsts.Add(ControlName, Ctrl);
+            }
+        }
+
         /// <summary> Creates a new instance of the specified type, and checks to make sure it implements the given interface. </summary>
-        /// <typeparam name="InterfaceType"> The interface that the resulting object must implement. </typeparam>
+        /// <typeparam name="BaseType"> The interface that the resulting object must implement. </typeparam>
         /// <param name="fullName"> The full name (namespace + type) of the object to create. </param>
         /// <param name="configEntry"> The config entry containing options that should be applied to the resulting object. </param>
         /// <returns> A configured, ready object, or null if it was not able to be made. </returns>
-        private static InterfaceType? CreateObject<InterfaceType>(string fullName, JToken configEntry, bool complexConfig = false) where InterfaceType : IConfigurableAttr
+        private static BaseType? CreateObject<BaseType>(string fullName, JToken configEntry, bool complexConfig = false, bool provideControllerInterface = false) where BaseType : IConfigurableAttr
         {
-            Type? ObjType = Type.GetType(fullName);
-            if (ObjType == null || !typeof(InterfaceType).IsAssignableFrom(ObjType)) { return default; } // Type doesn't exist, or does not implement the right interface.
+            Type? ObjType;
+            if (fullName.StartsWith('#'))
+            {
+                fullName = fullName.Substring(1);
+                ObjType = ExtensionHandler.FindType(fullName);
+            }
+            else { ObjType = Type.GetType(fullName); }
+            if (ObjType == null || !typeof(BaseType).IsAssignableFrom(ObjType)) { return default; } // Type doesn't exist, or does not implement the right interface.
 
             string? ObjName = configEntry.Value<string>(NAME);
-            if (typeof(InterfaceType) == typeof(IAudioSource) || typeof(InterfaceType) == typeof(NoteFinderCommon)) { ObjName = "NoName"; }
+            if (typeof(BaseType) == typeof(IAudioSource) || typeof(BaseType) == typeof(NoteFinderCommon)) { ObjName = ObjType.Name; }
             if (ObjName == null) { return default; }
 
-            object? Instance = Activator.CreateInstance(ObjType, ObjName, ToDict(configEntry, complexConfig));
-            return (InterfaceType?)Instance;
+            object? Instance = 
+            provideControllerInterface
+                ? Activator.CreateInstance(ObjType, ObjName, ToDict(configEntry, complexConfig), ControllerInterface.Instance)
+                : Activator.CreateInstance(ObjType, ObjName, ToDict(configEntry, complexConfig));
+            return (BaseType?)Instance;
         }
 
         /// <summary> Takes a JSON token, and converts all single-valued children into a Dictionary. </summary>

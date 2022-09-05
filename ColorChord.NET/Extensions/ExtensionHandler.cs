@@ -10,10 +10,11 @@ namespace ColorChord.NET.Extensions;
 
 public static class ExtensionHandler
 {
+    private static List<Assembly>? Assemblies;
     private static List<IExtension>? Extensions;
 
     /// <summary>Finds all suitable extension DLLs, loads them, then instantiates all contained classes that implement <see cref="IExtension"/>.</summary>
-    public static void LoadExtensions() { Extensions = LoadExtensions(FindExtensions()); }
+    public static void LoadExtensions() { (Assemblies, Extensions) = LoadExtensions(FindExtensions()); }
 
     /// <summary>Calls <see cref="IExtension.Initialize"/> on all loaded extensions.</summary>
     public static void InitExtensions()
@@ -33,6 +34,27 @@ public static class ExtensionHandler
         foreach (IExtension Extension in Extensions!) { Extension.Shutdown(); }
     }
 
+    /// <summary>Attempts to find a type by name in any assemblies of loaded extensions.</summary>
+    /// <param name="typeName">The namespace + type name to search for</param>
+    /// <returns>The <see cref="Type"/> if it was found in any loaded extensions, otherwise null</returns>
+    public static Type? FindType(string typeName)
+    {
+        if (Assemblies == null) { return null; }
+        foreach (Assembly Assembly in Assemblies)
+        {
+            try
+            {
+                Type? FoundType = Assembly.GetType(typeName);
+                if (FoundType != null) { return FoundType; }
+            }
+            catch { continue; }
+        }
+        return null;
+    }
+
+    /// <summary>Finds the names of any suitable DLL files in the Extensions directory. If the directory doesn't exist, it will be created.</summary>
+    /// <remarks>Suitable DLL files are those whose name stars with "CC.NET" and have an extension of ".dll".</remarks>
+    /// <returns>A list of all extension DLL file names found</returns>
     private static List<string> FindExtensions()
     {
         string MyExecutable = Assembly.GetExecutingAssembly().Location;
@@ -56,14 +78,20 @@ public static class ExtensionHandler
         return new();
     }
 
-    private static List<IExtension> LoadExtensions(List<string> extensionFiles)
+    /// <summary>Attempts to load the given extension DLLs if they are compatible.</summary>
+    /// <remarks>Extension classes must implement <see cref="IExtension"/> and have a parameterless constructor.</remarks>
+    /// <param name="extensionFiles">A list of DLL file names to attempt to load</param>
+    /// <returns>A list of assemblies loaded, and a list of extension classes constructed</returns>
+    private static (List<Assembly>, List<IExtension>) LoadExtensions(List<string> extensionFiles)
     {
+        List<Assembly> Assemblies = new();
         List<Type> ExtensionTypes = new();
         foreach (string ExtensionFile in extensionFiles)
         {
+            Assembly? Extension = null;
             try
             {
-                Assembly Extension = Assembly.LoadFile(ExtensionFile);
+                Extension = Assembly.LoadFile(ExtensionFile);
                 ExtensionTypes.AddRange(Extension.GetExportedTypes().Where(x => typeof(IExtension).IsAssignableFrom(x)));
             }
             catch(Exception Ex)
@@ -71,6 +99,7 @@ public static class ExtensionHandler
                 Log.Warn($"Failed to load extension \"{ExtensionFile}\".");
                 Log.Warn(Ex.ToString());
             }
+            if (Extension != null) { Assemblies.Add(Extension); }
         }
         Log.Debug(string.Format("Found {0} extension{1}.", ExtensionTypes.Count, (ExtensionTypes.Count == 1 ? "" : 's')));
         List<IExtension> Extensions = new(ExtensionTypes.Count);
@@ -90,6 +119,6 @@ public static class ExtensionHandler
                 Extensions.Add(ExtensionInstance);
             }
         }
-        return Extensions;
+        return (Assemblies, Extensions);
     }
 }
