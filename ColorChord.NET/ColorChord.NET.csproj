@@ -84,9 +84,6 @@
   <ItemGroup>
     <ProjectReference Include="..\ColorChord.NET-API\ColorChord.NET-API.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Controllers\" />
-  </ItemGroup>
   <PropertyGroup>
 
   </PropertyGroup>

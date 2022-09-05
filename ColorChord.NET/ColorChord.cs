@@ -3,6 +3,7 @@ using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.Extensions;
 using ColorChord.NET.NoteFinder;
 using Newtonsoft.Json.Linq;
 using System;
@@ -37,8 +38,10 @@ namespace ColorChord.NET
                 Log.Warn("Could not find config file. Creating and using default.");
                 WriteDefaultConfig();
             }
-
+            ExtensionHandler.LoadExtensions();
+            ExtensionHandler.InitExtensions();
             ReadConfig();
+            ExtensionHandler.PostInitExtensions();
         }
 
         private static void WriteDefaultConfig()
@@ -98,6 +101,7 @@ namespace ColorChord.NET
         public static void Stop()
         {
             Log.Info("Exiting...");
+            ExtensionHandler.StopExtensions();
             Source?.Stop();
             NoteFinder?.Stop();
             foreach (IVisualizer Visualizer in VisualizerInsts.Values) { Visualizer.Stop(); }

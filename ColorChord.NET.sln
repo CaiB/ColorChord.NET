@@ -13,6 +13,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ColorChordTests", "ColorCho
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ColorChord.NET-API", "ColorChord.NET-API\ColorChord.NET-API.csproj", "{2851D19F-7B96-4EA3-8438-90F186C07CC0}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Extensions", "Extensions", "{9C6DF1A6-92A4-4CC9-99C5-C9CFBECB6E09}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UDPReceiverController", "Extensions\UDPReceiverController\UDPReceiverController.csproj", "{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -59,9 +63,24 @@ Global
 		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Release|x64.Build.0 = Release|Any CPU
 		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Release|x86.ActiveCfg = Release|Any CPU
 		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Release|x86.Build.0 = Release|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Debug|x64.Build.0 = Debug|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Debug|x86.Build.0 = Debug|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Release|x64.ActiveCfg = Release|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Release|x64.Build.0 = Release|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Release|x86.ActiveCfg = Release|Any CPU
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752} = {9C6DF1A6-92A4-4CC9-99C5-C9CFBECB6E09}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6679A80E-95B6-4840-BC13-0D43DF7E70FD}
