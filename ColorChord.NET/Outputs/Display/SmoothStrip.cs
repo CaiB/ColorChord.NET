@@ -1,5 +1,6 @@
-﻿using ColorChord.NET.Visualizers;
-using ColorChord.NET.Visualizers.Formats;
+﻿using ColorChord.NET.API.Outputs.Display;
+using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.API.Visualizers.Formats;
 using OpenTK.Graphics.ES30;
 using System;
 

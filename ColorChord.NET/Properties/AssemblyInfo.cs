@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("CaiB")]
 [assembly: AssemblyProduct("ColorChord.NET")]
-[assembly: AssemblyCopyright("Copyright © Cai B 2018")]
+[assembly: AssemblyCopyright("Copyright © Cai B 2022")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

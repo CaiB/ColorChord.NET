@@ -1,7 +1,6 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29215.179
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32804.467
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ColorChord.NET", "ColorChord.NET\ColorChord.NET.csproj", "{8FD047CD-693D-4D5A-8C1E-802101FCC54E}"
 EndProject
@@ -11,6 +10,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ColorChordTests", "ColorChordTests\ColorChordTests.csproj", "{EFB82CAB-785E-48A4-A2BD-CA1AC191C324}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ColorChord.NET-API", "ColorChord.NET-API\ColorChord.NET-API.csproj", "{2851D19F-7B96-4EA3-8438-90F186C07CC0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -46,6 +47,18 @@ Global
 		{EFB82CAB-785E-48A4-A2BD-CA1AC191C324}.Release|x64.Build.0 = Release|Any CPU
 		{EFB82CAB-785E-48A4-A2BD-CA1AC191C324}.Release|x86.ActiveCfg = Release|Any CPU
 		{EFB82CAB-785E-48A4-A2BD-CA1AC191C324}.Release|x86.Build.0 = Release|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Debug|x64.Build.0 = Debug|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Debug|x86.Build.0 = Debug|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Release|x64.ActiveCfg = Release|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Release|x64.Build.0 = Release|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Release|x86.ActiveCfg = Release|Any CPU
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

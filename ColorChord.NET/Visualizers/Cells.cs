@@ -1,7 +1,9 @@
-﻿using ColorChord.NET.Config;
-using ColorChord.NET.NoteFinder;
-using ColorChord.NET.Outputs;
-using ColorChord.NET.Visualizers.Formats;
+﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.NoteFinder;
+using ColorChord.NET.API.Outputs;
+using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.API.Visualizers.Formats;
+using ColorChord.NET.Config;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;

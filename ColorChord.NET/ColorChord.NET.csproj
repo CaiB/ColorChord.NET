@@ -81,6 +81,12 @@
     <None Remove="Outputs\Display\Shaders\tube3d.frag" />
     <None Remove="Outputs\Display\Shaders\tube3d.vert" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ColorChord.NET-API\ColorChord.NET-API.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Controllers\" />
+  </ItemGroup>
   <PropertyGroup>
 
   </PropertyGroup>

@@ -1,7 +1,9 @@
-﻿using ColorChord.NET.Config;
+﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Outputs.Display;
+using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.API.Visualizers.Formats;
+using ColorChord.NET.Config;
 using ColorChord.NET.NoteFinder;
-using ColorChord.NET.Visualizers;
-using ColorChord.NET.Visualizers.Formats;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using System;

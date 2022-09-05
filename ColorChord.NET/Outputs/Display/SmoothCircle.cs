@@ -1,10 +1,12 @@
-﻿using ColorChord.NET.Visualizers;
-using ColorChord.NET.Visualizers.Formats;
+﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Outputs.Display;
+using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.API.Visualizers.Formats;
+using ColorChord.NET.Config;
 using System;
 using OpenTK.Graphics.OpenGL4;
 using System.Collections.Generic;
 using OpenTK.Mathematics;
-using ColorChord.NET.Config;
 
 namespace ColorChord.NET.Outputs.Display
 {

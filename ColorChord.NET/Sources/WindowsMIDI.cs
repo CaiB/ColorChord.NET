@@ -1,4 +1,6 @@
-﻿using ColorChord.NET.Config;
+﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Sources;
+using ColorChord.NET.Config;
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;

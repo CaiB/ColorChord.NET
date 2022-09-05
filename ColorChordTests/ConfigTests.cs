@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.Config;
+﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.Config;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Collections.Generic;

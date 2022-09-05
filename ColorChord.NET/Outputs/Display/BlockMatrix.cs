@@ -1,6 +1,7 @@
-﻿using ColorChord.NET.Visualizers.Formats;
-using System;
+﻿using ColorChord.NET.API.Outputs.Display;
+using ColorChord.NET.API.Visualizers.Formats;
 using OpenTK.Graphics.OpenGL4;
+using System;
 
 namespace ColorChord.NET.Outputs.Display
 {

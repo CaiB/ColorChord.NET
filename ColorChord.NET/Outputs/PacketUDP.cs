@@ -1,6 +1,9 @@
-﻿using ColorChord.NET.Config;
-using ColorChord.NET.Visualizers;
-using ColorChord.NET.Visualizers.Formats;
+﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Controllers;
+using ColorChord.NET.API.Outputs;
+using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.API.Visualizers.Formats;
+using ColorChord.NET.Config;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -10,20 +13,23 @@ using System.Text;
 
 namespace ColorChord.NET.Outputs
 {
-    public class PacketUDP : IOutput
+    public class PacketUDP : IOutput, IControllableAttr
     {
         /// <summary> Instance name, for identification and attaching controllers. </summary>
         public string Name { get; private init; }
 
         /// <summary> Number of empty bytes to leave at the front of the packet. </summary>
+        [Controllable("PaddingFront")]
         [ConfigInt("PaddingFront", 0, 1000, 0)]
         public uint FrontPadding { get; set; }
 
         /// <summary> Number of empty bytes to leave at the end of the packet. </summary>
+        [Controllable("PaddingBack")]
         [ConfigInt("PaddingBack", 0, 1000, 0)]
         public uint BackPadding { get; set; }
 
         /// <summary> The data to place into the padding bytes specified by <see cref="FrontPadding"/> and <see cref="BackPadding"/>. </summary>
+        [Controllable("PaddingContent")]
         [ConfigInt("PaddingContent", 0x00, 0xFF, 0x00)]
         public byte PaddingContent { get; set; }
 
@@ -55,7 +61,8 @@ namespace ColorChord.NET.Outputs
         public bool UseConstantPacketLength { get; private set; }
 
         /// <summary> Whether this sender instance is enabled (can send packets). </summary>
-        [ConfigBool("Enable", true)]
+        [Controllable(ConfigNames.ENABLE)]
+        [ConfigBool(ConfigNames.ENABLE, true)]
         public bool Enabled { get; set; }
 
         /// <summary> Whether the LED matrix uses shorter wiring, reversing the direction of every other line. </summary>
@@ -79,20 +86,25 @@ namespace ColorChord.NET.Outputs
         public int MatrixSizeY { get; set; } = 1;
 
         /// <summary> Where in the visualizer data we start reading data to output over the network. </summary>
+        [Controllable("StartIndex")]
         [ConfigInt("StartIndex", 0, int.MaxValue, 0)]
         public int StartIndex = 0;
 
         /// <summary> Where in the visualizer data we stop reading data to output over the network. </summary>
         /// <remarks> -1 means read to the end of the data available. </remarks>
+        [Controllable("EndIndex")]
         [ConfigInt("EndIndex", -1, int.MaxValue, -1)]
         public int EndIndex = -1;
 
+        [Controllable("Port", 1)]
         [ConfigInt("Port", 1, 65535, 7777)]
         private readonly ushort PortFromConfig = 7777;
 
+        [Controllable("IP", 1)]
         [ConfigString("IP", "127.0.0.1")]
         private readonly string IPFromConfig = "127.0.0.1";
 
+        [Controllable("Universe")]
         [ConfigInt("Universe", 1, 63999, 1)]
         private readonly ushort Universe = 1;
 
@@ -108,7 +120,7 @@ namespace ColorChord.NET.Outputs
         private byte E131Sequence = 0;
 
         /// <summary> Where the packets will be sent. </summary>
-        private readonly IPEndPoint Destination;
+        private IPEndPoint Destination;
 
         private readonly IVisualizer Source;
         private readonly UdpClient Sender = new();
@@ -235,6 +247,12 @@ namespace ColorChord.NET.Outputs
                 SendMode.E131 => 5568,
                 _ => 7777,
             };
+        }
+
+        /// <summary>Callback for when a controller changes settings.</summary>
+        public void SettingChanged(int id)
+        {
+            if (id == 1) { this.Destination = new IPEndPoint(IPAddress.Parse(this.IPFromConfig), this.PortFromConfig); }
         }
 
         /// <summary> Sets the pattern length and content based on the given pattern descriptor string. </summary>

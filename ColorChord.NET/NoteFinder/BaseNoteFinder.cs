@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Threading;
+using ColorChord.NET.API.Config;
+using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.Config;
-using ColorChord.NET.NoteFinder;
 
 namespace ColorChord.NET.NoteFinder
 {

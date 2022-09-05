@@ -1,9 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Outputs.Display;
+using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.API.Visualizers.Formats;
 using ColorChord.NET.Config;
 using ColorChord.NET.NoteFinder;
-using ColorChord.NET.Visualizers;
-using ColorChord.NET.Visualizers.Formats;
+using System;
+using System.Collections.Generic;
 using OpenTK.Graphics.ES30;
 using OpenTK.Mathematics;
 

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ColorChord.NET.API.NoteFinder;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -84,7 +85,9 @@ namespace ColorChord.NET.NoteFinder
             }
             if((status & 0xF0) == 0xE0) // Pitch bend
             {
-
+                short Bend = (short)(((data & 0x7F) << 7) | ((data >> 8) & 0x7F));
+                if (((data >> 13) & 1) == 1) { unchecked { Bend |= (short)0xC000; } } // sign-extend if negative
+                PitchBends[Channel] = Bend;
             }
         }
 
@@ -94,12 +97,11 @@ namespace ColorChord.NET.NoteFinder
         {
             for (byte Channel = 0; Channel < CHANNELS; Channel++)
             {
-                for (byte Note = 0; Note < NOTES; Note++)
-                {
-                    if (Note < 12) { SummedNotes[Channel, Note] = InputNoteStatus[Channel, Note]; }
-                    else { SummedNotes[Channel, Note % 12] += InputNoteStatus[Channel, Note]; }
-                }
+                for (byte Note = 0; Note < 12; Note++) { SummedNotes[Channel, Note] = InputNoteStatus[Channel, Note]; }
+                for (byte Note = 12; Note < NOTES; Note++) { SummedNotes[Channel, Note % 12] += InputNoteStatus[Channel, Note]; }
             }
+
+
 
         }
 

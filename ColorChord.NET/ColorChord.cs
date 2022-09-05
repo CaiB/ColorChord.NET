@@ -1,16 +1,15 @@
-﻿using ColorChord.NET.Config;
+﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.NoteFinder;
+using ColorChord.NET.API.Outputs;
+using ColorChord.NET.API.Sources;
+using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.NoteFinder;
-using ColorChord.NET.Outputs;
-using ColorChord.NET.Sources;
-using ColorChord.NET.Visualizers;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Reflection;
-using static ColorChord.NET.Config.ConfigNames;
+using static ColorChord.NET.API.Config.ConfigNames;
 
 namespace ColorChord.NET
 {
