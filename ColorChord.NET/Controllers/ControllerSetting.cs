@@ -1,7 +1,6 @@
 ﻿using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.Outputs;
-using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Visualizers;
 using System;
 using System.Reflection;
@@ -17,11 +16,13 @@ public class ControllerSetting : ISetting
     public SettingType DataType { get; private set; } = SettingType.None;
 
     private IControllableAttr? TargetInstance { get; set; }
+    private int ControlID { get; set; }
     private bool InitializeAttempted { get; set; }
     private bool IsInitialized => IsProperty ? Property != null : Field != null;
     private bool IsProperty { get; set; }
     private FieldInfo? Field { get; set; }
     private PropertyInfo? Property { get; set; }
+    private ConfigAttribute? ConfigAttribute { get; set; }
 
     public ControllerSetting()
     {
@@ -43,6 +44,35 @@ public class ControllerSetting : ISetting
         if (this.InitializeAttempted && !this.IsInitialized) { return false; }
         if (!this.InitializeAttempted) { return Initialize(); }
         return this.IsInitialized;
+    }
+
+    internal object? GetValue() => this.IsProperty ? this.Property!.GetValue(this.TargetInstance) : this.Field!.GetValue(this.TargetInstance); // Assumes IsValid
+
+    internal bool SetValue(object newValue) // Assumes IsValid
+    {
+        if (!CheckNewValue(newValue)) { return false; }
+
+        if (this.IsProperty) { this.Property!.SetValue(this.TargetInstance, newValue); }
+        else { this.Field!.SetValue(this.TargetInstance, newValue); }
+
+        if (ControllableAttribute.CheckNeedsCallback(this.ControlID)) { this.TargetInstance!.SettingChanged(this.ControlID); }
+        return true;
+    }
+
+    internal void Toggle() // Assumes IsValid
+    {
+        if (this.DataType != SettingType.Bool) { throw new InvalidOperationException("Cannot use toggle method on a non-bool setting."); }
+        if (this.IsProperty)
+        {
+            bool CurrentState = (bool?)GetValue() ?? throw new InvalidOperationException("Cannot use toggle method on a non-bool setting.");
+            this.Property!.SetValue(this.TargetInstance, !CurrentState);
+        }
+        else
+        {
+            bool CurrentState = (bool?)GetValue() ?? throw new InvalidOperationException("Cannot use toggle method on a non-bool setting.");
+            this.Field!.SetValue(this.TargetInstance, !CurrentState);
+        }
+        if (ControllableAttribute.CheckNeedsCallback(this.ControlID)) { this.TargetInstance!.SettingChanged(this.ControlID); }
     }
 
     private bool Initialize()
@@ -101,6 +131,8 @@ public class ControllerSetting : ISetting
                 this.IsProperty = true;
                 this.Property = Property;
                 this.DataType = TypeToSettingType(Property.GetType());
+                this.ControlID = ControlAttr.ControlID;
+                this.ConfigAttribute = Property.GetCustomAttribute<ConfigAttribute>();
                 return true;
             }
         }
@@ -115,11 +147,45 @@ public class ControllerSetting : ISetting
                 this.IsProperty = false;
                 this.Field = Field;
                 this.DataType = TypeToSettingType(Field.GetType());
+                this.ControlID = ControlAttr.ControlID;
+                this.ConfigAttribute = Field.GetCustomAttribute<ConfigAttribute>();
                 return true;
             }
         }
         return false;
     }
+
+    private bool CheckNewValue(object newValue)
+    {
+        if (this.ConfigAttribute is ConfigIntAttribute ConfigInt)
+        {
+            if (newValue is not long NewValue) { throw new InvalidOperationException("Cannot configure an integral numeric setting with a value that is not castable to a long."); }
+            if (NewValue > ConfigInt.MaxValue || NewValue < ConfigInt.MinValue) { return false; }
+        }
+        else if (this.ConfigAttribute is ConfigFloatAttribute ConfigFloat)
+        {
+            if (newValue is not double NewValue) { throw new InvalidOperationException("Cannot configure a decimal numeric setting with a value that is not castable to a double."); }
+            if (NewValue > ConfigFloat.MaxValue || NewValue < ConfigFloat.MinValue) { return false; }
+        }
+
+        if (this.DataType == SettingType.IntegralNumber)
+        {
+            if (newValue is not long) { throw new InvalidOperationException("Cannot configure an integral numeric setting with a value that is not castable to a long."); }
+        }
+        else if (this.DataType == SettingType.DecimalNumber)
+        {
+            if (newValue is not double) { throw new InvalidOperationException("Cannot configure a decimal numeric setting with a value that is not castable to a double."); }
+        }
+        else if (this.DataType == SettingType.Bool)
+        {
+            if (newValue is not bool) { throw new InvalidOperationException("Cannot configure a bool setting with a value that is not castable to a bool."); }
+        }
+        else if (this.DataType == SettingType.String)
+        {
+            if (newValue is not string) { throw new InvalidOperationException("Cannot configure a string setting with a value that is not castable to a string."); }
+        }
+        return true;
+    } // Assumes IsValid
 
     private static SettingType TypeToSettingType(Type type)
     {

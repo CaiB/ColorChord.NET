@@ -22,15 +22,28 @@ public class ControllerInterface : IControllerInterface
         return Setting.IsValid() ? Setting : null;
     }
 
-    public object GetSettingValue(ISetting setting)
+    public object? GetSettingValue(ISetting setting)
     {
-        return null; //TODO: Finish
+        if (!setting.IsValid()) { throw new InvalidOperationException("The provided setting object is not valid."); }
+        if (setting is not ControllerSetting CtrlSetting) { throw new InvalidOperationException("The provided setting object is not a recognized type. Do not attempt to implement ISetting."); }
+        return CtrlSetting.GetValue();
     }
 
-    public bool SetSettingValue(ISetting setting, object newSetting)
+    public bool SetSettingValue(ISetting setting, object newValue)
     {
-        return false; //TODO: Finish
+        if (!setting.IsValid()) { throw new InvalidOperationException("The provided setting object is not valid."); }
+        if (setting is not ControllerSetting CtrlSetting) { throw new InvalidOperationException("The provided setting object is not a recognized type. Do not attempt to implement ISetting."); }
+        return CtrlSetting.SetValue(newValue);
     }
+
+    public void ToggleSettingValue(ISetting setting) // bool only
+    {
+        if (!setting.IsValid()) { throw new InvalidOperationException("The provided setting object is not valid."); }
+        if (setting is not ControllerSetting CtrlSetting) { throw new InvalidOperationException("The provided setting object is not a recognized type. Do not attempt to implement ISetting."); }
+        CtrlSetting.Toggle();
+    }
+
+    //TODO: Enumerate all settings for UIs
 
     private static ControllerSetting ParsePath(string settingPath)
     {

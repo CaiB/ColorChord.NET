@@ -10,7 +10,7 @@ public class ControllableAttribute : Attribute
     /// <summary>An ID passed to the callback function when this setting gets changed.</summary>
     public int ControlID { get; private init; } = 0;
     /// <summary>Whether or not a change of this setting should cause the callback to be invoked.</summary>
-    public bool NeedsCallback { get => this.ControlID != 0; }
+    public bool NeedsCallback { get => CheckNeedsCallback(this.ControlID); }
 
     /// <summary>Exposes the attached field/property to controllers for runtime settings changes.</summary>
     /// <remarks>Using this constructor means that when the setting gets changed, no callback occurs.</remarks>
@@ -27,4 +27,9 @@ public class ControllableAttribute : Attribute
         this.ControlName = name;
         this.ControlID = controlID;
     }
+
+    /// <summary>Whether or not a change of a setting should cause the <see cref="IControllableAttr.SettingChanged(int)"/> callback to be invoked.</summary>
+    /// <returns>Whether the callback needs to be invoked when this setting is changed</returns>
+    /// <param name="controlID">The <see cref="ControlID"/> value of the controllable setting</param>
+    public static bool CheckNeedsCallback(int controlID) => controlID != 0;
 }
