@@ -37,7 +37,7 @@ build_script:
     $ExtensionDirs | ForEach-Object {
 
 
-    & dotnet publish "$env:APPVEYOR_BUILD_FOLDER\Extensions\$_\$_.csproj" --output "$env:APPVEYOR_BUILD_FOLDER\Extensions\PublishResult" --configuration Release --verbosity minimal
+    & dotnet publish "$_.csproj" --output "$env:APPVEYOR_BUILD_FOLDER\Extensions\PublishResult" --configuration Release --verbosity minimal
 
 
     }
