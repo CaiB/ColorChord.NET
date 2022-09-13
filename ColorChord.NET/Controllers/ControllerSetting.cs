@@ -130,7 +130,7 @@ public class ControllerSetting : ISetting
             {
                 this.IsProperty = true;
                 this.Property = Property;
-                this.DataType = TypeToSettingType(Property.GetType());
+                this.DataType = TypeToSettingType(Property.PropertyType);
                 this.ControlID = ControlAttr.ControlID;
                 this.ConfigAttribute = Property.GetCustomAttribute<ConfigAttribute>();
                 return true;
@@ -146,7 +146,7 @@ public class ControllerSetting : ISetting
             {
                 this.IsProperty = false;
                 this.Field = Field;
-                this.DataType = TypeToSettingType(Field.GetType());
+                this.DataType = TypeToSettingType(Field.FieldType);
                 this.ControlID = ControlAttr.ControlID;
                 this.ConfigAttribute = Field.GetCustomAttribute<ConfigAttribute>();
                 return true;
