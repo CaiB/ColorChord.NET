@@ -24,16 +24,31 @@ dotnet_csproj:
   file_version: '{version}'
   informational_version: '{version}'
 build_script:
-- cmd: >-
-    nuget restore
+- pwsh: >-
+    & nuget restore
 
 
-    dotnet publish "%APPVEYOR_BUILD_FOLDER%\ColorChord.NET\ColorChord.NET.csproj" --output "%APPVEYOR_BUILD_FOLDER%\ColorChord.NET\PublishResult" --configuration Release --verbosity minimal
+    & dotnet publish "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\ColorChord.NET.csproj" --output "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\PublishResult" --configuration Release --verbosity minimal
 
 
-    7z a autobuild-v%appveyor_build_version%.zip %APPVEYOR_BUILD_FOLDER%\ColorChord.NET\PublishResult\*
+    $ExtensionDirs = Get-ChildItem "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\Extensions\" -Directory
+
+
+    $ExtensionDirs | ForEach-Object {
+
+
+    & dotnet publish "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\Extensions\$_\$_.csproj" --output "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\Extensions\PublishResult" --configuration Release --verbosity minimal
+
+
+    }
+
+
+    & 7z a "ColorChord.NET-autobuild-v$($env:appveyor_build_version).zip" "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\PublishResult\*"
+
+
+    & 7z a "ColorChord.NET-Extensions-autobuild-v$($env:appveyor_build_version).zip" "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\Extensions\PublishResult\*"
 artifacts:
-- path: autobuild-v*.zip
+- path: ColorChord.NET*autobuild-v*.zip
 deploy:
 - provider: GitHub
   tag: auto-v$(appveyor_build_version)
@@ -41,5 +56,5 @@ deploy:
   description: This is an automatic build of the latest commits. Usage is at your own risk. Unless you are actively debugging, it is recommended to use a regular release instead.
   auth_token:
     secure: fIgQpdctIp9szYmG0dfhfD0Cc4/eKQYO7aGXOOYULOB4Bu5SIg6GE+ZRw9kTFNRZ
-  artifact: autobuild-v$(appveyor_build_version).zip
+  artifact: ColorChord.NET*autobuild-v*.zip
   prerelease: true
