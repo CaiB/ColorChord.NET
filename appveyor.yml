@@ -37,10 +37,13 @@ build_script:
     $ExtensionDirs | ForEach-Object {
 
 
-    & dotnet publish "$_.csproj" --output "$env:APPVEYOR_BUILD_FOLDER\Extensions\PublishResult" --configuration Release --verbosity minimal
+    & dotnet publish "$env:APPVEYOR_BUILD_FOLDER\Extensions\$($_.Name)\$($_.Name).csproj" --output "$env:APPVEYOR_BUILD_FOLDER\Extensions\PublishResult" --configuration Release --verbosity minimal
 
 
     }
+
+
+    Remove-Item "$env:APPVEYOR_BUILD_FOLDER\Extensions\PublishResult\ColorChord.NET-API.*"
 
 
     & 7z a "ColorChord.NET-autobuild-v$($env:appveyor_build_version).zip" "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\PublishResult\*"
