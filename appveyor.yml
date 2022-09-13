@@ -31,7 +31,7 @@ build_script:
     & dotnet publish "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\ColorChord.NET.csproj" --output "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\PublishResult" --configuration Release --verbosity minimal
 
 
-    $ExtensionDirs = Get-ChildItem "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\Extensions\" -Directory
+    $ExtensionDirs = Get-ChildItem "$env:APPVEYOR_BUILD_FOLDER\Extensions\" -Directory
 
 
     $ExtensionDirs | ForEach-Object {
