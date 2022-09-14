@@ -1,3 +1,4 @@
+using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Outputs.Display;
 using ColorChord.NET.API.Visualizers;

@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.API.Config;
+﻿using ColorChord.NET.API;
+using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using System;
 
@@ -20,9 +21,9 @@ namespace ColorChord.NET.Extensions.WindowsController
                 Dictionary<string, object>[] ShortcutList = (Dictionary<string, object>[])config[SHORTCUTS];
                 foreach (Dictionary<string, object> ShortcutConfig in ShortcutList)
                 {
-                    if (!ShortcutConfig.ContainsKey(KEY_COMBO)) { Console.WriteLine($"Shortcut list entry did not have a \"{KEY_COMBO}\" set. Please check your config."); continue; }
-                    if (!ShortcutConfig.ContainsKey(ConfigNames.NAME)) { Console.WriteLine($"Shortcut list entry did not have a \"{ConfigNames.NAME}\" set. Please check your config."); continue; }
-                    if (!ShortcutConfig.ContainsKey(ConfigNames.TARGET)) { Console.WriteLine($"Shortcut list entry did not have a \"{ConfigNames.TARGET}\" set. Please check you config."); continue; }
+                    if (!ShortcutConfig.ContainsKey(KEY_COMBO)) { Log.Warn($"Shortcut list entry did not have a \"{KEY_COMBO}\" set. Please check your config."); continue; }
+                    if (!ShortcutConfig.ContainsKey(ConfigNames.NAME)) { Log.Warn($"Shortcut list entry did not have a \"{ConfigNames.NAME}\" set. Please check your config."); continue; }
+                    if (!ShortcutConfig.ContainsKey(ConfigNames.TARGET)) { Log.Warn($"Shortcut list entry did not have a \"{ConfigNames.TARGET}\" set. Please check you config."); continue; }
 
                     string ShortcutName = (string)ShortcutConfig[ConfigNames.NAME];
                     string KeyCombo = (string)ShortcutConfig[KEY_COMBO];
@@ -32,7 +33,7 @@ namespace ColorChord.NET.Extensions.WindowsController
 
                     string TargetName = (string)ShortcutConfig[ConfigNames.TARGET];
                     ISetting? TargetSetting = this.Interface.FindSetting(TargetName);
-                    if (TargetSetting == null) { Console.WriteLine($"Could not find target setting \"{TargetName}\". Please check your config."); continue; }
+                    if (TargetSetting == null) { Log.Warn($"Could not find target setting \"{TargetName}\". Please check your config."); continue; }
                     this.Targets.Add(ShortcutName, TargetSetting);
 
                     Extension.WindowsInterface!.AddShortcut(ShortcutName, Modifiers, Keycode);
@@ -53,11 +54,11 @@ namespace ColorChord.NET.Extensions.WindowsController
                 if (i != Parts.Length - 1) // Not the last part -> modifier keys
                 {
                     if (Enum.TryParse(PartClean, true, out Win32.KeyModifiers ThisModifier)) { Modifiers |= ThisModifier; }
-                    else { Console.WriteLine($"Unknown modifier was found in a key combo definition: \"{PartClean}\" (Found while parsing \"{keyCombo}\")"); Valid = false; }
+                    else { Log.Warn($"Unknown modifier was found in a key combo definition: \"{PartClean}\" (Found while parsing \"{keyCombo}\")"); Valid = false; }
                 }
                 else // Last part -> actual key
                 {
-                    if (!Enum.TryParse(PartClean, true, out Key)) { Console.WriteLine($"Unknown key was found in a key combo definition: \"{PartClean}\" (Found while parsing \"{keyCombo}\")"); Valid = false; }
+                    if (!Enum.TryParse(PartClean, true, out Key)) { Log.Warn($"Unknown key was found in a key combo definition: \"{PartClean}\" (Found while parsing \"{keyCombo}\")"); Valid = false; }
                 }
             }
 

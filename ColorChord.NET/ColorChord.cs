@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.API.Config;
+﻿using ColorChord.NET.API;
+using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
@@ -19,7 +20,6 @@ namespace ColorChord.NET
     public class ColorChord
     {
         private static string ConfigFile = "config.json";
-        public static bool Debug = false;
 
         public static IAudioSource? Source { get; private set; }
         public static NoteFinderCommon? NoteFinder { get; private set; }
@@ -32,7 +32,7 @@ namespace ColorChord.NET
             for(int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "config" && args.Length > i + 1) { ConfigFile = args[++i]; }
-                if (args[i] == "debug") { Debug = true; }
+                if (args[i] == "debug") { Log.EnableDebug = true; }
             }
 
             if (!File.Exists(ConfigFile)) // No config file

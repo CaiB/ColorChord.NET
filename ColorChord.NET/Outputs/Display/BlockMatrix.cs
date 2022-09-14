@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.API.Outputs.Display;
+﻿using ColorChord.NET.API;
+using ColorChord.NET.API.Outputs.Display;
 using ColorChord.NET.API.Visualizers.Formats;
 using OpenTK.Graphics.OpenGL4;
 using System;

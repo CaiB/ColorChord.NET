@@ -1,12 +1,14 @@
 ﻿using System;
 
-namespace ColorChord.NET
+namespace ColorChord.NET.API
 {
     public static class Log
     {
+        public static bool EnableDebug { get; set; } = false;
+
         public static void Debug(string message)
         {
-            if (!ColorChord.Debug) { return; }
+            if (!EnableDebug) { return; }
             Console.ForegroundColor = ConsoleColor.DarkGray;
             Console.WriteLine("[DBG] " + message);
             Console.ForegroundColor = ConsoleColor.White;

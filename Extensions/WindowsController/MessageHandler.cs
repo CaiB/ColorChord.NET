@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ColorChord.NET.API;
+using System;
 
 namespace ColorChord.NET.Extensions.WindowsController
 {
@@ -76,7 +77,7 @@ namespace ColorChord.NET.Extensions.WindowsController
                         }
                     }
                 }
-                else if (ReturnCode < 0) { Console.WriteLine("An error occured getting messages from Windows. You may need to restart ColorChord.NET."); } // Error
+                else if (ReturnCode < 0) { Log.Error("An error occured getting messages from Windows. You may need to restart ColorChord.NET."); } // Error
                 else { break; } // Exiting
             }
         }
