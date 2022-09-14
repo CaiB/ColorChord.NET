@@ -250,6 +250,8 @@ namespace ColorChord.NET.Outputs
             };
         }
 
+        public void SettingWillChange(int controlID) { }
+
         /// <summary>Callback for when a controller changes settings.</summary>
         public void SettingChanged(int id)
         {

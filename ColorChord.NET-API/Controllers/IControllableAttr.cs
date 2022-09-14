@@ -8,6 +8,10 @@ public interface IControllableAttr
     /// <summary>Called when a controller changes the value of a setting that requires a callback.</summary>
     /// <param name="controlID">The ID defined in the <see cref="ControllableAttribute">Controllable</see> attribute params</param>
     public void SettingChanged(int controlID);
+
+    /// <summary>Called when a controller is about to change the value of a setting that requires a callback.</summary>
+    /// <param name="controlID">The ID defined in the <see cref="ControllableAttribute">Controllable</see> attribute params</param>
+    public void SettingWillChange(int controlID);
 }
 
 /// <summary>This is implemented by classes that are controllable, but which are unable to use the <see cref="ControllableAttribute">Controllable</see> attributes.</summary>

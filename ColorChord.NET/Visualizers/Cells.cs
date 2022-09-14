@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Visualizers;
@@ -9,117 +10,155 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 
-namespace ColorChord.NET.Visualizers
+namespace ColorChord.NET.Visualizers;
+
+public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
 {
-    public class Cells : IVisualizer, IDiscrete1D
+    /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
+    public string Name { get; private init; }
+
+    /// <summary> The number of discrete points to be output. Usually equals the number of LEDs on a physical system. </summary>
+    [Controllable("LEDCount", 1)]
+    [ConfigInt("LEDCount", 1, 100000, 50)]
+    public int LEDCount { get; set; } = 50;
+
+    /// <summary> Whether or not this visualizer is currently operating. </summary>
+    [Controllable("Enable")]
+    [ConfigBool("Enable", true)]
+    public bool Enabled { get; set; }
+
+    /// <summary> How many times per second the output should be updated. </summary>
+    [Controllable("FrameRate")]
+    [ConfigInt("FrameRate", 0, 1000, 60)]
+    public int FrameRate { get; set; } = 60;
+    
+    /// <summary> The number of milliseconds to wait between output updates. </summary>
+    private int FramePeriod => 1000 / this.FrameRate;
+
+    /// <summary> How strongly notes should be amplified before processing. </summary>
+    [Controllable("LightSiding")]
+    [ConfigFloat("LightSiding", 0F, 100F, 1.9F)]
+    public float LightSiding { get; set; }
+
+    /// <summary> How much to amplify saturation (LED brightness) after processing. </summary>
+    [Controllable("SaturationAmplifier")]
+    [ConfigFloat("SaturationAmplifier", 0F, 100F, 2F)]
+    public float SaturationAmplifier { get; set; }
+
+    /// <summary> A multiplier applied to input note strengths to determine how many LEDs should become that colour. </summary>
+    /// <remarks> This should be proportionally increased/decreased if the number of LEDs changes to keep the same overall percentage of LEDs on the same. </remarks>
+    [Controllable("QtyAmp")]
+    [ConfigFloat("QtyAmp", 0, 100, 20)]
+    public float QtyAmp { get; set; }
+
+    /// <summary> Whether to use smoothed input data (to reduce flicker at the cost of higher response time), or only the latest data. </summary>
+    [Controllable("SteadyBright")]
+    [ConfigBool("SteadyBright", false)]
+    public bool SteadyBright { get; set; }
+
+    /// <summary> Whether LEDs turning on/off should be based on how long since their last state change (true), or based solely on position (false). </summary>
+    /// <remarks> Useful for pies, turn off for linear systems. </remarks>
+    [Controllable("TimeBased")]
+    [ConfigBool("TimeBased", false)]
+    public bool TimeBased { get; set; }
+
+    // TODO: Understand & document this feature once it works in base ColorChord.
+    [ConfigBool("Snakey", false)]
+    public bool Snakey { get; set; } // Advance head for where to get LEDs around.
+
+    /// <summary> All outputs that need to be notified when new data is available. </summary>
+    private readonly List<IOutput> Outputs = new();
+
+    /// <summary> Stores the latest data to be given to <see cref="IOutput"/> modules when requested. </summary>
+    private uint[] OutputData;
+
+    /// <summary> Whether to continue processing, or stop threads and finish up in preparation for closing the application. </summary>
+    private bool KeepGoing = true;
+
+    /// <summary>Used to make sure a controller changing a setting does not happen in the middle of a processing cycle.</summary>
+    private readonly object SettingUpdateLock = new();
+
+    /// <summary> The thread on which input note data is processed by this visualizer. </summary>
+    private Thread? ProcessThread;
+
+    private readonly int NoteCount, BinsPerOctave;
+
+    public Cells(string name, Dictionary<string, object> config)
     {
-        /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
-        public string Name { get; private init; }
+        this.Name = name;
+        Configurer.Configure(this, config);
+        this.OutputData = new uint[this.LEDCount];
+        this.LEDBinMapping = new int[this.LEDCount];
+        this.LastChangeTime = new double[this.LEDCount];
+        this.NoteCount = ColorChord.NoteFinder!.NoteCount;
+        this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
+    }
 
-        /// <summary> The number of discrete points to be output. Usually equals the number of LEDs on a physical system. </summary>
-        [ConfigInt("LEDCount", 1, 100000, 50)]
-        public int LEDCount { get; set; } = 50;
+    public void Start()
+    {
+        this.KeepGoing = true;
+        this.ProcessThread = new Thread(DoProcessing) { Name = "Cells " + this.Name };
+        this.ProcessThread.Start();
+        ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
+    }
 
-        /// <summary> Whether or not this visualizer is currently operating. </summary>
-        [ConfigBool("Enable", true)]
-        public bool Enabled { get; set; }
+    public void Stop()
+    {
+        this.KeepGoing = false;
+        this.ProcessThread?.Join();
+    }
 
-        /// <summary> How many times per second the output should be updated. </summary>
-        [ConfigInt("FrameRate", 0, 1000, 60)]
-        public int FrameRate { get; set; } = 60;
-        
-        /// <summary> The number of milliseconds to wait between output updates. </summary>
-        private int FramePeriod => 1000 / this.FrameRate;
+    public void AttachOutput(IOutput output) { if (output != null) { this.Outputs.Add(output); } }
 
-        /// <summary> How strongly notes should be amplified before processing. </summary>
-        [ConfigFloat("LightSiding", 0F, 100F, 1.9F)]
-        public float LightSiding { get; set; }
-
-        /// <summary> How much to amplify saturation (LED brightness) after processing. </summary>
-        [ConfigFloat("SaturationAmplifier", 0F, 100F, 2F)]
-        public float SaturationAmplifier { get; set; }
-
-        /// <summary> A multiplier applied to input note strengths to determine how many LEDs should become that colour. </summary>
-        /// <remarks> This should be proportionally increased/decreased if the number of LEDs changes to keep the same overall percentage of LEDs on the same. </remarks>
-        [ConfigFloat("QtyAmp", 0, 100, 20)]
-        public float QtyAmp { get; set; }
-
-        /// <summary> Whether to use smoothed input data (to reduce flicker at the cost of higher response time), or only the latest data. </summary>
-        [ConfigBool("SteadyBright", false)]
-        public bool SteadyBright { get; set; }
-
-        /// <summary> Whether LEDs turning on/off should be based on how long since their last state change (true), or based solely on position (false). </summary>
-        /// <remarks> Useful for pies, turn off for linear systems. </remarks>
-        [ConfigBool("TimeBased", false)]
-        public bool TimeBased { get; set; }
-
-        // TODO: Understand & document this feature once it works in base ColorChord.
-        [ConfigBool("Snakey", false)]
-        public bool Snakey { get; set; } // Advance head for where to get LEDs around.
-
-        /// <summary> All outputs that need to be notified when new data is available. </summary>
-        private readonly List<IOutput> Outputs = new();
-
-        /// <summary> Stores the latest data to be given to <see cref="IOutput"/> modules when requested. </summary>
-        private uint[] OutputData;
-
-        /// <summary> Whether to continue processing, or stop threads and finish up in preparation for closing the application. </summary>
-        private bool KeepGoing = true;
-
-        /// <summary> The thread on which input note data is processed by this visualizer. </summary>
-        private Thread? ProcessThread;
-
-        private readonly int NoteCount, BinsPerOctave;
-
-        public Cells(string name, Dictionary<string, object> config)
+    private void DoProcessing()
+    {
+        Stopwatch Timer = new();
+        while (this.KeepGoing)
         {
-            this.Name = name;
-            Configurer.Configure(this, config);
-            this.OutputData = new uint[this.LEDCount]; // TODO: Properly handle LEDCount changing during runtime.
-            this.LEDBinMapping = new int[this.LEDCount];
-            this.LastChangeTime = new double[this.LEDCount];
-            this.NoteCount = ColorChord.NoteFinder!.NoteCount;
-            this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
+            Timer.Restart();
+            Update();
+            foreach (IOutput Output in this.Outputs) { Output.Dispatch(); }
+            int WaitTime = (int)(this.FramePeriod - Timer.ElapsedMilliseconds);
+            if (WaitTime > 0) { Thread.Sleep(WaitTime); }
         }
+    }
 
-        public void Start()
+    public void SettingWillChange(int controlID)
+    {
+        if (controlID == 1) { Monitor.Enter(this.SettingUpdateLock); }
+    }
+
+    public void SettingChanged(int controlID)
+    {
+        if (controlID == 1)
         {
-            this.KeepGoing = true;
-            this.ProcessThread = new Thread(DoProcessing);
-            this.ProcessThread.Start();
-            ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
+            uint[] NewOutputData = new uint[this.LEDCount];
+            Array.Copy(this.OutputData, NewOutputData, Math.Min(this.OutputData.Length, NewOutputData.Length));
+            this.OutputData = NewOutputData;
+
+            int[] NewLEDBinMapping = new int[this.LEDCount];
+            Array.Copy(this.LEDBinMapping, NewLEDBinMapping, Math.Min(this.LEDBinMapping.Length, NewLEDBinMapping.Length));
+            this.LEDBinMapping = NewLEDBinMapping;
+
+            double[] NewLastChangeTime = new double[this.LEDCount];
+            Array.Copy(this.LastChangeTime, NewLastChangeTime, Math.Min(this.LastChangeTime.Length, NewLastChangeTime.Length));
+            this.LastChangeTime = NewLastChangeTime;
+
+            Monitor.Exit(this.SettingUpdateLock);
         }
+    }
 
-        public void Stop()
-        {
-            this.KeepGoing = false;
-            this.ProcessThread?.Join();
-        }
+    public int GetCountDiscrete() => this.LEDCount;
+    public uint[] GetDataDiscrete() => this.OutputData;
 
-        public void AttachOutput(IOutput output) { if (output != null) { this.Outputs.Add(output); } }
+    // These are used between frames of output data. Only used in Update().
+    private int[] LEDBinMapping; // Contains each LED's note bin ID.
+    private double[] LastChangeTime; // When each LED last changed state.
+    private int LastChangeIndex = 0; // Where we last made changes, only used in snakey mode.
 
-        private void DoProcessing()
-        {
-            Stopwatch Timer = new();
-            while (this.KeepGoing)
-            {
-                Timer.Restart();
-                Update();
-                foreach (IOutput Output in this.Outputs) { Output.Dispatch(); }
-                int WaitTime = (int)(this.FramePeriod - Timer.ElapsedMilliseconds);
-                if (WaitTime > 0) { Thread.Sleep(WaitTime); }
-            }
-        }
-
-        public int GetCountDiscrete() => this.LEDCount;
-        public uint[] GetDataDiscrete() => this.OutputData;
-
-        // These are used between frames of output data. Only used in Update().
-        private int[] LEDBinMapping; // Contains each LED's note bin ID.
-        private double[] LastChangeTime; // When each LED last changed state.
-        private int LastChangeIndex = 0; // Where we last made changes, only used in snakey mode.
-
-        private void Update()
+    private void Update()
+    {
+        lock (this.SettingUpdateLock)
         {
             // Determine how many LEDs of each colour there currently are on from the previous cycle.
             float[] LEDsPerBin = new float[NoteCount];
@@ -253,7 +292,7 @@ namespace ColorChord.NET.Visualizers
                 }
             }
         }
-
-        private static double Now => DateTime.UtcNow.Ticks / 10000000D;
     }
+
+    private static double Now => DateTime.UtcNow.Ticks / 10000000D;
 }

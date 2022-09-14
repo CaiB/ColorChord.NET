@@ -52,10 +52,13 @@ public class ControllerSetting : ISetting
     {
         if (!CheckNewValue(newValue)) { return false; }
 
+        if (ControllableAttribute.CheckNeedsCallback(this.ControlID)) { this.TargetInstance!.SettingWillChange(this.ControlID); }
+
         if (this.IsProperty) { this.Property!.SetValue(this.TargetInstance, newValue); }
         else { this.Field!.SetValue(this.TargetInstance, newValue); }
 
         if (ControllableAttribute.CheckNeedsCallback(this.ControlID)) { this.TargetInstance!.SettingChanged(this.ControlID); }
+
         return true;
     }
 
