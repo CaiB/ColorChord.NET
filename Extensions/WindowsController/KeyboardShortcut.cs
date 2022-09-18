@@ -8,14 +8,27 @@ namespace ColorChord.NET.Extensions.WindowsController
     [ThreadedInstance]
     public class KeyboardShortcut : Controller
     {
+        private static MessageHandler? WindowsInterface;
         private Dictionary<string, ISetting> Targets = new();
 
+        /*public static void Main()
+        {
+            Extension.WindowsInterface = new();
+            KeyboardShortcut Inst = new("No name", new(), null);
+            Inst.Start();
+        }*/
 
         public KeyboardShortcut(string name, Dictionary<string, object> config, IControllerInterface controllerInterface) : base(name, config, controllerInterface)
         {
             const string SHORTCUTS = "Shortcuts";
             const string KEY_COMBO = "KeyCombo";
             const string NO_REPEAT = "NoRepeat";
+            const string DEBUG_WINDOW = "DebugWindow";
+
+            bool SetupWindow = false;
+            if (config.ContainsKey(DEBUG_WINDOW) && bool.Parse(config[DEBUG_WINDOW].ToString() ?? "false")) { SetupWindow = true; }
+            WindowsInterface = new(SetupWindow);
+
             // TODO: configurer?
             if (config.ContainsKey(SHORTCUTS))
             {
@@ -37,7 +50,7 @@ namespace ColorChord.NET.Extensions.WindowsController
                     if (TargetSetting == null) { Log.Warn($"Could not find target setting \"{TargetName}\". Please check your config."); continue; }
                     this.Targets.Add(ShortcutName, TargetSetting);
 
-                    Extension.WindowsInterface!.AddShortcut(ShortcutName, Modifiers, Keycode);
+                    WindowsInterface.AddShortcut(ShortcutName, Modifiers, Keycode);
                 }
             }
         }
@@ -68,8 +81,8 @@ namespace ColorChord.NET.Extensions.WindowsController
 
         public override void Start()
         {
-            Extension.WindowsInterface!.SetCallback(HandleShortcut);
-            Extension.WindowsInterface!.Start();
+            WindowsInterface!.SetCallback(HandleShortcut);
+            WindowsInterface!.Start();
         }
 
         internal void HandleShortcut(string name, Win32.KeyModifiers modifiers, Win32.Keycode key)
@@ -80,6 +93,6 @@ namespace ColorChord.NET.Extensions.WindowsController
             }
         }
 
-        public override void Stop() => Extension.WindowsInterface?.Stop();
+        public override void Stop() => WindowsInterface?.Stop();
     }
 }
