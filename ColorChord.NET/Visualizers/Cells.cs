@@ -23,8 +23,8 @@ public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
     public int LEDCount { get; set; } = 50;
 
     /// <summary> Whether or not this visualizer is currently operating. </summary>
-    [Controllable("Enable")]
-    [ConfigBool("Enable", true)]
+    [Controllable(ConfigNames.ENABLE)]
+    [ConfigBool(ConfigNames.ENABLE, true)]
     public bool Enabled { get; set; }
 
     /// <summary> How many times per second the output should be updated. </summary>

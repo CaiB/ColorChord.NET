@@ -70,7 +70,7 @@ namespace ColorChord.NET.Outputs.Display
             }
         }
 
-        ~Shader() { GL.DeleteProgram(this.ShaderHandle); } // Don't rely on this.
+        ~Shader() { Dispose(false); } // Don't rely on this.
 
         public void Dispose()
         {

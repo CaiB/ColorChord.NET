@@ -25,8 +25,8 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     public int LEDCount { get; set; }
 
     /// <summary> Whether the visualizer is currently processing/outputting. </summary>
-    [Controllable("Enable")]
-    [ConfigBool("Enable", true)]
+    [Controllable(ConfigNames.ENABLE)]
+    [ConfigBool(ConfigNames.ENABLE, true)]
     public bool Enabled { get; set; }
 
     /// <summary> How many times per second the output should be updated. </summary>
