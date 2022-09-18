@@ -11,13 +11,15 @@ using ColorChord.NET.NoteFinder;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using static ColorChord.NET.API.Config.ConfigNames;
 
 namespace ColorChord.NET
 {
-    public class ColorChord
+    public static class ColorChord
     {
         private static string ConfigFile = "config.json";
 
@@ -26,6 +28,9 @@ namespace ColorChord.NET
         public static readonly Dictionary<string, IVisualizer> VisualizerInsts = new();
         public static readonly Dictionary<string, IOutput> OutputInsts = new();
         public static readonly Dictionary<string, Controller> ControllerInsts = new();
+
+        private static readonly List<Thread> InstanceThreads = new();
+        private static ManualResetEventSlim StopSignal = new();
 
         public static void Main(string[] args)
         {
@@ -98,10 +103,8 @@ namespace ColorChord.NET
             // Controllers
             ReadAndApplyControllers(JSON);
             Log.Info("Finished processing config file.");
-        }
 
-        public static void Stop()
-        {
+            StopSignal.Wait();
             Log.Info("Exiting...");
             ExtensionHandler.StopExtensions();
             Source?.Stop();
@@ -109,7 +112,10 @@ namespace ColorChord.NET
             foreach (IVisualizer Visualizer in VisualizerInsts.Values) { Visualizer.Stop(); }
             foreach (IOutput Output in OutputInsts.Values) { Output.Stop(); }
             foreach (Controller Controller in ControllerInsts.Values) { Controller.Stop(); }
+            foreach (Thread Thread in InstanceThreads) { Thread.Join(); }
         }
+
+        public static void Stop() => StopSignal.Set();
 
         private static IAudioSource? ReadSource(JObject JSON)
         {
@@ -135,7 +141,13 @@ namespace ColorChord.NET
             Type DefaultType = typeof(BaseNoteFinder); // Defined once more below as well.
             NoteFinderCommon? NoteFinder;
 
-            if (!JSON.ContainsKey(NOTEFINDER) || JSON[NOTEFINDER] == null) { Log.Warn($"Could not find valid \"{NOTEFINDER}\" definition. All defaults will be used."); }
+            if (!JSON.ContainsKey(NOTEFINDER) || JSON[NOTEFINDER] == null)
+            {
+                Log.Warn($"Could not find valid \"{NOTEFINDER}\" definition. All defaults will be used.");
+                NoteFinder = new BaseNoteFinder(NOTEFINDER, new Dictionary<string, object>());
+                Log.Info("Created audio source of type \"" + NoteFinder.GetType().FullName + "\".");
+                return NoteFinder;
+            }
             else
             {
                 JToken NFToken = JSON[NOTEFINDER]!;
@@ -151,10 +163,6 @@ namespace ColorChord.NET
                 Log.Info("Created audio source of type \"" + NoteFinder.GetType().FullName + "\".");
                 return NoteFinder;
             }
-
-            NoteFinder = new BaseNoteFinder(NOTEFINDER, new Dictionary<string, object>());
-            Log.Info("Created audio source of type \"" + NoteFinder.GetType().FullName + "\".");
-            return NoteFinder;
         }
 
         private static void ReadAndApplyVisualizers(JObject JSON)
@@ -174,7 +182,6 @@ namespace ColorChord.NET
 
                 IVisualizer? Vis = CreateObject<IVisualizer>(VisType.StartsWith('#') ? VisType : "ColorChord.NET.Visualizers." + VisType, Entry);
                 if (Vis == null) { Log.Error($"Could not create visualizer \"{VisName}\". Check to make sure the type \"{VisType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
-                Vis.Start();
                 VisualizerInsts.Add(VisName, Vis);
             }
         }
@@ -196,7 +203,6 @@ namespace ColorChord.NET
 
                 IOutput? Out = CreateObject<IOutput>(OutType.StartsWith('#') ? OutType : "ColorChord.NET.Outputs." + OutType, Entry, true);
                 if (Out == null) { Log.Error($"Could not create output \"{OutName}\". Check to make sure the type \"{OutType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
-                Out.Start();
                 OutputInsts.Add(OutName, Out);
             }
         }
@@ -217,7 +223,6 @@ namespace ColorChord.NET
 
                 Controller? Ctrl = CreateObject<Controller>(ControlType.StartsWith('#') ? ControlType : "ColorChord.NET.Controllers." + ControlType, Entry, true, true);
                 if (Ctrl == null) { Log.Error($"Could not create controller \"{ControlName}\". Check to make sure the type \"{ControlType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
-                Ctrl.Start();
                 ControllerInsts.Add(ControlName, Ctrl);
             }
         }
@@ -242,11 +247,38 @@ namespace ColorChord.NET
             if (typeof(BaseType) == typeof(IAudioSource) || typeof(BaseType) == typeof(NoteFinderCommon)) { ObjName = ObjType.Name; }
             if (ObjName == null) { return default; }
 
-            object? Instance = 
-            provideControllerInterface
-                ? Activator.CreateInstance(ObjType, ObjName, ToDict(configEntry, complexConfig), ControllerInterface.Instance)
-                : Activator.CreateInstance(ObjType, ObjName, ToDict(configEntry, complexConfig));
+            object? Instance = null;
+            if (ObjType.GetCustomAttribute<ThreadedInstanceAttribute>() is not null) // Start this on a thread
+            {
+                ManualResetEventSlim InstInitialized = new();
+                Thread InstThread = new(() =>
+                {
+                    Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry, complexConfig), provideControllerInterface);
+                    InstInitialized.Set();
+                    if (Instance is IVisualizer Vis) { Vis.Start(); }
+                    else if (Instance is IOutput Outp) { Outp.Start(); }
+                    else if (Instance is Controller Ctrl) { Ctrl.Start(); }
+                }) { Name = $"{ObjType.Name} {ObjName}" };
+                InstThread.Start();
+                InstInitialized.Wait(); // Wait for the instance to have its constructor run before retruning, otherwise we might return null too early
+                InstInitialized.Dispose(); // TODO: Check if the above is actually needed?
+                InstanceThreads.Add(InstThread);
+            }
+            else
+            {
+                Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry, complexConfig), provideControllerInterface);
+                if (Instance is IVisualizer Vis) { Vis.Start(); }
+                else if (Instance is IOutput Outp) { Outp.Start(); }
+                else if (Instance is Controller Ctrl) { Ctrl.Start(); }
+            }
             return (BaseType?)Instance;
+        }
+
+        private static object? CreateInstWithParams(Type type, string name, Dictionary<string, object> config, bool provideControllerInterface)
+        {
+            return provideControllerInterface
+                    ? Activator.CreateInstance(type, name, config, ControllerInterface.Instance)
+                    : Activator.CreateInstance(type, name, config);
         }
 
         /// <summary> Takes a JSON token, and converts all single-valued children into a Dictionary. </summary>

@@ -5,6 +5,7 @@ using System;
 
 namespace ColorChord.NET.Extensions.WindowsController
 {
+    [ThreadedInstance]
     public class KeyboardShortcut : Controller
     {
         private Dictionary<string, ISetting> Targets = new();
@@ -79,9 +80,6 @@ namespace ColorChord.NET.Extensions.WindowsController
             }
         }
 
-        public override void Stop()
-        {
-            // Dispose WindowsInterface
-        }
+        public override void Stop() => Extension.WindowsInterface?.Stop();
     }
 }

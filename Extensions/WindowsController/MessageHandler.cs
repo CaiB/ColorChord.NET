@@ -10,6 +10,7 @@ namespace ColorChord.NET.Extensions.WindowsController
         private const uint WS_OVERLAPPEDWINDOW = 0xcf0000;
         private const uint WS_VISIBLE = 0x10000000;
         private const uint WINDOWS_MESSAGE_ID_HOTKEY = 0x0312;
+        private const uint WINDOWS_MESSAGE_ID_QUIT = 0x0012;
 
         public delegate void ShortcutHandler(string shortcutName, Win32.KeyModifiers modifiers, Win32.Keycode key);
 
@@ -20,6 +21,7 @@ namespace ColorChord.NET.Extensions.WindowsController
         private int CurrentID = 1;
         private readonly Dictionary<int, string> ShortcutNames = new();
         private ShortcutHandler? ShortcutCallback;
+        private uint ThreadID;
 
         public MessageHandler()
         {
@@ -52,7 +54,13 @@ namespace ColorChord.NET.Extensions.WindowsController
 
         public void Start()
         {
+            this.ThreadID = Win32.GetCurrentThreadId();
             MessageLoop();
+        }
+
+        public void Stop()
+        {
+            Win32.PostThreadMessageA(this.ThreadID, WINDOWS_MESSAGE_ID_QUIT, IntPtr.Zero, IntPtr.Zero);
         }
 
         private void MessageLoop()
@@ -76,6 +84,7 @@ namespace ColorChord.NET.Extensions.WindowsController
                             this.ShortcutCallback!.Invoke(ShortcutName, Modifiers, Key);
                         }
                     }
+                    else if (msg.message == WINDOWS_MESSAGE_ID_QUIT) { break; }
                 }
                 else if (ReturnCode < 0) { Log.Error("An error occured getting messages from Windows. You may need to restart ColorChord.NET."); } // Error
                 else { break; } // Exiting

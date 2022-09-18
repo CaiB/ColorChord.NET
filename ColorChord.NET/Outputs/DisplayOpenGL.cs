@@ -1,5 +1,6 @@
 ﻿using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Outputs.Display;
 using ColorChord.NET.API.Visualizers;
@@ -16,6 +17,7 @@ using System.Runtime.InteropServices;
 
 namespace ColorChord.NET.Outputs
 {
+    [ThreadedInstance]
     public class DisplayOpenGL : GameWindow, IOutput
     {
         private static readonly DebugProc DebugCallbackRef = DebugCallback; // Needed to prevent GC
@@ -25,6 +27,7 @@ namespace ColorChord.NET.Outputs
         public readonly string Name;
 
         /// <summary> The width of the window contents, in pixels. </summary>
+        [Controllable("WindowWidth")] // TODO: Check whether this changing causes any thread safety problems
         [ConfigInt("WindowWidth", 10, 4000, 1280)]
         public int Width
         {
@@ -33,6 +36,7 @@ namespace ColorChord.NET.Outputs
         }
 
         /// <summary> The height of the window contents, in pixels. </summary>
+        [Controllable("WindowHeight")]
         [ConfigInt("WindowHeight", 10, 4000, 720)]
         public int Height
         {
@@ -40,10 +44,14 @@ namespace ColorChord.NET.Outputs
             set => this.ClientRectangle = new Box2i(this.ClientRectangle.Min, new Vector2i(this.ClientRectangle.Max.X, this.ClientRectangle.Min.Y + value));
         }
 
+        [Controllable(ConfigNames.ENABLE)]
+        [ConfigBool(ConfigNames.ENABLE, true)]
+        public bool Enabled { get; set; }
+
         private int DefaultWidth, DefaultHeight;
 
         private readonly IDisplayMode? Display;
-        private bool Loaded = false;
+        private bool Stopping = false;
 
         public DisplayOpenGL(string name, Dictionary<string, object> config) : base(GameWindowSettings.Default, SetupNativeWindow())
         {
@@ -65,9 +73,6 @@ namespace ColorChord.NET.Outputs
                     if (!ModeList[i].ContainsKey("Type")) { Log.Error("Mode at index " + i + " is missing \"Type\" specification."); continue; }
                     this.Display = CreateMode("ColorChord.NET.Outputs.Display." + ModeList[i]["Type"], ModeList[i]);
                     if (this.Display == null) { Log.Error("Failed to create display of type \"" + ModeList[i]["Type"] + "\" under \"" + this.Name + "\"."); }
-
-                    // We already loaded, we want to make sure our display does as well.
-                    if (this.Loaded) { this.Display?.Load(); }
                 }
                 if (ModeList.Length > 1) { Log.Warn("Config specifies multiple modes. This is not yet supported, so only the first one will be used."); }
                 Log.Info("Finished reading display modes under \"" + this.Name + "\".");
@@ -85,15 +90,12 @@ namespace ColorChord.NET.Outputs
 
         public void Start()
         {
+            if (!this.Enabled) { return; }
             this.IsVisible = true;
             Run();
         }
 
-        public void Stop()
-        {
-            this.Loaded = false;
-            this.Display?.Close();
-        }
+        public void Stop() => this.Stopping = true;
 
         private IDisplayMode? CreateMode(string fullName, Dictionary<string, object> config)
         {
@@ -127,17 +129,23 @@ namespace ColorChord.NET.Outputs
             this.Display?.Load();
 
             base.OnLoad();
-            this.Loaded = true;
         }
 
         protected override void OnRenderFrame(FrameEventArgs evt)
         {
+            if (this.Stopping) { this.Display?.Close(); return; }
             GL.Clear(ClearBufferMask.ColorBufferBit);
 
             this.Display?.Render();
 
             this.Context.SwapBuffers();
             base.OnRenderFrame(evt);
+        }
+
+        protected override void OnUpdateFrame(FrameEventArgs args)
+        {
+            if (this.Stopping) { this.Display?.Close(); return; }
+            base.OnUpdateFrame(args);
         }
 
         protected override void OnKeyDown(KeyboardKeyEventArgs e)

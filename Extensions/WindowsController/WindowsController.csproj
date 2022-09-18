@@ -7,10 +7,15 @@
     <RootNamespace>ColorChord.NET.Extensions.WindowsController</RootNamespace>
     <AssemblyName>CC.NET-Ext-WindowsController</AssemblyName>
     <OutputType>Library</OutputType>
+    <RunPostBuildEvent>OnOutputUpdated</RunPostBuildEvent>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\ColorChord.NET-API\ColorChord.NET-API.csproj" />
   </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="echo &quot;Copying to $(SolutionDir)ColorChord.NET\bin\$(Configuration)\net6.0\Extensions\$(TargetName).dll&quot;&#xD;&#xA;copy /Y &quot;$(TargetDir)$(TargetName).dll&quot; &quot;$(SolutionDir)ColorChord.NET\bin\$(Configuration)\net6.0\Extensions\$(TargetName).dll&quot;" />
+  </Target>
 
 </Project>
