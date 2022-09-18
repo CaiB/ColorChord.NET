@@ -48,6 +48,7 @@ namespace ColorChord.NET.Sources
 
         public void Start()
         {
+            if (!OperatingSystem.IsWindows()) { throw new InvalidOperationException($"{nameof(WASAPILoopback)} is only supported on Windows. Use another audio source type, such as {nameof(CNFABinding)}, on other platforms."); }
             int ErrorCode;
             Type? DeviceEnumeratorType = Type.GetTypeFromCLSID(new Guid(ComCLSIDs.MMDeviceEnumeratorCLSID));
             if (DeviceEnumeratorType == null) { Log.Error("Couldn't get device enumerator type info."); return; }
@@ -215,6 +216,7 @@ namespace ColorChord.NET.Sources
         public void Stop()
         {
             this.KeepGoing = false;
+            this.AudioEvent.Set();
             this.ProcessThread?.Join();
             this.AudioEvent.Dispose();
             AudioEventHandle.Free();
@@ -227,6 +229,7 @@ namespace ColorChord.NET.Sources
             while (this.KeepGoing)
             {
                 this.AudioEvent.WaitOne();
+                if (!this.KeepGoing) { break; } // Early exit for when an event was used to break this loop
                 if (this.CaptureClient == null) { Log.Warn("Capture client was not ready when an audio event was received."); continue; }
 
                 ErrorCode = this.CaptureClient.GetNextPacketSize(out uint PacketLength);
