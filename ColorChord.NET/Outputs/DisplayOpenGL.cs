@@ -18,7 +18,7 @@ using System.Runtime.InteropServices;
 namespace ColorChord.NET.Outputs
 {
     [ThreadedInstance]
-    public class DisplayOpenGL : GameWindow, IOutput
+    public class DisplayOpenGL : GameWindow, IOutput, IControllableAttr
     {
         private static readonly DebugProc DebugCallbackRef = DebugCallback; // Needed to prevent GC
 
@@ -119,6 +119,9 @@ namespace ColorChord.NET.Outputs
 
             return Instance == null ? null : (IDisplayMode)Instance;
         }
+
+        public void SettingWillChange(int controlID) { }
+        public void SettingChanged(int controlID) { }
 
         protected override void OnLoad()
         {

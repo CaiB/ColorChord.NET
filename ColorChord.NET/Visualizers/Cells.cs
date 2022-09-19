@@ -18,8 +18,8 @@ public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
     public string Name { get; private init; }
 
     /// <summary> The number of discrete points to be output. Usually equals the number of LEDs on a physical system. </summary>
-    [Controllable("LEDCount", 1)]
-    [ConfigInt("LEDCount", 1, 100000, 50)]
+    [Controllable(ConfigNames.LED_COUNT, 1)]
+    [ConfigInt(ConfigNames.LED_COUNT, 1, 100000, 50)]
     public int LEDCount { get; set; } = 50;
 
     /// <summary> Whether or not this visualizer is currently operating. </summary>

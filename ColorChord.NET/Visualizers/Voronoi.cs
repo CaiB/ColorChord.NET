@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Visualizers;
@@ -9,113 +10,143 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 
-namespace ColorChord.NET.Visualizers
+namespace ColorChord.NET.Visualizers;
+
+public class Voronoi : IVisualizer, IDiscrete2D, IControllableAttr
 {
-    public class Voronoi : IVisualizer, IDiscrete2D
+    /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
+    public string Name { get; private init; }
+
+    /// <summary> Whether this visualizer is currently active. </summary>
+    [Controllable(ConfigNames.ENABLE)]
+    [ConfigBool(ConfigNames.ENABLE, true)]
+    public bool Enabled { get; set; }
+
+    /// <summary> How many times per second the output should be updated. </summary>
+    [Controllable("FrameRate", 2)]
+    [ConfigInt("FrameRate", 0, 1000, 60)]
+    public int FrameRate { get; set; } = 60;
+
+    /// <summary> The number of milliseconds to wait between output updates. </summary>
+    private int FramePeriod => 1000 / this.FrameRate;
+
+    /// <summary> How many LEDs/blocks to output for in the X direction (width). </summary>
+    [Controllable("LEDCountX", 1)]
+    [ConfigInt("LEDCountX", 1, 1000000, 64)]
+    public int LEDCountX { get; set; }
+
+    /// <summary> How many LEDs/blocks to output for in the Y direction (height). </summary>
+    [Controllable("LEDCountY", 1)]
+    [ConfigInt("LEDCountY", 1, 1000000, 32)]
+    public int LEDCountY { get; set; }
+
+    /// <summary> Note amplitude is raised to this power as a preprocessing step. Higher means more differentiation between different peak sizes. </summary>
+    [Controllable("AmplifyPower")]
+    [ConfigFloat("AmplifyPower", 0F, 100F, 2.51F)]
+    public float AmplifyPower { get; set; }
+
+    /// <summary> Distances from centers to draw the colours up to. Higher numbers means fewer colours will take up a majority of screen space. </summary>
+    [Controllable("DistancePower")]
+    [ConfigFloat("DistancePower", 0F, 100F, 1.5F)]
+    public float DistancePower { get; set; }
+
+    /// <summary> How strong a note's amplitude needs to be for it to be considered in rendering. </summary>
+    [Controllable("Cutoff")]
+    [ConfigFloat("Cutoff", 0F, 100F, 0.03F)]
+    public float NoteCutoff { get; set; }
+
+    /// <summary> Whether to draw the colours in a circle around the edges (true), or to randomly place colours (false). </summary>
+    [Controllable("CentersFromSides")]
+    [ConfigBool("CentersFromSides", true)]
+    public bool CentersFromSides { get; set; }
+
+    /// <summary> Amplifier on the output colour saturation. </summary>
+    [Controllable("SaturationAmplifier")]
+    [ConfigFloat("SaturationAmplifier", 0, 100, 5F)]
+    public float SaturationAmplifier { get; set; }
+
+    /// <summary> Scales the final output saturation curve. </summary>
+    [Controllable("OutputGamma")]
+    [ConfigFloat("OutputGamma", 0F, 1F, 1F)]
+    public float OutGamma { get; set; }
+
+    /// <summary> All outputs that need to be notified when new data is available. </summary>
+    private readonly List<IOutput> Outputs = new();
+
+    /// <summary> Output data for the continuous voronoi mode. </summary>
+    public VoronoiPoint[] OutputData;
+
+    /// <summary> Output data for the discrete (pixel matrix) voronoi mode. </summary>
+    private uint[,] OutputDataDiscrete;
+
+    /// <summary>Used to make sure a controller changing a setting does not happen in the middle of a processing cycle.</summary>
+    private readonly object SettingUpdateLock = new();
+
+    private readonly DiscreteVoronoiNote[] DiscreteNotes;
+
+    private Thread? ProcessThread;
+    private bool KeepGoing = true;
+
+    private readonly int NoteCount, BinsPerOctave;
+
+    public Voronoi(string name, Dictionary<string, object> config)
     {
-        /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
-        public string Name { get; private init; }
+        this.Name = name;
+        Configurer.Configure(this, config);
+        this.NoteCount = ColorChord.NoteFinder!.NoteCount;
+        this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
+        this.OutputDataDiscrete = new uint[this.LEDCountX, this.LEDCountY];
+        this.DiscreteNotes = new DiscreteVoronoiNote[this.NoteCount];
+        this.OutputData = new VoronoiPoint[this.NoteCount];
+    }
 
-        /// <summary> Whether this visualizer is currently active. </summary>
-        [ConfigBool("Enable", true)]
-        public bool Enabled { get; set; }
+    public void Start()
+    {
+        this.KeepGoing = true;
+        this.ProcessThread = new Thread(DoProcessing) { Name = "Voronoi " + this.Name };
+        this.ProcessThread.Start();
+        ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
+    }
 
-        /// <summary> How many times per second the output should be updated. </summary>
-        [ConfigInt("FrameRate", 0, 1000, 60)]
-        public int FrameRate { get; set; } = 60;
+    public void Stop()
+    {
+        this.KeepGoing = false;
+        this.ProcessThread?.Join();
+    }
 
-        /// <summary> The number of milliseconds to wait between output updates. </summary>
-        private int FramePeriod => 1000 / this.FrameRate;
+    public void AttachOutput(IOutput output) { if (output != null) { this.Outputs.Add(output); } }
 
-        /// <summary> How many LEDs/blocks to output for in the X direction (width). </summary>
-        [ConfigInt("LEDCountX", 1, 1000000, 64)]
-        public int LEDCountX { get; set; }
+    public void SettingWillChange(int controlID)
+    {
+        if (controlID == 1) { Monitor.Enter(this.SettingUpdateLock); }
+    }
 
-        /// <summary> How many LEDs/blocks to output for in the Y direction (height). </summary>
-        [ConfigInt("LEDCountY", 1, 1000000, 32)]
-        public int LEDCountY { get; set; }
-
-        /// <summary> Note amplitude is raised to this power as a preprocessing step. Higher means more differentiation between different peak sizes. </summary>
-        [ConfigFloat("AmplifyPower", 0F, 100F, 2.51F)]
-        public float AmplifyPower { get; set; }
-
-        /// <summary> Distances from centers to draw the colours up to. Higher numbers means fewer colours will take up a majority of screen space. </summary>
-        [ConfigFloat("DistancePower", 0F, 100F, 1.5F)]
-        public float DistancePower { get; set; }
-
-        /// <summary> How strong a note's amplitude needs to be for it to be considered in rendering. </summary>
-        [ConfigFloat("Cutoff", 0F, 100F, 0.03F)]
-        public float NoteCutoff { get; set; }
-
-        /// <summary> Whether to draw the colours in a circle around the edges (true), or to randomly place colours (false). </summary>
-        [ConfigBool("CentersFromSides", true)]
-        public bool CentersFromSides { get; set; }
-
-        /// <summary> Amplifier on the output colour saturation. </summary>
-        [ConfigFloat("SaturationAmplifier", 0, 100, 5F)]
-        public float SaturationAmplifier { get; set; }
-
-        /// <summary> Scales the final output saturation curve. </summary>
-        [ConfigFloat("OutputGamma", 0F, 1F, 1F)]
-        public float OutGamma { get; set; }
-
-        /// <summary> All outputs that need to be notified when new data is available. </summary>
-        private readonly List<IOutput> Outputs = new();
-
-        /// <summary> Output data for the continuous voronoi mode. </summary>
-        public VoronoiPoint[] OutputData;
-
-        /// <summary> Output data for the discrete (pixel matrix) voronoi mode. </summary>
-        private readonly uint[,] OutputDataDiscrete;
-
-        private readonly DiscreteVoronoiNote[] DiscreteNotes;
-
-        private Thread? ProcessThread;
-        private bool KeepGoing = true;
-
-        private readonly int NoteCount, BinsPerOctave;
-
-        public Voronoi(string name, Dictionary<string, object> config)
+    public void SettingChanged(int controlID)
+    {
+        if (controlID == 1)
         {
-            this.Name = name;
-            Configurer.Configure(this, config);
-            this.NoteCount = ColorChord.NoteFinder!.NoteCount;
-            this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
             this.OutputDataDiscrete = new uint[this.LEDCountX, this.LEDCountY];
-            this.DiscreteNotes = new DiscreteVoronoiNote[this.NoteCount];
-            this.OutputData = new VoronoiPoint[this.NoteCount];
+            Monitor.Exit(this.SettingUpdateLock);
         }
+        else if (controlID == 2) { ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod); }
+    }
 
-        public void Start()
+    private void DoProcessing()
+    {
+        Stopwatch Timer = new();
+        while (this.KeepGoing)
         {
-            this.KeepGoing = true;
-            this.ProcessThread = new Thread(DoProcessing) { Name = "Voronoi " + this.Name };
-            this.ProcessThread.Start();
-            ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
+            Timer.Restart();
+            Update();
+            foreach (IOutput Output in this.Outputs) { Output.Dispatch(); }
+            int WaitTime = (int)(this.FramePeriod - Timer.ElapsedMilliseconds);
+            if (WaitTime > 0) { Thread.Sleep(WaitTime); }
         }
+    }
 
-        public void Stop()
-        {
-            this.KeepGoing = false;
-            this.ProcessThread?.Join();
-        }
-
-        public void AttachOutput(IOutput output) { if (output != null) { this.Outputs.Add(output); } }
-
-        private void DoProcessing()
-        {
-            Stopwatch Timer = new();
-            while (this.KeepGoing)
-            {
-                Timer.Restart();
-                Update();
-                foreach (IOutput Output in this.Outputs) { Output.Dispatch(); }
-                int WaitTime = (int)(this.FramePeriod - Timer.ElapsedMilliseconds);
-                if (WaitTime > 0) { Thread.Sleep(WaitTime); }
-            }
-        }
-
-        private void Update()
+    private void Update()
+    {
+        lock (this.SettingUpdateLock)
         {
             // Smooth Voronoi
             /*
@@ -217,25 +248,25 @@ namespace ColorChord.NET.Visualizers
                 }
             }
         }
-
-        private struct DiscreteVoronoiNote
-        {
-            public float X, Y;
-            public float Value;
-            public float LEDCount;
-        }
-
-        public struct VoronoiPoint
-        {
-            public bool Present;
-            public float X, Y;
-            public float Amplitude;
-            public byte R, G, B;
-        }
-
-        // Discrete
-        public int GetWidth() => this.LEDCountX;
-        public int GetHeight() => this.LEDCountY;
-        public uint[,] GetDataDiscrete() => this.OutputDataDiscrete;
     }
+
+    private struct DiscreteVoronoiNote
+    {
+        public float X, Y;
+        public float Value;
+        public float LEDCount;
+    }
+
+    public struct VoronoiPoint
+    {
+        public bool Present;
+        public float X, Y;
+        public float Amplitude;
+        public byte R, G, B;
+    }
+
+    // Discrete
+    public int GetWidth() => this.LEDCountX;
+    public int GetHeight() => this.LEDCountY;
+    public uint[,] GetDataDiscrete() => this.OutputDataDiscrete;
 }

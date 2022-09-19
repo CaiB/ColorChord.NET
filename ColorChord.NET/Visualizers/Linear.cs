@@ -20,8 +20,8 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
 
     /// <summary> The number of discrete elements outputted by this visualizer. </summary>
     /// <remarks> If only using continuous mode, set this to 12 or 24. </remarks>
-    [Controllable("LEDCount", 1)]
-    [ConfigInt("LEDCount", 1, 100000, 50)]
+    [Controllable(ConfigNames.LED_COUNT, 1)]
+    [ConfigInt(ConfigNames.LED_COUNT, 1, 100000, 50)]
     public int LEDCount { get; set; }
 
     /// <summary> Whether the visualizer is currently processing/outputting. </summary>
@@ -30,7 +30,7 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     public bool Enabled { get; set; }
 
     /// <summary> How many times per second the output should be updated. </summary>
-    [Controllable("FrameRate")]
+    [Controllable("FrameRate", 2)]
     [ConfigInt("FrameRate", 0, 1000, 60)]
     public int FrameRate { get; set; } = 60;
 
@@ -150,6 +150,7 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
             UpdateSize();
             Monitor.Exit(this.SettingUpdateLock);
         }
+        else if (controlID == 2) { ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod); }
     }
 
     public int GetCountDiscrete() => this.LEDCount;
