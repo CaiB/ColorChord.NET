@@ -24,7 +24,7 @@ namespace ColorChord.NET.Outputs
 
         public IVisualizer Source { get; private set; }
 
-        public readonly string Name;
+        public string Name { get; private init; }
 
         /// <summary> The width of the window contents, in pixels. </summary>
         [Controllable("WindowWidth")] // TODO: Check whether this changing causes any thread safety problems

@@ -14,6 +14,7 @@ public class ControllerSetting : ISetting
     public string ComponentName { get; private init; }
     public string SettingName { get; private init; }
     public SettingType DataType { get; private set; } = SettingType.None;
+    public string SettingPath { get => $"{this.ComponentType}.{this.ComponentName}.{this.SettingName}"; } // TODO: This cannot handle custom paths yet.
 
     private IControllableAttr? TargetInstance { get; set; }
     private int ControlID { get; set; }
@@ -36,6 +37,37 @@ public class ControllerSetting : ISetting
         this.ComponentType = component;
         this.ComponentName = componentName;
         this.SettingName = settingName;
+    }
+
+    internal ControllerSetting(IControllableAttr instance, Component componentType, string componentName, string settingName, MemberInfo targetMember)
+    {
+        this.ComponentType = componentType;
+        this.ComponentName = componentName;
+        this.TargetInstance = instance;
+        this.InitializeAttempted = true;
+
+        if (targetMember is PropertyInfo PropInfo)
+        {
+            this.IsProperty = true;
+            this.Property = PropInfo;
+            this.DataType = TypeToSettingType(PropInfo.PropertyType);
+        }
+        else if (targetMember is FieldInfo FieldInfo)
+        {
+            this.IsProperty = false;
+            this.Field = FieldInfo;
+            this.DataType = TypeToSettingType(FieldInfo.FieldType);
+
+        }
+        else { throw new InvalidOperationException($"Cannot initialize {nameof(ControllerSetting)} with a target member that is neither a field nor a property."); }
+
+        ControllableAttribute? AttrControl = targetMember.GetCustomAttribute<ControllableAttribute>();
+        ConfigAttribute? AttrConfig = targetMember.GetCustomAttribute<ConfigAttribute>();
+        if (AttrConfig == null || AttrControl == null) { throw new InvalidOperationException($"Cannot initialize {nameof(ControllerSetting)} with a target that doesn't have both configurable and controllable attributes."); }
+
+        this.SettingName = AttrControl.ControlName;
+        this.ControlID = AttrControl.ControlID;
+        this.ConfigAttribute = AttrConfig;
     }
 
     public bool IsValid()
@@ -76,6 +108,20 @@ public class ControllerSetting : ISetting
             this.Field!.SetValue(this.TargetInstance, !CurrentState);
         }
         if (ControllableAttribute.CheckNeedsCallback(this.ControlID)) { this.TargetInstance!.SettingChanged(this.ControlID); }
+    }
+
+    internal object? GetMinimumValue() // Assumes IsValid
+    {
+        if (this.ConfigAttribute is ConfigIntAttribute ConfigInt) { return ConfigInt.MinValue; }
+        else if (this.ConfigAttribute is ConfigFloatAttribute ConfigFloat) { return ConfigFloat.MinValue; }
+        return null;
+    }
+
+    internal object? GetMaximumValue() // Assumes IsValid
+    {
+        if (this.ConfigAttribute is ConfigIntAttribute ConfigInt) { return ConfigInt.MaxValue; }
+        else if (this.ConfigAttribute is ConfigFloatAttribute ConfigFloat) { return ConfigFloat.MaxValue; }
+        return null;
     }
 
     private bool Initialize()

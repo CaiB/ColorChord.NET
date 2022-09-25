@@ -4,6 +4,8 @@ namespace ColorChord.NET.API.Outputs;
 
 public interface IOutput : IConfigurableAttr
 {
+    string Name { get; }
+
     // TODO: Document exactly when this happens
     void Start();
 

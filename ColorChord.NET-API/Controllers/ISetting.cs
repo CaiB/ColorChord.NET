@@ -16,6 +16,9 @@ public interface ISetting
     /// <summary>The underlying type that this setting is configuring.</summary>
     public SettingType DataType { get; }
 
+    /// <summary>Gets the full path of this setting.</summary>
+    public string SettingPath { get; }
+
     /// <summary>Checks whether this setting is valid and configurable.</summary>
     public bool IsValid();
 
