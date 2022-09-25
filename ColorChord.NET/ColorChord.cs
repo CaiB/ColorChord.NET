@@ -180,7 +180,7 @@ namespace ColorChord.NET
                 if (VisType == null) { Log.Error($"A visualizer is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
                 if (VisName == null) { Log.Error($"A visualizer is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
 
-                IVisualizer? Vis = CreateObject<IVisualizer>(VisType.StartsWith('#') ? VisType : "ColorChord.NET.Visualizers." + VisType, Entry);
+                IVisualizer? Vis = CreateObject<IVisualizer>(VisType.StartsWith('#') ? VisType : "ColorChord.NET.Visualizers." + VisType, Entry, true);
                 if (Vis == null) { Log.Error($"Could not create visualizer \"{VisName}\". Check to make sure the type \"{VisType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
                 VisualizerInsts.Add(VisName, Vis);
             }
@@ -285,7 +285,7 @@ namespace ColorChord.NET
         /// <param name="parent"> The JSON token whose child elements should be converted. </param>
         /// <param name="convertComplex"> Whether to also convert arrays and objects, or to just convert single value items. </param>
         /// <returns> A Dictionary containing all properties contained in the parent element. </returns>
-        private static Dictionary<string, object> ToDict(JToken parent, bool convertComplex = false)
+        private static Dictionary<string, object> ToDict(JToken parent, bool convertComplex = false) // TODO: Revisit when convertComplex is on (why not always?)
         {
             Dictionary<string, object> Items = new();
             foreach(JToken ItemToken in parent.Children())
@@ -293,12 +293,26 @@ namespace ColorChord.NET
                 JProperty Item = (JProperty)ItemToken;
                 if (Item.Value is JArray Array && convertComplex) // TODO: See if Object needs to be handled.
                 {
-                    Dictionary<string, object>[] ArrayItems = new Dictionary<string, object>[Array.Count];
-                    for (int i = 0; i < ArrayItems.Length; i++)
+                    if (Array.First == null) { continue; }
+                    if (Array.First.Type == JTokenType.Object)
                     {
-                        ArrayItems[i] = ToDict(Array[i], true);
+                        Dictionary<string, object>[] ArrayItems = new Dictionary<string, object>[Array.Count];
+                        for (int i = 0; i < ArrayItems.Length; i++)
+                        {
+                            ArrayItems[i] = ToDict(Array[i], true);
+                        }
+                        Items.Add(Item.Name, ArrayItems);
                     }
-                    Items.Add(Item.Name, ArrayItems);
+                    else
+                    {
+                        object? ParsedArray = null;
+                        if (Array.First.Type == JTokenType.Boolean) { ParsedArray = Array.ToObject<bool[]>(); }
+                        if (Array.First.Type == JTokenType.String) { ParsedArray = Array.ToObject<string[]>(); }
+                        if (Array.First.Type == JTokenType.Float) { ParsedArray = Array.ToObject<float[]>(); }
+                        if (Array.First.Type == JTokenType.Integer) { ParsedArray = Array.ToObject<int[]>(); }
+
+                        if (ParsedArray != null) { Items.Add(Item.Name, ParsedArray); }
+                    }
                 }
                 else
                 {
