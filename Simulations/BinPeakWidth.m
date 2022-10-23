@@ -10,7 +10,7 @@ PlotPointCount = 1200;
 ZeroCutoff = 0.05; % This is multiplied by the maximum value to set a cutoff for where a zero is
 
 WindowSizes = 1:MaxWindowSize;
-t = [0:(1 / SampleRate):((MaxWindowSize - 1) / SampleRate)];
+t = 0:(1 / SampleRate):((MaxWindowSize - 1) / SampleRate);
 Sin = sin(t .* (2 * pi * BinCenter));
 Cos = cos(t .* (2 * pi * BinCenter));
 
@@ -25,6 +25,8 @@ AllMagnitudesNC = zeros(PlotPointCount + 1, MaxWindowSize);
 UpperZero = zeros(2, MaxWindowSize);
 LowerZero = zeros(2, MaxWindowSize);
 
+RandInput = rand(MaxWindowSize, 1);
+
 for WindowSize = WindowSizes
     NCOffset = SampleRate / WindowSize;
     NCBinCenterL = BinCenter - (NCOffset / 2);
@@ -38,8 +40,13 @@ for WindowSize = WindowSizes
     Magnitudes = zeros(1, PlotPointCount + 1);
     NCMagnitudes = zeros(1, PlotPointCount + 1);
 
+    % Use this if you want only random noise to be input
+    %InputSin = RandInput(1:WindowSize)';
     for FreqIndex = 1:(PlotPointCount + 1)
         Freq = InputFrequencies(FreqIndex);
+        % Use this if you want random noise plus a faint signal to be input
+        %InputSin = RandInput(1:WindowSize)'; % + (0.05 .* sin(t(1:WindowSize) .* (2 * pi * Freq)));
+        % Use this if you just want the signal to be input
         InputSin = sin(t(1:WindowSize) .* (2 * pi * Freq));
     
         SinProducts = sum(InputSin .* Sin(1:WindowSize));
@@ -56,8 +63,8 @@ for WindowSize = WindowSizes
     end
 
     %%%
-    AllMagnitudes(:,WindowSize) = Magnitudes;
-    AllMagnitudesNC(:,WindowSize) = NCMagnitudes;
+    AllMagnitudes(:, WindowSize) = Magnitudes;
+    AllMagnitudesNC(:, WindowSize) = NCMagnitudes;
     %%%
 
     [PeakMag, PeakIndex] = max(Magnitudes);
@@ -91,11 +98,13 @@ for WindowSize = WindowSizes
     end
 end
 
-hold on;
+%% Plots
 figure(1);
-plot(WindowSizes, LowerZero(1,:), "-r", WindowSizes, UpperZero(1,:), "-r");
-plot(WindowSizes, LowerZero(2,:), "-b", WindowSizes, UpperZero(2,:), "-b");
+plot(WindowSizes, LowerZero(1, :), "-r", WindowSizes, UpperZero(1, :), "-r");
+hold on;
+plot(WindowSizes, LowerZero(2, :), "-b", WindowSizes, UpperZero(2, :), "-b");
 plot([1, MaxWindowSize], [BinCenter, BinCenter], ":k")
+hold off;
 xlim([1, MaxWindowSize]);
 ylim([0, BinCenter + PlotRange]);
 %xline(BinCenter);
@@ -106,23 +115,35 @@ legend("ColorChord Lower", "ColorChord Upper", "NC Lower", "NC Upper"); %, "FFT"
 grid on;
 
 %%%
+XAxisRange = [min(WindowSizes), max(WindowSizes)];
+YAxisRange = [BinCenter + PlotRange, BinCenter - PlotRange];
 figure(2);
 grid off;
 subplot(2, 1, 1);
-imagesc(max(0, log(AllMagnitudes)));
+imagesc(XAxisRange, YAxisRange, max(0, log(AllMagnitudes)));
+axis xy;
 colormap jet;
 title("ColorChord DFT Bin");
 xlabel("Window Size, samples");
 xlim([1, MaxWindowSize]);
-ylabel("Frequency");
+ylim([BinCenter - PlotRange, BinCenter + PlotRange]);
+ylabel("Frequency (Hz)");
 
 subplot(2, 1, 2);
-imagesc(max(0, log(AllMagnitudesNC)));
+imagesc(XAxisRange, YAxisRange, max(0, log(AllMagnitudesNC)));
+axis xy;
 colormap jet;
 title("ColorChord DFT Bin with NC");
 xlabel("Window Size, samples");
 xlim([1, MaxWindowSize]);
-ylabel("Frequency");
+ylabel("Frequency (Hz)");
 %%%
+
+%figure(3);
+%plot(t, InputSin);
+%title("Raw Input Signal");
+%xlabel("Time, s");
+%ylabel("Amplitude");
+%grid on;
 
 hold off;
