@@ -1,251 +1,291 @@
 ﻿using ColorChord.NET.API;
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Runtime.CompilerServices;
-using System.Text;
+using System.Diagnostics.CodeAnalysis;
 
-namespace ColorChord.NET.NoteFinder
+namespace ColorChord.NET.NoteFinder;
+
+/// <summary> My own note finder implementation. </summary>
+public static class ShinNoteFinderDFT
 {
-    /// <summary> My own note finder implementation. </summary>
-    public class ShinNoteFinderDFT
+    private const int MIN_WINDOW_SIZE = 256;
+    private const int MAX_WINDOW_SIZE = 32768;
+    private const ushort SINE_TABLE_90_OFFSET = 64;
+
+    private static readonly short[] SinWave = new short[256]
     {
-        /// <summary> The number of octaves we will analyze. </summary>
-        public byte OctaveCount = 5;
+        0, 402, 804, 1205, 1606, 2005, 2404, 2801, 3196, 3590, 3981, 4370, 4756, 5139, 5519, 5896,
+        6270, 6639, 7005, 7366, 7723, 8075, 8423, 8765, 9102, 9433, 9759, 10079, 10393, 10701, 11002, 11297,
+        11585, 11865, 12139, 12405, 12664, 12915, 13159, 13394, 13622, 13841, 14052, 14255, 14449, 14634, 14810, 14977,
+        15136, 15285, 15425, 15556, 15678, 15790, 15892, 15985, 16068, 16142, 16206, 16260, 16304, 16339, 16363, 16378,
+        16383, 16378, 16363, 16339, 16304, 16260, 16206, 16142, 16068, 15985, 15892, 15790, 15678, 15556, 15425, 15285,
+        15136, 14977, 14810, 14634, 14449, 14255, 14052, 13841, 13622, 13394, 13159, 12915, 12664, 12405, 12139, 11865,
+        11585, 11297, 11002, 10701, 10393, 10079, 9759, 9433, 9102, 8765, 8423, 8075, 7723, 7366, 7005, 6639,
+        6270, 5896, 5519, 5139, 4756, 4370, 3981, 3590, 3196, 2801, 2404, 2005, 1606, 1205, 804, 402,
+        0, -402, -804, -1205, -1606, -2005, -2404, -2801, -3196, -3590, -3981, -4370, -4756, -5139, -5519, -5896,
+        -6270, -6639, -7005, -7366, -7723, -8075, -8423, -8765, -9102, -9433, -9759, -10079, -10393, -10701, -11002, -11297,
+        -11585, -11865, -12139, -12405, -12664, -12915, -13159, -13394, -13622, -13841, -14052, -14255, -14449, -14634, -14810, -14977,
+        -15136, -15285, -15425, -15556, -15678, -15790, -15892, -15985, -16068, -16142, -16206, -16260, -16304, -16339, -16363, -16378,
+        -16383, -16378, -16363, -16339, -16304, -16260, -16206, -16142, -16068, -15985, -15892, -15790, -15678, -15556, -15425, -15285,
+        -15136, -14977, -14810, -14634, -14449, -14255, -14052, -13841, -13622, -13394, -13159, -12915, -12664, -12405, -12139, -11865,
+        -11585, -11297, -11002, -10701, -10393, -10079, -9759, -9433, -9102, -8765, -8423, -8075, -7723, -7366, -7005, -6639,
+        -6270, -5896, -5519, -5139, -4756, -4370, -3981, -3590, -3196, -2801, -2404, -2005, -1606, -1205, -804, -402,
+    };
 
-        /// <summary> The number of frequency bins of data we will output per octave. </summary>
-        public byte BinsPerOctave = 24;
-
-        /// <summary> How long our sample window is. </summary>
-        /// <remarks> This must be divisible by 2 ^ <see cref="OctaveCount"/>. </remarks>
-        public ushort WindowSize = 8192;
-
-        /// <summary> The sample rate of the incoming audio signal, and our reference waveforms. </summary>
-        public uint SampleRate = 48000;
-
-        /// <summary> The total number of bins over all octaves. </summary>
-        public ushort BinCount => (ushort)(this.OctaveCount * this.BinsPerOctave);
-
-        /// <summary> Gets the index of the first bin in the topmost octave. </summary>
-        private ushort StartOfTopOctave => (ushort)((this.OctaveCount - 1) * this.BinsPerOctave);
-
-        /// <summary> The frequencies of all bins, in Hz. </summary>
-        /// <remarks> Length = <see cref="BinCount"/>. </remarks>
-        private float[] BinFrequencies;
-
-        /// <summary> The reference sine waveforms for each bin. </summary>
-        /// <remarks> Dimensions = [<see cref="BinsPerOctave"/>, <see cref="WindowSize"/>]. </remarks>
-        private float[,] SinTable;
-
-        /// <summary> The reference cosine waveforms for each bin. </summary>
-        /// <remarks> Dimensions = [<see cref="BinsPerOctave"/>, <see cref="WindowSize"/>]. </remarks>
-        private float[,] CosTable;
-
-        /// <summary> Where in the circular buffers we are currently writing to/calculating for. </summary>
-        private uint HeadLocation;
-
-        /// <summary> The circular buffer containing input audio data. Length <see cref="WindowSize"/>. </summary>
-        private float[] AudioBuffer;
-
-        /// <summary> The buffers for lower octaves, with downsampled audio. </summary>
-        /// <remarks>
-        /// Organized in order of descending octaves. Each step's buffer size is half of the previous.
-        /// i.e. Length[x] = <see cref="WindowSize"/> / (2 ^ x + 1)
-        /// </remarks>
-        private float[][] SmallerAudioBuffers;
-
-        /// <summary> The product of (sin reference) * (input signal) at each sample, for each bin. </summary>
-        /// <remarks> Dimensions = [<see cref="BinCount"/>, <see cref="WindowSize"/>]. </remarks>
-        private float[,] SinProducts;
-
-        /// <summary> The product of (cos reference) * (input signal) at each sample, for each bin. </summary>
-        /// <remarks> Dimensions = [<see cref="BinCount"/>, <see cref="WindowSize"/>]. </remarks>
-        private float[,] CosProducts;
-
-        /// <summary> The sin and cos products at for each bin, summed over the entire window. </summary>
-        /// <remarks> Length = <see cref="BinCount"/>. </remarks>
-        private float[] PrevSinSum, PrevCosSum;
-
-        /// <summary> The magnitudes of summed sin and cos products, for each bin. </summary>
-        /// <remarks> Length = <see cref="BinCount"/>. </remarks>
-        public float[] Magnitudes;
-
-        /// <summary> Stores the current cycle count, which is used in determining which lower octaves need to be updated. </summary>
-        private uint CycleCount = 0;
-
-        public ShinNoteFinderDFT()
+    // The above generated by:
+    /*
+        const short AMPLITUDE = short.MaxValue / 2;
+        for (byte Line = 0; Line < 16; Line++)
         {
-            Log.Info("Starting ShinNoteFinder DFT module");
-        }
-
-        /// <summary> Fills <see cref="BinFrequencies"/> with the frequency (in Hz) of each bin. </summary>
-        /// <remarks> Depends on <see cref="BinCount"/>, <see cref="BinsPerOctave"/>. </remarks>
-        /// <param name="baseFrequency"> The frequency of the lowest bin. </param>
-        public void CalculateFrequencies(float baseFrequency)
-        {
-            this.BinFrequencies = new float[this.BinCount];
-            for (ushort Bin = 0; Bin < this.BinCount; Bin++)
+            for (byte Entry = 0; Entry < 16; Entry++)
             {
-                this.BinFrequencies[Bin] = (float)(baseFrequency * Math.Pow(2, ((float)Bin / this.BinsPerOctave)));
+                Console.Write(Math.Round(AMPLITUDE * Math.Sin(((Line * 16) + Entry) * Math.Tau / 256)));
+                Console.Write(", ");
             }
+            Console.WriteLine();
+        }
+    */
+
+    /// <summary> The number of octaves we will analyze. </summary>
+    public static byte OctaveCount = 5;
+
+    /// <summary> The number of frequency bins of data we will output per octave. </summary>
+    public static byte BinsPerOctave = 24;
+
+    /// <summary> How long our sample window is. </summary>
+    public static ushort MaxWindowSize = 8192;
+
+    /// <summary> The sample rate of the incoming audio signal, and our reference waveforms. </summary>
+    public static uint SampleRate = 48000;
+
+    public static float StartFrequency = 55F;
+
+    /// <summary> The total number of bins over all octaves. </summary>
+    public static ushort BinCount => (ushort)(OctaveCount * BinsPerOctave);
+
+    /// <summary> Gets the index of the first bin in the topmost octave. </summary>
+    private static ushort StartOfTopOctave => (ushort)((OctaveCount - 1) * BinsPerOctave);
+
+    private static float StartFrequencyOfTopOctave => StartFrequency * MathF.Pow(2, OctaveCount - 1);
+
+    /// <summary> Where raw and resampled audio data is stored. </summary>
+    /// <remarks> Indexed by [Octave][Sample], size is [<see cref="OctaveCount"/>][<see cref="MaxWindowSize"/>] </remarks>
+    private static short[][] AudioBuffer;
+
+    /// <summary> How large the audio buffer should be treated as being, for each bin. </summary>
+    /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
+    private static ushort[] AudioBufferSizes;
+
+    /// <summary> Where in the audio buffer each bin has added data up to. </summary>
+    /// <remarks> Indexed by [Octave], size is [<see cref="OctaveCount"/>] </remarks>
+    private static ushort[] AudioBufferAddHeads;
+
+    /// <summary> Where in the audio buffer each bin has removed data up to. </summary>
+    /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
+    private static ushort[] AudioBufferSubHeads;
+
+    /// <summary> How far forward in the sine table this bin should step with every added sample. Format is fixed-point 8b+8b. </summary>
+    /// <remarks> Indexed by [Bin], size is [<see cref="BinsPerOctave"/>] </remarks>
+    private static DualU16[] SinTableStepSize;
+
+    /// <summary>
+    /// Where in the sin table the bin is currently at. This is incremented by <see cref="SinTableStepSize"/> every sample.
+    /// Format is fixed-point 8b+8b.
+    /// Since addition and subtraction of data does not happen in-phase, both are tracked separately.
+    /// </summary>
+    /// <remarks> Indexed by [Bin], size is [<see cref="BinsPerOctave"/>] </remarks>
+    private static DualU16[] SinTableLocationAdd, SinTableLocationSub;
+
+    /// <summary> Stores the current value of the sin*sample and cos*sample product sums, for each bin. </summary>
+    /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
+    private static DualI64[] SinProductAccumulators, CosProductAccumulators;
+
+    /// <summary> Stores the magnitude output of each bin before any filtering is done. </summary>
+    /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
+    public static float[] RawBinMagnitudes;
+
+    static ShinNoteFinderDFT()
+    {
+        Log.Info("Starting ShinNoteFinder DFT module");
+        Reconfigure();
+    }
+
+    /// <summary> Reconfigures all settings and data structures, used when any configuration changes occur that require recalculating internal state. </summary>
+    [MemberNotNull(
+        nameof(AudioBuffer),
+        nameof(AudioBufferSizes),
+        nameof(AudioBufferAddHeads), nameof(AudioBufferSubHeads),
+        nameof(SinTableStepSize), nameof(SinTableLocationAdd), nameof(SinTableLocationSub),
+        nameof(SinProductAccumulators), nameof(CosProductAccumulators),
+        nameof(RawBinMagnitudes)
+    )]
+    public static void Reconfigure()
+    {
+        AudioBuffer = new short[OctaveCount][];
+        AudioBufferSizes = new ushort[BinCount];
+        AudioBufferAddHeads = new ushort[OctaveCount];
+        AudioBufferSubHeads = new ushort[BinCount];
+        SinTableStepSize = new DualU16[BinsPerOctave];
+        SinTableLocationAdd = new DualU16[BinsPerOctave];
+        SinTableLocationSub = new DualU16[BinsPerOctave];
+        SinProductAccumulators = new DualI64[BinCount];
+        CosProductAccumulators = new DualI64[BinCount];
+        RawBinMagnitudes = new float[BinCount];
+
+        float TopStart = StartFrequencyOfTopOctave;
+
+        ushort MaxAudioBufferSize = 0;
+        // Operations that occur on all bins
+        for (uint Bin = 0; Bin < BinCount; Bin++)
+        {
+            uint WrappedBinIndex = Bin % BinsPerOctave;
+
+            float TopOctaveBinFreq = CalculateNoteFrequency(TopStart, BinsPerOctave, WrappedBinIndex);
+            float TopOctaveNextBinFreq = CalculateNoteFrequency(TopStart, BinsPerOctave, WrappedBinIndex + 1);
+            float IdealWindowSize = WindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq); // TODO: Add scale factor to shift this from no overlap to -3dB point
+            ushort ThisBuffferSize = (ushort)Math.Ceiling(IdealWindowSize);
+            AudioBufferSizes[Bin] = ThisBuffferSize;
+
+            if (Bin == 0) { MaxAudioBufferSize = ThisBuffferSize; }
+
+            AudioBufferSubHeads[Bin] = (ushort)(WrappedBinIndex == 0 ? 0 : (1 - ThisBuffferSize + MaxAudioBufferSize) % MaxAudioBufferSize);
+        }
+        MaxWindowSize = MaxAudioBufferSize;
+
+        // Operations that occur on only one octave's worth of bins
+        for (uint Bin = 0; Bin < BinsPerOctave; Bin++)
+        {
+            float NCOffset = SampleRate / (AudioBufferSizes[Bin] * 2F);
+            float StepSizeNCL = (ushort.MaxValue + 1.0F) * (CalculateNoteFrequency(StartFrequencyOfTopOctave, BinsPerOctave, Bin) - NCOffset) / SampleRate;
+            float StepSizeNCR = (ushort.MaxValue + 1.0F) * (CalculateNoteFrequency(StartFrequencyOfTopOctave, BinsPerOctave, Bin) + NCOffset) / SampleRate;
+            SinTableStepSize[Bin].NCLeft  = (ushort)Math.Round(StepSizeNCL);
+            SinTableStepSize[Bin].NCRight = (ushort)Math.Round(StepSizeNCR);
+
+            SinTableLocationSub[Bin].NCLeft  = (ushort)(-(SinTableStepSize[Bin].NCLeft  * (AudioBufferSizes[StartOfTopOctave + Bin] - (Bin == 0 ? 0 : 1))));
+            SinTableLocationSub[Bin].NCRight = (ushort)(-(SinTableStepSize[Bin].NCRight * (AudioBufferSizes[StartOfTopOctave + Bin] - (Bin == 0 ? 0 : 1))));
         }
 
-        /// <summary> Fills the reference waveform tables with data needed to do DFT calculations. </summary>
-        /// <remarks> This needs to be done whenever any of <see cref="SampleRate"/>, <see cref="BinsPerOctave"/>, or <see cref="WindowSize"/> change. </remarks>
-        public void FillReferenceTables()
+        // Operations that occur for each octave
+        for (int Octave = 0; Octave < OctaveCount; Octave++)
         {
-            this.SinTable = new float[BinsPerOctave, WindowSize];
-            this.CosTable = new float[BinsPerOctave, WindowSize];
-            float Coefficient = MathF.PI * 2 / this.SampleRate;
-            for (ushort Bin = 0; Bin < this.BinsPerOctave; Bin++)
-            {
-                for (ushort Sample = 0; Sample < this.WindowSize; Sample++)
-                {
-                    this.SinTable[Bin, Sample] = MathF.Sin(Sample * this.BinFrequencies[Bin + this.StartOfTopOctave] * Coefficient);
-                    this.CosTable[Bin, Sample] = MathF.Cos(Sample * this.BinFrequencies[Bin + this.StartOfTopOctave] * Coefficient);
-                }
-            }
-        }
-
-        /// <summary> Sets up and clears the storage for input audio data, and internal calculated data. </summary>
-        /// <remarks> This can be called if you want to reset the NoteFinder state (e.g. during a period of silence). </remarks>
-        public void PrepareSampleStorage()
-        {
-            this.HeadLocation = 0;
-            this.CycleCount = 0;
-            this.AudioBuffer = new float[this.WindowSize];
-            this.SmallerAudioBuffers = new float[this.OctaveCount - 1][];
-            for (int i = 0; i < this.OctaveCount - 1; i++) { this.SmallerAudioBuffers[i] = new float[this.WindowSize >> (i + 1)]; }
-            this.SinProducts = new float[this.BinCount, this.WindowSize];
-            this.CosProducts = new float[this.BinCount, this.WindowSize];
-            this.PrevSinSum = new float[this.BinCount];
-            this.PrevCosSum = new float[this.BinCount];
-            this.Magnitudes = new float[this.BinCount];
-        }
-
-        /// <summary> Adds a single new audio sample. </summary>
-        /// <param name="sample"> The sample to add to the buffer. </param>
-        /// <param name="doMagCalc"> Whether to do the final magnitude calculation or not. This is only needed on the last sample being added in a batch, or for all samples added individually. </param>
-        public void AddSample(float sample, bool doMagCalc = true)
-        {
-            this.AudioBuffer[this.HeadLocation] = sample;
-
-            CalculateProducts();
-
-            this.HeadLocation = (ushort)((this.HeadLocation + 1) % this.WindowSize);
-            this.CycleCount++;
-
-            if (doMagCalc) { CalculateMagnitudes(); }
-        }
-
-        /// <summary> Adds all samples in an array. </summary>
-        /// <param name="samples"> The samples to add to the buffer. </param>
-        public void AddSamples(float[] samples)
-        {
-            if (samples == null || samples.Length == 0) { return; }
-
-            for (uint i = 0; i < samples.Length; i++)
-            {
-                AddSample(samples[i], false); // Don't bother doing the final calculations except for the last sample.
-            }
-            AddSample(samples[samples.Length - 1], true);
-        }
-
-        /// <summary> Calculates sin and cos products at the current buffer head location. </summary>
-        private void CalculateProducts()
-        {
-            // Calculate the top octave.
-            for (ushort Bin = this.StartOfTopOctave; Bin < this.BinCount; Bin++)
-            {
-                // Remove the previous data from the sum.
-                this.PrevSinSum[Bin] -= this.SinProducts[Bin, this.HeadLocation];
-                this.PrevCosSum[Bin] -= this.CosProducts[Bin, this.HeadLocation];
-
-                // Calculate new data.
-                ushort TableSlot = (ushort)(Bin % this.BinsPerOctave);
-                this.SinProducts[Bin, this.HeadLocation] = this.SinTable[TableSlot, this.HeadLocation] * this.AudioBuffer[this.HeadLocation];
-                this.CosProducts[Bin, this.HeadLocation] = this.CosTable[TableSlot, this.HeadLocation] * this.AudioBuffer[this.HeadLocation];
-
-                // Add the new data to the sum.
-                this.PrevSinSum[Bin] += this.SinProducts[Bin, this.HeadLocation];
-                this.PrevCosSum[Bin] += this.CosProducts[Bin, this.HeadLocation];
-            }
-
-            uint NextCycle = this.CycleCount + 1;
-
-            // Calculate the other octaves if needed.
-            // [Down] is how many octaves down we are from the top. This makes subsequent math nicer.
-            // E.g. in the case of 5 octaves, [Down] values would be: Lowest Octave-> [4 3 2 1 x] <-Highest Octave
-            for (byte Down = 1; Down < this.OctaveCount; Down++)
-            {
-                // If this octave needs to be calculated this cycle
-                if (((this.CycleCount >> (Down - 1)) & 0b1) == 0b1 &&
-                    ((      NextCycle >> (Down - 1)) & 0b1) == 0b0) // If this is the last cycle where the corresponding bit has a 1
-                {
-                    uint HeadLocationCondensed = this.HeadLocation >> Down; // Buffer head location in this new buffer to match with the main buffer location.
-
-                    // TODO: Use a better averaging method
-                    if (Down > 1) // If we are averaging samples from another condensed buffer
-                    {
-                        this.SmallerAudioBuffers[Down - 1][HeadLocationCondensed] =
-                            this.SmallerAudioBuffers[Down - 2][HeadLocationCondensed << 1] +
-                            this.SmallerAudioBuffers[Down - 2][(HeadLocationCondensed << 1) + 1];
-                    }
-                    else // If we are averaging samples from the main buffer
-                    {
-                        this.SmallerAudioBuffers[0][HeadLocationCondensed] =
-                            this.AudioBuffer[this.HeadLocation] +
-                            this.AudioBuffer[this.HeadLocation - 1];
-                    }
-
-                    ushort BinOffset = (ushort)((this.OctaveCount - (Down + 1)) * this.BinsPerOctave); // The bottom bin in this octave
-                    for (ushort Bin = BinOffset; Bin < BinOffset + this.BinsPerOctave; Bin++)
-                    {
-                        // Remove the previous data from the sum.
-                        this.PrevSinSum[Bin] -= this.SinProducts[Bin, HeadLocationCondensed];
-                        this.PrevCosSum[Bin] -= this.CosProducts[Bin, HeadLocationCondensed];
-
-                        // Calculate new data.
-                        ushort TableSlot = (ushort)(Bin % this.BinsPerOctave);
-                        this.SinProducts[Bin, HeadLocationCondensed] = this.SinTable[TableSlot, HeadLocationCondensed] * this.SmallerAudioBuffers[Down - 1][HeadLocationCondensed];
-                        this.CosProducts[Bin, HeadLocationCondensed] = this.CosTable[TableSlot, HeadLocationCondensed] * this.SmallerAudioBuffers[Down - 1][HeadLocationCondensed];
-
-                        // Add the new data to the sum.
-                        this.PrevSinSum[Bin] += this.SinProducts[Bin, HeadLocationCondensed];
-                        this.PrevCosSum[Bin] += this.CosProducts[Bin, HeadLocationCondensed];
-                    }
-                }
-            }
-        }
-
-        /// <summary> Updates <see cref="Magnitudes"/> with the current magnitude of sin and cos sum data. </summary>
-        private void CalculateMagnitudes()
-        {
-            for (ushort Bin = 0; Bin < this.BinCount; Bin++)
-            {
-                this.Magnitudes[Bin] = MathF.Sqrt((this.PrevSinSum[Bin] * this.PrevSinSum[Bin]) + (this.PrevCosSum[Bin] * this.PrevCosSum[Bin]));
-            }
-        }
-
-        //public float[] GetBins() => this.Magnitudes;
-
-        // TODO: Remove this or move elsewhere, only for testing
-        public void SaveData()
-        {
-            using (StreamWriter Writer = new("testdata.csv"))
-            {
-                for (uint i = 0; i < this.AudioBuffer.Length; i++)
-                {
-                    string Line = string.Join(',',
-                        this.AudioBuffer[i],
-                        i < this.SmallerAudioBuffers[0].Length ? this.SmallerAudioBuffers[0][i] : 0,
-                        i < this.SmallerAudioBuffers[1].Length ? this.SmallerAudioBuffers[1][i] : 0,
-                        i < this.SmallerAudioBuffers[2].Length ? this.SmallerAudioBuffers[2][i] : 0,
-                        i < this.SmallerAudioBuffers[3].Length ? this.SmallerAudioBuffers[3][i] : 0);
-                    Writer.WriteLine(Line);
-                }
-                Writer.Flush();
-            }
+            AudioBuffer[Octave] = new short[MaxAudioBufferSize];
         }
     }
+
+    public static void UpdateSampleRate(uint newSampleRate)
+    {
+        if (newSampleRate == SampleRate) { return; }
+        SampleRate = newSampleRate;
+        Reconfigure();
+    }
+
+    public static void AddAudioData(short[] newData)
+    {
+        // TODO: This handles the top octave only
+        for (int i = 0; i < newData.Length; i++)
+        {
+            AddAudioDataToOctave(newData[i], OctaveCount - 1);
+        }
+    }
+
+    private static void AddAudioDataToOctave(short newData, int octave)
+    {
+        int OctaveBinOffset = octave * BinsPerOctave;
+
+        // Subtract old data from accumulators
+        for (int Bin = 0; Bin < BinsPerOctave; Bin++)
+        {
+            int FullBinIndex = OctaveBinOffset + Bin;
+
+            // Find where we are in the sine table
+            DualU16 SinTableLoc = SinTableLocationSub[Bin];
+            byte SinTableLocNCL = (byte)(SinTableLoc.NCLeft >> 8);
+            byte SinTableLocNCR = (byte)(SinTableLoc.NCRight >> 8);
+
+            if (Bin == 0 && AudioBufferSubHeads[FullBinIndex] == 0) { Console.WriteLine("Subtracting at 0, pos: " + SinTableLoc); }
+
+            // Multiply the outgoing sample by the correct sine sample
+            short OldBufferData = AudioBuffer[octave][AudioBufferSubHeads[FullBinIndex]];
+            int OldSinProductNCL = SinWave[SinTableLocNCL] * OldBufferData;
+            int OldSinProductNCR = SinWave[SinTableLocNCR] * OldBufferData;
+            int OldCosProductNCL = SinWave[(byte)(SinTableLocNCL + SINE_TABLE_90_OFFSET)] * OldBufferData;
+            int OldCosProductNCR = SinWave[(byte)(SinTableLocNCR + SINE_TABLE_90_OFFSET)] * OldBufferData;
+
+            // Remove the product from the accumulators
+            SinProductAccumulators[FullBinIndex].NCLeft  -= OldSinProductNCL;
+            SinProductAccumulators[FullBinIndex].NCRight -= OldSinProductNCR;
+            CosProductAccumulators[FullBinIndex].NCLeft  -= OldCosProductNCL;
+            CosProductAccumulators[FullBinIndex].NCRight -= OldCosProductNCR;
+
+            // Advance the buffer and sine table locations
+            AudioBufferSubHeads[FullBinIndex] = (ushort)((AudioBufferSubHeads[FullBinIndex] + 1) % MaxWindowSize);
+
+            DualU16 SinTableStep = SinTableStepSize[Bin];
+            SinTableLocationSub[Bin].NCLeft  += SinTableStep.NCLeft;
+            SinTableLocationSub[Bin].NCRight += SinTableStep.NCRight;
+        }
+
+        // Write new data
+        ushort HeadBefore = AudioBufferAddHeads[octave];
+        AudioBuffer[octave][AudioBufferAddHeads[octave]] = newData;
+        AudioBufferAddHeads[octave] = (ushort)((AudioBufferAddHeads[octave] + 1) % MaxWindowSize);
+
+        // Add new data to accumulators
+        for (int Bin = 0; Bin < BinsPerOctave; Bin++)
+        {
+            int FullBinIndex = OctaveBinOffset + Bin;
+
+            // Find where we are in the sine table
+            DualU16 SinTableLoc = SinTableLocationAdd[Bin];
+            byte SinTableLocNCL = (byte)(SinTableLoc.NCLeft >> 8);
+            byte SinTableLocNCR = (byte)(SinTableLoc.NCRight >> 8);
+
+            if (Bin == 0 && HeadBefore == 0) { Console.WriteLine("### This Step is " + SinTableStepSize[Bin] + "\nAdding at 0, pos: " + SinTableLoc); }
+
+            // Multiply the incoming sample by the correct sine sample
+            int NewSinProductNCL = SinWave[SinTableLocNCL] * newData;
+            int NewSinProductNCR = SinWave[SinTableLocNCR] * newData;
+            int NewCosProductNCL = SinWave[(byte)(SinTableLocNCL + SINE_TABLE_90_OFFSET)] * newData;
+            int NewCosProductNCR = SinWave[(byte)(SinTableLocNCR + SINE_TABLE_90_OFFSET)] * newData;
+
+            // Add the product to the accumulators
+            SinProductAccumulators[FullBinIndex].NCLeft  += NewSinProductNCL;
+            SinProductAccumulators[FullBinIndex].NCRight += NewSinProductNCR;
+            CosProductAccumulators[FullBinIndex].NCLeft  += NewCosProductNCL;
+            CosProductAccumulators[FullBinIndex].NCRight += NewCosProductNCR;
+
+            // Advance the sine table locations
+            DualU16 SinTableStep = SinTableStepSize[Bin];
+            SinTableLocationAdd[Bin].NCLeft  += SinTableStep.NCLeft;
+            SinTableLocationAdd[Bin].NCRight += SinTableStep.NCRight;
+        }
+    }
+
+    public static void CalculateOutput()
+    {
+        for (int Bin = 0; Bin < BinCount; Bin++)
+        {
+            double Sin = SinProductAccumulators[Bin].NCLeft * SinProductAccumulators[Bin].NCRight;
+            double Cos = CosProductAccumulators[Bin].NCLeft * CosProductAccumulators[Bin].NCRight;
+            float Magnitude = (float)Math.Sqrt(Math.Max(0F, -(Sin + Cos)));
+            RawBinMagnitudes[Bin] = Magnitude;
+        }
+    }
+
+    private struct DualU16
+    {
+        public ushort NCLeft, NCRight;
+        public override string ToString() => $"2xU16 L={this.NCLeft}, R={this.NCRight}";
+    }
+    private struct DualI64
+    {
+        public long NCLeft, NCRight;
+        public override string ToString() => $"2xI32 L={this.NCLeft}, R={this.NCRight}";
+    }
+
+    // Everyone loves magic numbers :)
+    // These were determined through simulations and regressions, which can be found in the Simulations folder in the root of the ColorChord.NET repository.
+    private static float BinWidthAtWindowSize(float windowSize) => 50222.5926786413F / (windowSize + 11.483904495504245F);
+    private static float WindowSizeForBinWidth(float binWidth) => Math.Min(MAX_WINDOW_SIZE, Math.Max(MIN_WINDOW_SIZE, (50222.5926786413F / binWidth) - 11.483904495504245F));
+    private static float CalculateNoteFrequency(float octaveStart, uint binsPerOctave, uint binIndex) => octaveStart * GetNoteFrequencyMultiplier(binsPerOctave, binIndex);
+    private static float GetNoteFrequencyMultiplier(uint binsPerOctave, uint binIndex) => MathF.Pow(2F, (float)binIndex / binsPerOctave);
 }
