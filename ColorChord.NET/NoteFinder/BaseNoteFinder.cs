@@ -191,7 +191,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     public override void Start()
     {
         KeepGoing = true;
-        ProcessThread = new Thread(DoProcessing);
+        ProcessThread = new Thread(DoProcessing) { Name = nameof(BaseNoteFinder) };
         ProcessThread.Start();
     }
 
