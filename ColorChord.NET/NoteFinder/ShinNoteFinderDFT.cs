@@ -103,6 +103,8 @@ public static class ShinNoteFinderDFT
     /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
     public static float[] RawBinMagnitudes;
 
+    private static ushort[] AddHeadIncrements;
+
     static ShinNoteFinderDFT()
     {
         Log.Info("Starting ShinNoteFinder DFT module");
@@ -131,6 +133,8 @@ public static class ShinNoteFinderDFT
         CosProductAccumulators = new DualI64[BinCount];
         RawBinMagnitudes = new float[BinCount];
 
+        AddHeadIncrements = new ushort[BinCount];
+
         float TopStart = StartFrequencyOfTopOctave;
 
         ushort MaxAudioBufferSize = 0;
@@ -141,27 +145,28 @@ public static class ShinNoteFinderDFT
 
             float TopOctaveBinFreq = CalculateNoteFrequency(TopStart, BinsPerOctave, WrappedBinIndex);
             float TopOctaveNextBinFreq = CalculateNoteFrequency(TopStart, BinsPerOctave, WrappedBinIndex + 1);
-            float IdealWindowSize = WindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq); // TODO: Add scale factor to shift this from no overlap to -3dB point
-            ushort ThisBuffferSize = (ushort)Math.Ceiling(IdealWindowSize);
-            AudioBufferSizes[Bin] = ThisBuffferSize;
+            //float IdealWindowSize = WindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq); // TODO: Add scale factor to shift this from no overlap to -3dB point
+            ushort ThisBufferSize = RoundedWindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq, TopOctaveBinFreq, SampleRate);//(ushort)Math.Ceiling(IdealWindowSize);
+            AudioBufferSizes[Bin] = ThisBufferSize;
 
-            if (Bin == 0) { MaxAudioBufferSize = ThisBuffferSize; }
+            if (Bin == 0) { MaxAudioBufferSize = ThisBufferSize; }
 
-            AudioBufferSubHeads[Bin] = (ushort)(WrappedBinIndex == 0 ? 0 : (1 - ThisBuffferSize + MaxAudioBufferSize) % MaxAudioBufferSize);
+            AudioBufferSubHeads[Bin] = (ushort)(WrappedBinIndex == 0 ? 0 : (1 - ThisBufferSize + MaxAudioBufferSize) % MaxAudioBufferSize);
         }
         MaxWindowSize = MaxAudioBufferSize;
 
         // Operations that occur on only one octave's worth of bins
         for (uint Bin = 0; Bin < BinsPerOctave; Bin++)
         {
-            float NCOffset = SampleRate / (AudioBufferSizes[Bin] * 2F);
+            uint BinInTop = StartOfTopOctave + Bin;
+            float NCOffset = SampleRate / (AudioBufferSizes[BinInTop] * 2F);
             float StepSizeNCL = (ushort.MaxValue + 1.0F) * (CalculateNoteFrequency(StartFrequencyOfTopOctave, BinsPerOctave, Bin) - NCOffset) / SampleRate;
             float StepSizeNCR = (ushort.MaxValue + 1.0F) * (CalculateNoteFrequency(StartFrequencyOfTopOctave, BinsPerOctave, Bin) + NCOffset) / SampleRate;
             SinTableStepSize[Bin].NCLeft  = (ushort)Math.Round(StepSizeNCL);
             SinTableStepSize[Bin].NCRight = (ushort)Math.Round(StepSizeNCR);
 
-            SinTableLocationSub[Bin].NCLeft  = (ushort)(-(SinTableStepSize[Bin].NCLeft  * (AudioBufferSizes[StartOfTopOctave + Bin] - (Bin == 0 ? 0 : 1))));
-            SinTableLocationSub[Bin].NCRight = (ushort)(-(SinTableStepSize[Bin].NCRight * (AudioBufferSizes[StartOfTopOctave + Bin] - (Bin == 0 ? 0 : 1))));
+            SinTableLocationSub[Bin].NCLeft  = (ushort)(-(SinTableStepSize[Bin].NCLeft  * (AudioBufferSizes[BinInTop] - (Bin == 0 ? 0 : 1))));
+            SinTableLocationSub[Bin].NCRight = (ushort)(-(SinTableStepSize[Bin].NCRight * (AudioBufferSizes[BinInTop] - (Bin == 0 ? 0 : 1))));
         }
 
         // Operations that occur for each octave
@@ -195,33 +200,45 @@ public static class ShinNoteFinderDFT
         for (int Bin = 0; Bin < BinsPerOctave; Bin++)
         {
             int FullBinIndex = OctaveBinOffset + Bin;
+            ushort SubHeadBefore = AudioBufferSubHeads[FullBinIndex];
+
+            if (AddHeadIncrements[FullBinIndex] == AudioBufferSizes[FullBinIndex] - 1) { SinTableLocationSub[Bin] = new(); }
 
             // Find where we are in the sine table
+            //if (SubHeadBefore == 0) { SinTableLocationSub[Bin] = new(); }
             DualU16 SinTableLoc = SinTableLocationSub[Bin];
+            DualI16 SinValue = GetSine(SinTableLoc, false);
+            DualI16 CosValue = GetSine(SinTableLoc, true);
             byte SinTableLocNCL = (byte)(SinTableLoc.NCLeft >> 8);
             byte SinTableLocNCR = (byte)(SinTableLoc.NCRight >> 8);
 
-            if (Bin == 0 && AudioBufferSubHeads[FullBinIndex] == 0) { Console.WriteLine("Subtracting at 0, pos: " + SinTableLoc); }
+            //if (Bin == 0 && AudioBufferSubHeads[FullBinIndex] == 0) { Console.WriteLine("Subtracting at 0, pos: " + SinTableLoc); }
 
             // Multiply the outgoing sample by the correct sine sample
             short OldBufferData = AudioBuffer[octave][AudioBufferSubHeads[FullBinIndex]];
-            int OldSinProductNCL = SinWave[SinTableLocNCL] * OldBufferData;
-            int OldSinProductNCR = SinWave[SinTableLocNCR] * OldBufferData;
-            int OldCosProductNCL = SinWave[(byte)(SinTableLocNCL + SINE_TABLE_90_OFFSET)] * OldBufferData;
-            int OldCosProductNCR = SinWave[(byte)(SinTableLocNCR + SINE_TABLE_90_OFFSET)] * OldBufferData;
+            //int OldSinProductNCL = SinWave[SinTableLocNCL] * OldBufferData;
+            //int OldSinProductNCR = SinWave[SinTableLocNCR] * OldBufferData;
+            //int OldCosProductNCL = SinWave[(byte)(SinTableLocNCL + SINE_TABLE_90_OFFSET)] * OldBufferData;
+            //int OldCosProductNCR = SinWave[(byte)(SinTableLocNCR + SINE_TABLE_90_OFFSET)] * OldBufferData;
+            int OldSinProductNCL = SinValue.NCLeft * OldBufferData;
+            int OldSinProductNCR = SinValue.NCRight * OldBufferData;
+            int OldCosProductNCL = CosValue.NCLeft * OldBufferData;
+            int OldCosProductNCR = CosValue.NCRight * OldBufferData;
 
             // Remove the product from the accumulators
-            SinProductAccumulators[FullBinIndex].NCLeft  -= OldSinProductNCL;
+            SinProductAccumulators[FullBinIndex].NCLeft -= OldSinProductNCL;
             SinProductAccumulators[FullBinIndex].NCRight -= OldSinProductNCR;
-            CosProductAccumulators[FullBinIndex].NCLeft  -= OldCosProductNCL;
+            CosProductAccumulators[FullBinIndex].NCLeft -= OldCosProductNCL;
             CosProductAccumulators[FullBinIndex].NCRight -= OldCosProductNCR;
 
             // Advance the buffer and sine table locations
             AudioBufferSubHeads[FullBinIndex] = (ushort)((AudioBufferSubHeads[FullBinIndex] + 1) % MaxWindowSize);
 
             DualU16 SinTableStep = SinTableStepSize[Bin];
-            SinTableLocationSub[Bin].NCLeft  += SinTableStep.NCLeft;
+            SinTableLocationSub[Bin].NCLeft += SinTableStep.NCLeft;
             SinTableLocationSub[Bin].NCRight += SinTableStep.NCRight;
+
+            if (Bin == 6) { Console.Write($"{SubHeadBefore},{SinTableLocNCL},{OldSinProductNCL},"); }
         }
 
         // Write new data
@@ -235,17 +252,27 @@ public static class ShinNoteFinderDFT
             int FullBinIndex = OctaveBinOffset + Bin;
 
             // Find where we are in the sine table
+            AddHeadIncrements[FullBinIndex]++;
+            if (AddHeadIncrements[FullBinIndex] == AudioBufferSizes[FullBinIndex]) { SinTableLocationAdd[Bin] = new(); AddHeadIncrements[FullBinIndex] = 0; }
+
+            //if (HeadBefore == 0) { SinTableLocationAdd[Bin] = new(); }
             DualU16 SinTableLoc = SinTableLocationAdd[Bin];
+            DualI16 SinValue = GetSine(SinTableLoc, false);
+            DualI16 CosValue = GetSine(SinTableLoc, true);
             byte SinTableLocNCL = (byte)(SinTableLoc.NCLeft >> 8);
             byte SinTableLocNCR = (byte)(SinTableLoc.NCRight >> 8);
 
-            if (Bin == 0 && HeadBefore == 0) { Console.WriteLine("### This Step is " + SinTableStepSize[Bin] + "\nAdding at 0, pos: " + SinTableLoc); }
+            //if (Bin == 0 && HeadBefore == 0) { Console.WriteLine("### This Step is " + SinTableStepSize[Bin] + "\nAdding at 0, pos: " + SinTableLoc); }
 
             // Multiply the incoming sample by the correct sine sample
-            int NewSinProductNCL = SinWave[SinTableLocNCL] * newData;
-            int NewSinProductNCR = SinWave[SinTableLocNCR] * newData;
-            int NewCosProductNCL = SinWave[(byte)(SinTableLocNCL + SINE_TABLE_90_OFFSET)] * newData;
-            int NewCosProductNCR = SinWave[(byte)(SinTableLocNCR + SINE_TABLE_90_OFFSET)] * newData;
+            //int NewSinProductNCL = SinWave[SinTableLocNCL] * newData;
+            //int NewSinProductNCR = SinWave[SinTableLocNCR] * newData;
+            //int NewCosProductNCL = SinWave[(byte)(SinTableLocNCL + SINE_TABLE_90_OFFSET)] * newData;
+            //int NewCosProductNCR = SinWave[(byte)(SinTableLocNCR + SINE_TABLE_90_OFFSET)] * newData;
+            int NewSinProductNCL = SinValue.NCLeft * newData;
+            int NewSinProductNCR = SinValue.NCRight * newData;
+            int NewCosProductNCL = CosValue.NCLeft * newData;
+            int NewCosProductNCR = CosValue.NCRight * newData;
 
             // Add the product to the accumulators
             SinProductAccumulators[FullBinIndex].NCLeft  += NewSinProductNCL;
@@ -255,28 +282,54 @@ public static class ShinNoteFinderDFT
 
             // Advance the sine table locations
             DualU16 SinTableStep = SinTableStepSize[Bin];
-            SinTableLocationAdd[Bin].NCLeft  += SinTableStep.NCLeft;
+            SinTableLocationAdd[Bin].NCLeft  += SinTableStep.NCLeft; // TODO: This needs to be FullBinIndex
             SinTableLocationAdd[Bin].NCRight += SinTableStep.NCRight;
+
+            if (Bin == 6) { Console.WriteLine($"{HeadBefore},{SinTableLocNCL},{NewSinProductNCL},{SinProductAccumulators[FullBinIndex].NCLeft}"); }
         }
     }
 
     public static void CalculateOutput()
     {
-        for (int Bin = 0; Bin < BinCount; Bin++)
+        checked
         {
-            double Sin = SinProductAccumulators[Bin].NCLeft * SinProductAccumulators[Bin].NCRight;
-            double Cos = CosProductAccumulators[Bin].NCLeft * CosProductAccumulators[Bin].NCRight;
-            float Magnitude = (float)Math.Sqrt(Math.Max(0F, -(Sin + Cos)));
-            RawBinMagnitudes[Bin] = Magnitude;
+            for (int Bin = 0; Bin < BinCount; Bin++)
+            {
+                if (Bin >= 96) { Console.WriteLine($"{Bin},{SinProductAccumulators[Bin].NCLeft},{SinProductAccumulators[Bin].NCRight},{CosProductAccumulators[Bin].NCLeft},{CosProductAccumulators[Bin].NCRight}"); }
+                double Sin = (double)SinProductAccumulators[Bin].NCLeft * SinProductAccumulators[Bin].NCRight;
+                double Cos = (double)CosProductAccumulators[Bin].NCLeft * CosProductAccumulators[Bin].NCRight;
+                float Magnitude = (float)Math.Sqrt(Math.Max(0F, -(Sin + Cos)));
+                RawBinMagnitudes[Bin] = Magnitude;
+                //double SimpleSq = ((double)SinProductAccumulators[Bin].NCLeft * SinProductAccumulators[Bin].NCLeft) + ((double)CosProductAccumulators[Bin].NCLeft * CosProductAccumulators[Bin].NCLeft);
+                //RawBinMagnitudes[Bin] = (float)Math.Sqrt(Math.Max(0, SimpleSq)) / AudioBufferSizes[Bin];
+            }
         }
     }
 
-    private struct DualU16
+    public static DualI16 GetSine(DualU16 sineTablePosition, bool shiftForCos) // TODO: Determine if this added complexity is worth it
+    {
+        byte WholeLocationL = (byte)((sineTablePosition.NCLeft  >> 8) + (shiftForCos ? SINE_TABLE_90_OFFSET : 0));
+        byte WholeLocationR = (byte)((sineTablePosition.NCRight >> 8) + (shiftForCos ? SINE_TABLE_90_OFFSET : 0));
+        short ValueLowerL = SinWave[WholeLocationL];
+        short ValueLowerR = SinWave[WholeLocationR];
+        short ValueUpperL = SinWave[(byte)(WholeLocationL + 1)];
+        short ValueUpperR = SinWave[(byte)(WholeLocationR + 1)];
+        short FractionalPartL = (short)((((ValueUpperL - ValueLowerL) << 8) * (sineTablePosition.NCLeft  & 0xFF)) >> 16);
+        short FractionalPartR = (short)((((ValueUpperR - ValueLowerR) << 8) * (sineTablePosition.NCRight & 0xFF)) >> 16);
+        return new() { NCLeft = (short)(ValueLowerL + FractionalPartL), NCRight = (short)(ValueLowerR + FractionalPartR) };
+    }
+
+    public struct DualU16
     {
         public ushort NCLeft, NCRight;
         public override string ToString() => $"2xU16 L={this.NCLeft}, R={this.NCRight}";
     }
-    private struct DualI64
+    public struct DualI16
+    {
+        public short NCLeft, NCRight;
+        public override string ToString() => $"2xI16 L={this.NCLeft}, R={this.NCRight}";
+    }
+    public struct DualI64
     {
         public long NCLeft, NCRight;
         public override string ToString() => $"2xI32 L={this.NCLeft}, R={this.NCRight}";
@@ -286,6 +339,15 @@ public static class ShinNoteFinderDFT
     // These were determined through simulations and regressions, which can be found in the Simulations folder in the root of the ColorChord.NET repository.
     private static float BinWidthAtWindowSize(float windowSize) => 50222.5926786413F / (windowSize + 11.483904495504245F);
     private static float WindowSizeForBinWidth(float binWidth) => Math.Min(MAX_WINDOW_SIZE, Math.Max(MIN_WINDOW_SIZE, (50222.5926786413F / binWidth) - 11.483904495504245F));
+
+    private static ushort RoundedWindowSizeForBinWidth(float binWidth, float frequency, float sampleRate)
+    {
+        float IdealWindowSize = WindowSizeForBinWidth(binWidth);
+        float PeriodInSamples = sampleRate / frequency;
+        float PeriodsInWindow = IdealWindowSize / PeriodInSamples;
+        return (ushort)MathF.Round(MathF.Round(PeriodsInWindow) * PeriodInSamples);
+    }
+
     private static float CalculateNoteFrequency(float octaveStart, uint binsPerOctave, uint binIndex) => octaveStart * GetNoteFrequencyMultiplier(binsPerOctave, binIndex);
     private static float GetNoteFrequencyMultiplier(uint binsPerOctave, uint binIndex) => MathF.Pow(2F, (float)binIndex / binsPerOctave);
 }
