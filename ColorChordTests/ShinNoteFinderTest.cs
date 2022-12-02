@@ -115,7 +115,7 @@ public class ShinNoteFinderTest
             float FreqHere = MinFreq + ((float)f / Steps * (MaxFreq - MinFreq)); // Linear, maybe make log later on?
             float Omega = FreqHere * MathF.Tau / ShinNoteFinderDFT.SampleRate;
 
-            short[] AudioData = new short[WindowSize + 10];
+            short[] AudioData = new short[WindowSize + 123];
             for (int s = 0; s < AudioData.Length; s++)
             {
                 float Sin = MathF.Sin(s * Omega);
