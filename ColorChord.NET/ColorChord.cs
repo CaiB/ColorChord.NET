@@ -5,15 +5,18 @@ using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.Config;
 using ColorChord.NET.Controllers;
 using ColorChord.NET.Extensions;
 using ColorChord.NET.NoteFinder;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Data;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Threading;
 using static ColorChord.NET.API.Config.ConfigNames;
 
@@ -36,8 +39,10 @@ namespace ColorChord.NET
         {
             for(int i = 0; i < args.Length; i++)
             {
-                if (args[i] == "config" && args.Length > i + 1) { ConfigFile = args[++i]; }
-                if (args[i] == "debug") { Log.EnableDebug = true; }
+                string ThisArg = args[i].ToLower();
+                if (ThisArg == "--config" && args.Length > i + 1) { ConfigFile = args[++i]; }
+                if (ThisArg == "--debug") { Log.EnableDebug = true; }
+                if (ThisArg == "--help") { WriteHelp(); Environment.Exit(0); }
             }
 
             if (!File.Exists(ConfigFile)) // No config file
@@ -49,6 +54,13 @@ namespace ColorChord.NET
             ExtensionHandler.InitExtensions();
             ReadConfig();
             ExtensionHandler.PostInitExtensions();
+        }
+
+        private static void WriteHelp()
+        {
+            Console.WriteLine("--config <file>: Specifies the config file that ColorChord.NET should read");
+            Console.WriteLine("--debug: Outputs additional debug information");
+            Console.WriteLine("--help: Outputs usage information (this)");
         }
 
         private static void WriteDefaultConfig()
@@ -76,8 +88,37 @@ namespace ColorChord.NET
         public static void ReadConfig()
         {
             JObject JSON;
-            using (StreamReader Reader = File.OpenText(ConfigFile)) { JSON = JObject.Parse(Reader.ReadToEnd()); }
-            Log.Info("Reading and applying configuration file \"" + ConfigFile + "\"...");
+            using (FileStream Reader = File.Open(ConfigFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                // Parse the config file to JSON
+                using (StreamReader StringReader = new(Reader, leaveOpen: true))
+                {
+                    JSON = JObject.Parse(StringReader.ReadToEnd());
+                    Log.Info("Reading and applying configuration file \"" + ConfigFile + "\"...");
+                }
+
+                // Check the MD5 of the config file against the default
+                Reader.Seek(0, SeekOrigin.Begin);
+                using (MD5 MD5 = MD5.Create())
+                {
+                    byte[] ConfigHash = MD5.ComputeHash(Reader);
+                    if (ConfigHash.Length != DefaultConfigInfo.DefaultConfigFileMD5.Length / 2) { Log.Warn("Failed to check if the config file is default due to hashes not matdching in length"); }
+                    else
+                    {
+                        bool IsEqual = true;
+                        for (int i = 0; i < ConfigHash.Length; i++)
+                        {
+                            byte DefaultHashHere = byte.Parse(DefaultConfigInfo.DefaultConfigFileMD5.AsSpan(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                            if (DefaultHashHere != ConfigHash[i])
+                            {
+                                IsEqual = false;
+                                break;
+                            }
+                        }
+                        if (IsEqual) { Log.Warn($"It appears you are using the default config file, located at \"{Reader.Name}\". Make any changes as needed."); }
+                    }
+                }
+            }
 
             // Note Finder
             NoteFinderCommon? NoteFinder = ReadAndApplyNoteFinder(JSON);
