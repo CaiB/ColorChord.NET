@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <OutputType>Exe</OutputType>
@@ -97,6 +97,6 @@
   </Target>
 
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-        <Exec Command="powershell -ExecutionPolicy Unrestricted -File &quot;$(SolutionDir)GenBuildInfo.ps1&quot; -ConfigHashFile &quot;$(ProjectDir)Config\DefaultConfigInfo.cs&quot; -ConfigFile &quot;$(ProjectDir)sample-config.json&quot;" />
+        <Exec Command="powershell -ExecutionPolicy Unrestricted -File &quot;$(ProjectDir)..\GenBuildInfo.ps1&quot; -ConfigHashFile &quot;$(ProjectDir)Config\DefaultConfigInfo.cs&quot; -ConfigFile &quot;$(ProjectDir)sample-config.json&quot;" />
 	</Target>
 </Project>
