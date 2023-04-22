@@ -42,7 +42,7 @@ namespace ColorChord.NET
                 string ThisArg = args[i].ToLower();
                 if (ThisArg == "--config" && args.Length > i + 1) { ConfigFile = args[++i]; }
                 if (ThisArg == "--debug") { Log.EnableDebug = true; }
-                if (ThisArg == "--help") { WriteHelp(); Environment.Exit(0); }
+                if (ThisArg == "--help" || ThisArg == "-h" || ThisArg == "-?" || ThisArg == "/h" || ThisArg == "/help" || ThisArg == "/?") { WriteHelp(); Environment.Exit(0); }
             }
 
             if (!File.Exists(ConfigFile)) // No config file

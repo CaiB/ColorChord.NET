@@ -8,10 +8,12 @@ try
 {
     [byte[]] $HashBytes = $HashObj.ComputeHash($FileStream);
     $HexBuilder = [System.Text.StringBuilder]::new($HashBytes.Length * 2);
-    foreach($b in $HashBytes) { $HexBuilder.AppendFormat("{0:X2}", $b); }
+    foreach($b in $HashBytes) { $HexBuilder.AppendFormat('{0:X2}', $b) | Out-Null }
     [string] $Hash = $HexBuilder.ToString();
 }
 finally { $FileStream.Dispose(); }
+
+Write-Host "Default config file MD5 is $Hash";
 
 $Class = 
 @"

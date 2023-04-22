@@ -96,7 +96,10 @@
     <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.so $(PublishDir)" />
   </Target>
 
-    <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+    <Target Name="PreBuild" BeforeTargets="CoreCompile">
         <Exec Command="powershell -ExecutionPolicy Unrestricted -File &quot;$(ProjectDir)..\GenBuildInfo.ps1&quot; -ConfigHashFile &quot;$(ProjectDir)Config\DefaultConfigInfo.cs&quot; -ConfigFile &quot;$(ProjectDir)sample-config.json&quot;" />
 	</Target>
+	<ItemGroup>
+		<Compile Include="$(ProjectDir)Config\DefaultConfigInfo.cs" />
+	</ItemGroup>
 </Project>
