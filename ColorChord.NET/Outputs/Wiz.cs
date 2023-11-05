@@ -54,7 +54,7 @@ public class Wiz : IOutput
         {
             string CommandJSON = $"{{\"id\":1,\"method\":\"setPilot\",\"params\":{{\"r\":{(byte)(Data[i] >> 16)},\"g\":{(byte)(Data[i] >> 8)},\"b\":{(byte)Data[i]},\"dimming\": 100}}}}";
             byte[] CommandData = Encoding.UTF8.GetBytes(CommandJSON);
-            this.UDP!.SendAsync(CommandData, CommandData.Length, new IPEndPoint(IPAddress.Parse(BulbIPs[i]), PORT_DISCOVERY)); // TODO: Don't parse the IP every time, this is hideously inefficient
+            this.UDP!.BeginSend(CommandData, CommandData.Length, new IPEndPoint(IPAddress.Parse(BulbIPs[i]), PORT_DISCOVERY), null, "Dispatch"); // TODO: Don't parse the IP every time, this is hideously inefficient
         }
     }
 
