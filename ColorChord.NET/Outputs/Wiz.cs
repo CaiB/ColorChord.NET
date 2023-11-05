@@ -42,11 +42,14 @@ public class Wiz : IOutput
         if (Source == null) { throw new Exception($"{GetType().Name} \"{name}\" could not find requested visualizer."); }
         this.Source = (IDiscrete1D)Source;
         Configurer.Configure(this, config);
+        Source.AttachOutput(this);
     }
 
     public void Dispatch()
     {
         if (!this.ReadyForDispatch) { return; }
+
+        Log.Info("Wiz sending");
 
         int SendCount = Math.Min(this.Source.GetCountDiscrete(), this.BulbIPs.Count);
         uint[] Data = this.Source.GetDataDiscrete();
