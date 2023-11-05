@@ -10,7 +10,7 @@ My port and enhancement of [cnlohr's ColorChord 2](https://github.com/cnlohr/col
 
 Uses [Vannatech/dorba's netcoreaudio](https://github.com/dorba/netcoreaudio) for WASAPI support.
 
-Somewhat different from cnlohr' version, I divided components into 5 categories:
+Somewhat different from cnlohr's version, I divided components into 5 categories:
 - Audio Sources: Pipes audio data from some location into the NoteFinder. (e.g. WASAPI Loopback)
 - Note Finder: Turns raw audio data into note information.
 - Visualizers: Takes note info from the NoteFinder, and turns it into a format that is outputtable via some method. (e.g. Linear)
