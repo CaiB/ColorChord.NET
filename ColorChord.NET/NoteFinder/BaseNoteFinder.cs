@@ -136,7 +136,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
 
     /// <summary> The frequency spectrum, folded to overlap into a single octave length. </summary>
     /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
-    private static readonly float[] OctaveBinValues = new float[BINS_PER_OCTAVE];
+    public static readonly float[] OctaveBinValues = new float[BINS_PER_OCTAVE];
 
     private static int CurrentNoteID = 1;
 

@@ -38,6 +38,7 @@
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough3Textured.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.vert" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\RadialPoles.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.frag" />
@@ -77,6 +78,7 @@
     <None Remove="Outputs\Display\Shaders\Passthrough3Textured.vert" />
     <None Remove="Outputs\Display\Shaders\Radar.frag" />
     <None Remove="Outputs\Display\Shaders\Radar.vert" />
+    <None Remove="Outputs\Display\Shaders\RadialPoles.frag" />
     <None Remove="Outputs\Display\Shaders\SmoothRadialBright.frag" />
     <None Remove="Outputs\Display\Shaders\tube3d.frag" />
     <None Remove="Outputs\Display\Shaders\tube3d.vert" />
