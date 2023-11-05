@@ -25,7 +25,7 @@ public class Wiz : IOutput
     public bool ListDevices { get; private set; }
 
     [ConfigStringList("BulbIPs")]
-    public List<string> BulbIPs { get; private set; }
+    public List<string> BulbIPs { get; private set; } // TODO: When making this controllable, ensure that re-parsing happens via ParseIPs().
 
     /// <summary> Where colour data is taken from. </summary>
     private readonly IDiscrete1D Source;
@@ -34,6 +34,7 @@ public class Wiz : IOutput
     private IPEndPoint BroadcastEndpoint = new(IPAddress.Broadcast, PORT_DISCOVERY);
     private bool Stopping = false;
     private bool ReadyForDispatch = false;
+    private List<IPEndPoint> BulbIPsParsed = new();
 
     public Wiz(string name, Dictionary<string, object> config)
     {
@@ -42,22 +43,27 @@ public class Wiz : IOutput
         if (Source == null) { throw new Exception($"{GetType().Name} \"{name}\" could not find requested visualizer."); }
         this.Source = (IDiscrete1D)Source;
         Configurer.Configure(this, config);
+        ParseIPs();
         Source.AttachOutput(this);
+    }
+
+    private void ParseIPs()
+    {
+        this.BulbIPsParsed.Clear();
+        foreach (string IP in this.BulbIPs) { this.BulbIPsParsed.Add(new(IPAddress.Parse(IP), PORT_DISCOVERY)); }
     }
 
     public void Dispatch()
     {
         if (!this.ReadyForDispatch) { return; }
 
-        Log.Info("Wiz sending");
-
-        int SendCount = Math.Min(this.Source.GetCountDiscrete(), this.BulbIPs.Count);
+        int SendCount = Math.Min(this.Source.GetCountDiscrete(), this.BulbIPsParsed.Count);
         uint[] Data = this.Source.GetDataDiscrete();
         for (int i = 0; i < SendCount; i++)
         {
             string CommandJSON = $"{{\"id\":1,\"method\":\"setPilot\",\"params\":{{\"r\":{(byte)(Data[i] >> 16)},\"g\":{(byte)(Data[i] >> 8)},\"b\":{(byte)Data[i]},\"dimming\": 100}}}}";
             byte[] CommandData = Encoding.UTF8.GetBytes(CommandJSON);
-            this.UDP!.BeginSend(CommandData, CommandData.Length, new IPEndPoint(IPAddress.Parse(BulbIPs[i]), PORT_DISCOVERY), null, "Dispatch"); // TODO: Don't parse the IP every time, this is hideously inefficient
+            this.UDP!.BeginSend(CommandData, CommandData.Length, this.BulbIPsParsed[i], null, "Dispatch");
         }
     }
 
@@ -65,20 +71,19 @@ public class Wiz : IOutput
     {
         this.UDP = new(PORT_DISCOVERY);
         if (this.ListDevices) { DoDiscovery(); }
-        if (this.BulbIPs.Count != 0)
+        if (this.BulbIPsParsed.Count != 0)
         {
             int SrcCount = this.Source.GetCountDiscrete();
-            if (this.BulbIPs.Count != SrcCount) { Log.Warn($"Wiz sender \"{this.Name}\" has {this.BulbIPs.Count} bulb(s) configured, but the visualizer is outputting {SrcCount} unit(s). It is recommended to change the visualizer settings to match."); }
+            if (this.BulbIPsParsed.Count != SrcCount) { Log.Warn($"Wiz sender \"{this.Name}\" has {this.BulbIPsParsed.Count} bulb(s) configured, but the visualizer is outputting {SrcCount} unit(s). It is recommended to change the visualizer settings to match."); }
             ReadyForDispatch = true;
 
-            int BulbCount = Math.Min(this.Source.GetCountDiscrete(), this.BulbIPs.Count);
+            int BulbCount = Math.Min(this.Source.GetCountDiscrete(), this.BulbIPsParsed.Count);
             ReadOnlySpan<byte> ENABLE_BULB = "{\"id\":1,\"method\":\"setState\",\"params\":{\"state\":true}}"u8;
             ReadOnlySpan<byte> DIM_BULB = "{\"id\":1,\"method\":\"setPilot\",\"params\":{\"r\":10,\"g\":10,\"b\":10,\"dimming\": 10}}"u8;
             for (int i = 0; i < BulbCount; i++)
             {
-                IPEndPoint Target = new(IPAddress.Parse(BulbIPs[i]), PORT_DISCOVERY);
-                this.UDP!.Send(ENABLE_BULB, Target);
-                this.UDP!.Send(DIM_BULB, Target);
+                this.UDP!.Send(ENABLE_BULB, this.BulbIPsParsed[i]);
+                this.UDP!.Send(DIM_BULB, this.BulbIPsParsed[i]);
             }
         }
         else { Log.Warn($"Wiz sender \"{this.Name}\" does not have any bulbs configured. Specify at least one IP address in config entry \"BulbIPs\"."); }
@@ -119,9 +124,8 @@ public class Wiz : IOutput
         this.ReadyForDispatch = false;
 
         // Turn off bulbs
-        int BulbCount = Math.Min(this.Source.GetCountDiscrete(), this.BulbIPs.Count);
         ReadOnlySpan<byte> DISABLE_BULB = "{\"id\":1,\"method\":\"setState\",\"params\":{\"state\":false}}"u8;
-        for (int i = 0; i < BulbCount; i++) { this.UDP!.Send(DISABLE_BULB, new(IPAddress.Parse(BulbIPs[i]), PORT_DISCOVERY)); }
+        foreach (IPEndPoint Bulb in this.BulbIPsParsed) { this.UDP!.Send(DISABLE_BULB, Bulb); }
 
         this.UDP?.Close();
     }
