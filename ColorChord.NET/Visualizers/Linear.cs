@@ -47,6 +47,7 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     [ConfigFloat("LightSiding", 0F, 100F, 1F)]
     public float LightSiding { get; set; }
 
+    /// <summary>Whether new notes should appear in semi-random locations (false), or all notes should always remain sorted by their colour (true).</summary>
     [Controllable("IsOrdered")]
     [ConfigBool("IsOrdered", false)]
     public bool IsOrdered { get; set; }
