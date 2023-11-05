@@ -67,3 +67,10 @@ public sealed class ConfigBoolAttribute : ConfigAttribute
         this.DefaultValue = defaultValue;
     }
 }
+
+/// <summary>Used to get a list of string values from the config.</summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public sealed class ConfigStringListAttribute : ConfigAttribute
+{
+    public ConfigStringListAttribute(string name) : base(name) { }
+}
