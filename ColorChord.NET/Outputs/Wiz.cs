@@ -67,6 +67,16 @@ public class Wiz : IOutput
             int SrcCount = this.Source.GetCountDiscrete();
             if (this.BulbIPs.Count != SrcCount) { Log.Warn($"Wiz sender \"{this.Name}\" has {this.BulbIPs.Count} bulb(s) configured, but the visualizer is outputting {SrcCount} unit(s). It is recommended to change the visualizer settings to match."); }
             ReadyForDispatch = true;
+
+            int BulbCount = Math.Min(this.Source.GetCountDiscrete(), this.BulbIPs.Count);
+            ReadOnlySpan<byte> ENABLE_BULB = "{\"id\":1,\"method\":\"setState\",\"params\":{\"state\":true}}"u8;
+            ReadOnlySpan<byte> DIM_BULB = "{\"id\":1,\"method\":\"setPilot\",\"params\":{\"r\":10,\"g\":10,\"b\":10,\"dimming\": 10}}"u8;
+            for (int i = 0; i < BulbCount; i++)
+            {
+                IPEndPoint Target = new(IPAddress.Parse(BulbIPs[i]), PORT_DISCOVERY);
+                this.UDP!.Send(ENABLE_BULB, Target);
+                this.UDP!.Send(DIM_BULB, Target);
+            }
         }
         else { Log.Warn($"Wiz sender \"{this.Name}\" does not have any bulbs configured. Specify at least one IP address in config entry \"BulbIPs\"."); }
     }
@@ -104,6 +114,12 @@ public class Wiz : IOutput
     {
         this.Stopping = true;
         this.ReadyForDispatch = false;
+
+        // Turn off bulbs
+        int BulbCount = Math.Min(this.Source.GetCountDiscrete(), this.BulbIPs.Count);
+        ReadOnlySpan<byte> DISABLE_BULB = "{\"id\":1,\"method\":\"setState\",\"params\":{\"state\":false}}"u8;
+        for (int i = 0; i < BulbCount; i++) { this.UDP!.Send(DISABLE_BULB, new(IPAddress.Parse(BulbIPs[i]), PORT_DISCOVERY)); }
+
         this.UDP?.Close();
     }
 }
