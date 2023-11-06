@@ -78,8 +78,8 @@ namespace ColorChord.NET.Outputs.Display
             this.LocationSizeMult2 = this.Shader.GetUniformLocation("SizeMult2");
             this.LocationTime = this.Shader.GetUniformLocation("Time");
             this.LocationOffset = this.Shader.GetUniformLocation("Offset");
-            GL.Uniform1(this.LocationSizeMult1, this.SizeMult1);
-            GL.Uniform1(this.LocationSizeMult2, this.SizeMult2);
+            GL.Uniform1(this.LocationSizeMult1, this.SizeMult1 * 0.001F);
+            GL.Uniform1(this.LocationSizeMult2, this.SizeMult2 * 0.001F);
             GL.Uniform1(this.LocationTime, 0F);
 
             GL.BindVertexArray(this.VertexArrayHandle);
@@ -151,13 +151,13 @@ namespace ColorChord.NET.Outputs.Display
         public void Render()
         {
             if (!this.SetupDone) { return; }
-            this.Time += this.TimeIncr;
+            this.Time += (this.TimeIncr * 0.001F);
             this.Shader!.Use();
             GL.BindVertexArray(this.VertexArrayHandle);
             GL.Uniform1(this.LocationStarts, 12, this.Starts);
             GL.Uniform1(this.LocationColours, 36, this.Colours);
             GL.Uniform1(this.LocationTime, this.Time);
-            GL.Uniform1(this.LocationSizeMult1, this.SizeMult1 / Math.Max(this.SizeBoost, 0.5F));
+            GL.Uniform1(this.LocationSizeMult1, this.SizeMult1 * 0.001F / Math.Max(this.SizeBoost, 0.5F));
             GL.Uniform1(this.LocationOffset, this.Offset);
             GL.DrawArrays(PrimitiveType.Triangles, 0, Geometry.Length / 2);
         }
