@@ -15,6 +15,15 @@ public class RadialPoles : IDisplayMode, IConfigurableAttr
 {
     private readonly DisplayOpenGL HostWindow;
 
+    [ConfigFloat("CenterSize", 0.0F, 1.0F, 0.2F)]
+    public float CenterSize; // TODO: Make these controllable
+
+    [ConfigFloat("ScaleFactor", 0.0F, 100.0F, 0.7F)]
+    public float ScaleFactor;
+
+    [ConfigFloat("ScaleExponent", 0.0F, 10.0F, 1.6F)]
+    public float ScaleExponent;
+
     private Shader? Shader;
 
     private float[] Geometry = new float[] // {[X,Y]} x 6
@@ -80,11 +89,11 @@ public class RadialPoles : IDisplayMode, IConfigurableAttr
         GL.Uniform1(this.LocationPoleCount, PoleCount);
         this.LocationIsConnected = this.Shader.GetUniformLocation("IsConnected");
         this.LocationScaleFactor = this.Shader.GetUniformLocation("ScaleFactor");
-        GL.Uniform1(this.LocationScaleFactor, 0.95F);
+        GL.Uniform1(this.LocationScaleFactor, this.ScaleFactor);
         this.LocationExponent = this.Shader.GetUniformLocation("Exponent");
-        GL.Uniform1(this.LocationExponent, 1.6F);
+        GL.Uniform1(this.LocationExponent, this.ScaleExponent);
         this.LocationCenterBlank = this.Shader.GetUniformLocation("CenterBlank");
-        GL.Uniform1(this.LocationCenterBlank, 0.2F);
+        GL.Uniform1(this.LocationCenterBlank, this.CenterSize);
         this.LocationWidthOverride = this.Shader.GetUniformLocation("WidthOverride");
         this.LocationAdvance = this.Shader.GetUniformLocation("Advance");
 
