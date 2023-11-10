@@ -1,12 +1,14 @@
-# ColorChord.NET
+[![ColorChord.NET](https://www.colorchord.net/ccnettext.gif)](https://www.colorchord.net/)
+
+**:warning: Photosensitivity Warning: This is a music visualizer tool, so the documentation, demos, and program have bright, coloured, potentially fast flashing lights.**
 
 ## See the [ColorChord.NET Website](https://www.colorchord.net) for documentation/install instructions.
 
+**[Click here for downloads](https://github.com/CaiB/ColorChord.NET/releases)**
+
+### Info
+
 My port and enhancement of [cnlohr's ColorChord 2](https://github.com/cnlohr/colorchord).
-
-**[You can find binary downloads here.](https://github.com/CaiB/ColorChord.NET/releases)**
-
-**:warning: Photosensitivity Warning: This is a music visualizer tool, so the documentation, demos, and program have bright, coloured, potentially fast flashing lights.**
 
 Uses [Vannatech/dorba's netcoreaudio](https://github.com/dorba/netcoreaudio) for WASAPI support.
 
