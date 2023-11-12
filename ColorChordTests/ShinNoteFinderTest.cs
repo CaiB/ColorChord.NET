@@ -105,7 +105,7 @@ public class ShinNoteFinderTest
     {
         float MinFreq = 880F;
         float MaxFreq = 1760F;
-        int Steps = 200;
+        int Steps = 400;
 
         string[] OutputLines = new string[Steps];
 
@@ -141,22 +141,25 @@ public class ShinNoteFinderTest
     [TestMethod]
     public void TestSinInterpolation()
     {
-        Random Random = new();
-        int TableLocation = Random.Next(256);
-        TableLocation = 18; // TODO: Remove this override
+        const float WAVE_LOCATION = 0.18F;
+        const float TEST_RANGE = 0.03F;
+        const int TEST_STEPS = 20;
         const short TABLE_AMPLITUDE = short.MaxValue / 2;
-        const short ALLOWED_ERROR = 2;
+        const float ALLOWED_ERROR = 2.0F; // %
 
-        for (int i = 0; i < 256; i++) // Test each step fraction
+
+        for (int i = 0; i < TEST_STEPS; i++)
         {
-            ShinNoteFinderDFT.DualU16 Position = new() { NCLeft = (ushort)((TableLocation << 8) | (byte)i), NCRight = (ushort)(TableLocation << 8) };
+            float WaveLocHere = WAVE_LOCATION - TEST_RANGE + (TEST_RANGE * 2 * ((float)i / TEST_STEPS)); // From (WAVE_LOCATION - TEST_RANGE) to (WAVE_LOCATION + TEST_RANGE)
+            ShinNoteFinderDFT.DualU16 Position = new() { NCLeft = (ushort)(WaveLocHere * 65535.0F), NCRight = (ushort)(WaveLocHere * 65535.0F) };
             ShinNoteFinderDFT.DualI16 LUTSine = ShinNoteFinderDFT.GetSine(Position, false);
 
-            float RealSine = TABLE_AMPLITUDE * MathF.Sin((TableLocation + (i / 256F)) * MathF.Tau / 256F);
+            float RealSine = TABLE_AMPLITUDE * MathF.Sin(WaveLocHere * MathF.Tau);
             short RealSineRounded = (short)MathF.Round(RealSine);
-            Assert.IsTrue(RealSineRounded - ALLOWED_ERROR < LUTSine.NCLeft, $"The interpolated LUT sine output {LUTSine.NCLeft} was too small compared to the expected value of {RealSine}");
-            Assert.IsTrue(RealSineRounded + ALLOWED_ERROR > LUTSine.NCLeft, $"The interpolated LUT sine output {LUTSine.NCLeft} was too large compared to the expected value of {RealSine}");
-            Console.WriteLine($"{TableLocation},{i},{(TableLocation + (i / 256F))},{LUTSine.NCLeft},{RealSineRounded}");
+            float Difference = 100F * (LUTSine.NCLeft - RealSineRounded) / RealSineRounded;
+            Console.WriteLine($"{i}:{WaveLocHere:F5},0x{Position.NCLeft:X4},{LUTSine.NCLeft},{RealSineRounded},{Difference:+0.00;-0.00;0.00}%");
+            Assert.IsTrue(Difference > -ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine.NCLeft} was too small compared to the expected value of {RealSine}");
+            Assert.IsTrue(Difference < ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine.NCLeft} was too large compared to the expected value of {RealSine}");
         }
     }
 }
