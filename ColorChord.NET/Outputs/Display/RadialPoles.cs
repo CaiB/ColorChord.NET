@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.API.Config;
+using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs.Display;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
@@ -121,7 +122,7 @@ public class RadialPoles : IDisplayMode, IConfigurableAttr
 
         // TODO: Set uniforms
 
-        float[] NoteData = BaseNoteFinder.OctaveBinValues;
+        float[] NoteData = NoteFinderCommon.OctaveBinValues;
         if (this.LastPoleCount != NoteData.Length) { GL.Uniform1(this.LocationPoleCount, NoteData.Length); }
         GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, NoteData.Length, 1, 0, PixelFormat.Red, PixelType.Float, NoteData);
         this.LastPoleCount = NoteData.Length;

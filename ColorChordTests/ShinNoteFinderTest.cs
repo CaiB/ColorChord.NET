@@ -109,7 +109,7 @@ public class ShinNoteFinderTest
 
         string[] OutputLines = new string[Steps];
 
-        int WindowSize = ShinNoteFinderDFT.MaxWindowSize;
+        int WindowSize = ShinNoteFinderDFT.MaxPresentWindowSize;
         for (int f = 0; f < Steps; f++)
         {
             float FreqHere = MinFreq + ((float)f / Steps * (MaxFreq - MinFreq)); // Linear, maybe make log later on?

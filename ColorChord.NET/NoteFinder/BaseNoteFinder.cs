@@ -134,10 +134,6 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
     private static readonly float[] RawBinFrequencies = new float[TOTAL_DFT_BINS];
 
-    /// <summary> The frequency spectrum, folded to overlap into a single octave length. </summary>
-    /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
-    public static readonly float[] OctaveBinValues = new float[BINS_PER_OCTAVE];
-
     private static int CurrentNoteID = 1;
 
     /// <summary> The individual note distributions (peaks) detected this cycle. </summary>
@@ -166,6 +162,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
         SetSampleRate(SampleRate); // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
         Notes = new Note[NOTE_QTY];
         PersistentNoteIDs = new int[NOTE_QTY];
+        OctaveBinValues = new float[BINS_PER_OCTAVE];
     }
 
     /// <summary> Updates the sample rate if the audio source has changed. Also recalculates bin frequencies to match. </summary>

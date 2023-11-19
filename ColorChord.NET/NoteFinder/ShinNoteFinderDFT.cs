@@ -33,7 +33,7 @@ public static class ShinNoteFinderDFT
     public static byte BinsPerOctave = 24;
 
     /// <summary> How long our sample window is. </summary>
-    public static ushort MaxWindowSize = 8192;
+    public static ushort MaxPresentWindowSize = 8192;
 
     /// <summary> The sample rate of the incoming audio signal, and our reference waveforms. </summary>
     public static uint SampleRate = 48000;
@@ -49,7 +49,7 @@ public static class ShinNoteFinderDFT
     private static float StartFrequencyOfTopOctave => StartFrequency * MathF.Pow(2, OctaveCount - 1);
 
     /// <summary> Where raw and resampled audio data is stored. </summary>
-    /// <remarks> Indexed by [Octave][Sample], size is [<see cref="OctaveCount"/>][<see cref="MaxWindowSize"/>] </remarks>
+    /// <remarks> Indexed by [Octave][Sample], size is [<see cref="OctaveCount"/>][<see cref="MaxPresentWindowSize"/>] </remarks>
     private static short[][] AudioBuffer;
 
     /// <summary> How large the audio buffer should be treated as being, for each bin. </summary>
@@ -131,7 +131,7 @@ public static class ShinNoteFinderDFT
 
             AudioBufferSubHeads[Bin] = (ushort)(WrappedBinIndex == 0 ? 0 : (1 - ThisBufferSize + MaxAudioBufferSize) % MaxAudioBufferSize);
         }
-        MaxWindowSize = MaxAudioBufferSize;
+        MaxPresentWindowSize = MaxAudioBufferSize;
 
         // Operations that occur on only one octave's worth of bins
         for (uint Bin = 0; Bin < BinsPerOctave; Bin++)
@@ -161,12 +161,20 @@ public static class ShinNoteFinderDFT
         Reconfigure();
     }
 
-    public static void AddAudioData(short[] newData)
+    public static void AddAudioData(ReadOnlySpan<short> newData)
     {
         // TODO: This handles the top octave only
         for (int i = 0; i < newData.Length; i++)
         {
             AddAudioDataToOctave(newData[i], OctaveCount - 1);
+        }
+    }
+
+    public static void AddAudioData(ReadOnlySpan<float> newData) // TODO: Consider removing support for float audio data?
+    {
+        for (int i = 0; i < newData.Length; i++)
+        {
+            AddAudioDataToOctave((short)(newData[i] * short.MaxValue), OctaveCount - 1);
         }
     }
 
@@ -178,37 +186,27 @@ public static class ShinNoteFinderDFT
         for (int Bin = 0; Bin < BinsPerOctave; Bin++)
         {
             int FullBinIndex = OctaveBinOffset + Bin;
-            ushort SubHeadBefore = AudioBufferSubHeads[FullBinIndex];
 
             // Find where we are in the sine table
-            //if (SubHeadBefore == 0) { SinTableLocationSub[Bin] = new(); }
             DualU16 SinTableLoc = SinTableLocationSub[Bin];
             DualI16 SinValue = GetSine(SinTableLoc, false);
             DualI16 CosValue = GetSine(SinTableLoc, true);
-            //byte SinTableLocNCL = (byte)(SinTableLoc.NCLeft >> 8);
-            //byte SinTableLocNCR = (byte)(SinTableLoc.NCRight >> 8);
-
-            //if (Bin == 0 && AudioBufferSubHeads[FullBinIndex] == 0) { Console.WriteLine("Subtracting at 0, pos: " + SinTableLoc); }
 
             // Multiply the outgoing sample by the correct sine sample
             short OldBufferData = AudioBuffer[octave][AudioBufferSubHeads[FullBinIndex]];
-            //int OldSinProductNCL = SinWave[SinTableLocNCL] * OldBufferData;
-            //int OldSinProductNCR = SinWave[SinTableLocNCR] * OldBufferData;
-            //int OldCosProductNCL = SinWave[(byte)(SinTableLocNCL + SINE_TABLE_90_OFFSET)] * OldBufferData;
-            //int OldCosProductNCR = SinWave[(byte)(SinTableLocNCR + SINE_TABLE_90_OFFSET)] * OldBufferData;
             int OldSinProductNCL = SinValue.NCLeft * OldBufferData;
             int OldSinProductNCR = SinValue.NCRight * OldBufferData;
             int OldCosProductNCL = CosValue.NCLeft * OldBufferData;
             int OldCosProductNCR = CosValue.NCRight * OldBufferData;
 
             // Remove the product from the accumulators
-            SinProductAccumulators[FullBinIndex].NCLeft -= OldSinProductNCL;
+            SinProductAccumulators[FullBinIndex].NCLeft  -= OldSinProductNCL;
             SinProductAccumulators[FullBinIndex].NCRight -= OldSinProductNCR;
-            CosProductAccumulators[FullBinIndex].NCLeft -= OldCosProductNCL;
+            CosProductAccumulators[FullBinIndex].NCLeft  -= OldCosProductNCL;
             CosProductAccumulators[FullBinIndex].NCRight -= OldCosProductNCR;
 
             // Advance the buffer and sine table locations
-            AudioBufferSubHeads[FullBinIndex] = (ushort)((AudioBufferSubHeads[FullBinIndex] + 1) % MaxWindowSize);
+            AudioBufferSubHeads[FullBinIndex] = (ushort)((AudioBufferSubHeads[FullBinIndex] + 1) % MaxPresentWindowSize);
 
             DualU16 SinTableStep = SinTableStepSize[Bin];
             SinTableLocationSub[Bin].NCLeft += SinTableStep.NCLeft;
@@ -219,8 +217,8 @@ public static class ShinNoteFinderDFT
 
         // Write new data
         ushort HeadBefore = AudioBufferAddHeads[octave];
-        AudioBuffer[octave][AudioBufferAddHeads[octave]] = newData;
-        AudioBufferAddHeads[octave] = (ushort)((AudioBufferAddHeads[octave] + 1) % MaxWindowSize);
+        AudioBuffer[octave][HeadBefore] = newData;
+        AudioBufferAddHeads[octave] = (ushort)((HeadBefore + 1) % MaxPresentWindowSize);
 
         // Add new data to accumulators
         for (int Bin = 0; Bin < BinsPerOctave; Bin++)
@@ -228,20 +226,11 @@ public static class ShinNoteFinderDFT
             int FullBinIndex = OctaveBinOffset + Bin;
 
             // Find where we are in the sine table
-            //if (HeadBefore == 0) { SinTableLocationAdd[Bin] = new(); }
             DualU16 SinTableLoc = SinTableLocationAdd[Bin];
             DualI16 SinValue = GetSine(SinTableLoc, false);
             DualI16 CosValue = GetSine(SinTableLoc, true);
-            //byte SinTableLocNCL = (byte)(SinTableLoc.NCLeft >> 8);
-            //byte SinTableLocNCR = (byte)(SinTableLoc.NCRight >> 8);
-
-            //if (Bin == 0 && HeadBefore == 0) { Console.WriteLine("### This Step is " + SinTableStepSize[Bin] + "\nAdding at 0, pos: " + SinTableLoc); }
 
             // Multiply the incoming sample by the correct sine sample
-            //int NewSinProductNCL = SinWave[SinTableLocNCL] * newData;
-            //int NewSinProductNCR = SinWave[SinTableLocNCR] * newData;
-            //int NewCosProductNCL = SinWave[(byte)(SinTableLocNCL + SINE_TABLE_90_OFFSET)] * newData;
-            //int NewCosProductNCR = SinWave[(byte)(SinTableLocNCR + SINE_TABLE_90_OFFSET)] * newData;
             int NewSinProductNCL = SinValue.NCLeft * newData;
             int NewSinProductNCR = SinValue.NCRight * newData;
             int NewCosProductNCL = CosValue.NCLeft * newData;
@@ -284,6 +273,8 @@ public static class ShinNoteFinderDFT
                 // Traditional DFT for debugging
                 //double SimpleSq = ((double)SinProductAccumulators[Bin].NCLeft * SinProductAccumulators[Bin].NCLeft) + ((double)CosProductAccumulators[Bin].NCLeft * CosProductAccumulators[Bin].NCLeft);
                 //RawBinMagnitudes[Bin] = (float)Math.Sqrt(Math.Max(0, SimpleSq)) / AudioBufferSizes[Bin];
+
+                ShinNoteFinder.OctaveBinValues[Bin % BinsPerOctave] = MathF.Sqrt(RawBinMagnitudes[Bin]) / 8000; // TODO: THIS ONLY WORKS FOR THE TOP OCTAVE
             }
         }
     }
@@ -317,17 +308,17 @@ public static class ShinNoteFinderDFT
     public struct DualU16
     {
         public ushort NCLeft, NCRight;
-        public override string ToString() => $"2xU16 L={this.NCLeft}, R={this.NCRight}";
+        public override readonly string ToString() => $"2xU16 L={this.NCLeft}, R={this.NCRight}";
     }
     public struct DualI16
     {
         public short NCLeft, NCRight;
-        public override string ToString() => $"2xI16 L={this.NCLeft}, R={this.NCRight}";
+        public override readonly string ToString() => $"2xI16 L={this.NCLeft}, R={this.NCRight}";
     }
     public struct DualI64
     {
         public long NCLeft, NCRight;
-        public override string ToString() => $"2xI32 L={this.NCLeft}, R={this.NCRight}";
+        public override readonly string ToString() => $"2xI32 L={this.NCLeft}, R={this.NCRight}";
     }
 
     // Everyone loves magic numbers :)
