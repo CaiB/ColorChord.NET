@@ -11,7 +11,7 @@ namespace ColorChord.NET.NoteFinder;
 public class ShinNoteFinder : NoteFinderCommon
 {
     private const int NOTE_QTY = 12;
-    private const int BINS_PER_OCTAVE = 24;
+    internal const int BINS_PER_OCTAVE = 24;
 
     private static uint SampleRate = 48000;
 
@@ -27,6 +27,7 @@ public class ShinNoteFinder : NoteFinderCommon
         Notes = new Note[NOTE_QTY];
         PersistentNoteIDs = new int[NOTE_QTY];
         OctaveBinValues = new float[BINS_PER_OCTAVE];
+        AllBinValues = new float[BINS_PER_OCTAVE * ShinNoteFinderDFT.OctaveCount];
     }
 
     public override int NoteCount => NOTE_QTY;

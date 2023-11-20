@@ -17,6 +17,9 @@ public abstract class NoteFinderCommon : IConfigurableAttr
     /// <summary> The speed (in ms between runs) at which the note finder needs to run, set by the fastest visualizer. </summary>
     public static uint ShortestPeriod { get; protected set; } = 100;
 
+    /// <summary> The frequency spectrum data, before folding into a single octave. </summary>
+    public static float[]? AllBinValues { get; protected set; }
+
     /// <summary> The frequency spectrum data, folded to overlap into a single octave length. </summary>
     public static float[]? OctaveBinValues { get; protected set; }
 
