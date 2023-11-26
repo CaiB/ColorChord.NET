@@ -30,6 +30,6 @@ void main()
 {
     int SectionHere = int(floor(TexCoord.x * BinCount));
     float HeightHere = pow(texture(Texture, vec2((SectionHere + 0.5) / BinCount, 0.5)).r, 3.0) * ScaleFactor;
-    vec3 Colour = AngleToRGB(float(SectionHere) / BINS_PER_OCATVE, 1);
+    vec3 Colour = AngleToRGB(mod(float(SectionHere) / BINS_PER_OCATVE, 1.0), 1);
     FragColor = vec4(step(abs(TexCoord.y), HeightHere) * Colour, 1.0);
 }
