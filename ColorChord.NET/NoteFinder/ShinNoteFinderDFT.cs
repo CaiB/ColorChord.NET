@@ -2,13 +2,14 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.Intrinsics;
+using System.Text;
 
 namespace ColorChord.NET.NoteFinder;
 
 /// <summary> My own note finder implementation. </summary>
 public static class ShinNoteFinderDFT
 {
-    private const int MIN_WINDOW_SIZE = 256;
+    private const int MIN_WINDOW_SIZE = 16;
     private const uint MAX_WINDOW_SIZE = 6144;
     private const uint USHORT_RANGE = ushort.MaxValue + 1;
 
@@ -38,7 +39,7 @@ public static class ShinNoteFinderDFT
     /// <summary> The sample rate of the incoming audio signal, and our reference waveforms. </summary>
     public static uint SampleRate = 48000;
 
-    public static float StartFrequency = 110F;
+    public static float StartFrequency = 55f;
 
     private static uint GlobalSampleCounter = 0;
 
@@ -128,7 +129,7 @@ public static class ShinNoteFinderDFT
             uint WrappedBinIndex = Bin % BinsPerOctave;
 
             float TopOctaveBinFreq = CalculateNoteFrequency(TopStart, BinsPerOctave, WrappedBinIndex);
-            float TopOctaveNextBinFreq = CalculateNoteFrequency(TopStart, BinsPerOctave, WrappedBinIndex + 1);
+            float TopOctaveNextBinFreq = CalculateNoteFrequency(TopStart, BinsPerOctave, WrappedBinIndex + 2);
             float IdealWindowSize = WindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq); // TODO: Add scale factor to shift this from no overlap to -3dB point
             uint ThisBufferSize = RoundedWindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq, TopOctaveBinFreq, SampleRate);
             //ushort ThisBufferSize = (ushort)Math.Ceiling(IdealWindowSize);
@@ -164,6 +165,19 @@ public static class ShinNoteFinderDFT
         for (int Octave = 0; Octave < OctaveCount; Octave++)
         {
             AudioBuffer[Octave] = new short[MaxAudioBufferSize];
+        }
+
+        Log.Debug(nameof(ShinNoteFinder) + " bin window lengths:");
+        for (int Octave = 0; Octave < OctaveCount; Octave++)
+        {
+            StringBuilder OctaveOutput = new();
+            OctaveOutput.Append($"{StartFrequency * Math.Pow(2, Octave):F0}Hz~: ");
+            for (uint Bin = 0; Bin < BinsPerOctave; Bin++)
+            {
+                OctaveOutput.Append(AudioBufferSizes[(Octave * BinsPerOctave) + Bin]);
+                OctaveOutput.Append(',');
+            }
+            Log.Debug(OctaveOutput.ToString());
         }
     }
 
@@ -299,7 +313,9 @@ public static class ShinNoteFinderDFT
                 //double SimpleSq = ((double)SinProductAccumulators[Bin].NCLeft * SinProductAccumulators[Bin].NCLeft) + ((double)CosProductAccumulators[Bin].NCLeft * CosProductAccumulators[Bin].NCLeft);
                 //RawBinMagnitudes[Bin] = (float)Math.Sqrt(Math.Max(0, SimpleSq)) / AudioBufferSizes[Bin];
 
-                ShinNoteFinder.OctaveBinValues[Bin % BinsPerOctave] += MathF.Sqrt(RawBinMagnitudes[Bin]) / (8000 * OctaveCount);
+                float OutBinVal = MathF.Sqrt(RawBinMagnitudes[Bin]) / 8000;
+                ShinNoteFinder.OctaveBinValues[Bin % BinsPerOctave] += OutBinVal / OctaveCount;
+                ShinNoteFinder.AllBinValues[Bin] = OutBinVal;
             }
         }
     }
