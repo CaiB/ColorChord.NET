@@ -12,6 +12,11 @@ namespace ColorChordTests;
 [TestClass]
 public class ShinNoteFinderTest
 {
+    public ShinNoteFinderTest()
+    {
+        ShinNoteFinder a = new("Testing NoteFinder", new());
+    }
+
     [TestMethod]
     public void TestInit()
     {
@@ -109,7 +114,7 @@ public class ShinNoteFinderTest
 
         string[] OutputLines = new string[Steps];
 
-        int WindowSize = ShinNoteFinderDFT.MaxPresentWindowSize;
+        uint WindowSize = ShinNoteFinderDFT.MaxPresentWindowSize;
         for (int f = 0; f < Steps; f++)
         {
             float FreqHere = MinFreq + ((float)f / Steps * (MaxFreq - MinFreq)); // Linear, maybe make log later on?
