@@ -219,7 +219,7 @@ public class ShinNoteFinderTest
         const float WAVE_LOCATION = 0.18F;
         const float TEST_RANGE = 0.03F;
         const int TEST_STEPS = 20;
-        const short TABLE_AMPLITUDE = short.MaxValue / 2;
+        const short TABLE_AMPLITUDE = 4095;
         const float ALLOWED_ERROR = 2.0F; // %
 
         ShinNoteFinderDFT.GetSine(new() { NCLeft = 9725, NCRight = 52764 }, false);
@@ -245,7 +245,7 @@ public class ShinNoteFinderTest
         const float WAVE_LOCATION = 0.58F;
         const float TEST_RANGE = 0.60F;
         const int TEST_STEPS = 200;
-        const short TABLE_AMPLITUDE = short.MaxValue / 2;
+        const short TABLE_AMPLITUDE = 4095;
         const float ALLOWED_ERROR = 2.0F; // %
 
         ShinNoteFinderDFT.GetSine(new() { NCLeft = 9725, NCRight = 52764 }, false);
@@ -262,6 +262,28 @@ public class ShinNoteFinderTest
             Console.WriteLine($"{i}:{WaveLocHere:F5},0x{Position[0]:X4},{LUTSine},{RealSineRounded},{Difference:+0.00;-0.00;0.00}%");
             Assert.IsTrue(Difference > -ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine} was too small compared to the expected value of {RealSine}");
             Assert.IsTrue(Difference < ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine} was too large compared to the expected value of {RealSine}");
+        }
+    }
+
+    [TestMethod]
+    public void TestVecWrapRead()
+    {
+        ushort BUFFER_LEN = 48;
+        short[] DataBuffer = new short[BUFFER_LEN + 16];
+        for (int i = 0; i < DataBuffer.Length; i++) { DataBuffer[i] = (short)((i >= BUFFER_LEN) ? -i : i); }
+
+        MethodInfo TargetMethod = typeof(ShinNoteFinderDFT).GetMethod("ReadArrayWraparound", BindingFlags.Static | BindingFlags.NonPublic);
+
+        for (int h = BUFFER_LEN - 15; h < BUFFER_LEN; h++)
+        {
+            short[] Expected = new short[16];
+            for (int i = 0; i < Expected.Length; i++) { Expected[i] = DataBuffer[(h + i) % BUFFER_LEN]; }
+
+            object? ResultObj = TargetMethod.Invoke(null, new object[] { DataBuffer, BUFFER_LEN, (uint)h });
+            Vector256<short> Result = ResultObj as Vector256<short>? ?? throw new Exception("Could not get result from method call");
+
+            for (int i = 0; i < Expected.Length; i++) { Assert.AreEqual(Expected[i], Result[i], $"Item at index {i} was not as expected when reading from {h}."); }
+            Console.WriteLine($"Finished checking offset {h} ({BUFFER_LEN - h} from back + {16 - (BUFFER_LEN - h)} from front)");
         }
     }
 
