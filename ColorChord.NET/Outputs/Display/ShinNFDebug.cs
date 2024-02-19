@@ -30,7 +30,7 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
     private int VertexBufferHandle, VertexArrayHandle, TextureHandle;
     private int LocationBinCount, LocationScaleFactor;
 
-    private float ScaleFactor = 3F;
+    private float ScaleFactor = 0.5F;
 
     /// <summary> Whether this output is ready to accept data and draw. </summary>
     private bool SetupDone = false;

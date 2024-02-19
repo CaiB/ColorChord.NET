@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using System.Runtime.Serialization;
 using System.Text;
 using ColorChord.NET.NoteFinder;
@@ -49,7 +51,7 @@ public class ShinNoteFinderTest
     [TestMethod]
     public void TestSineInputAndOutputEachStep()
     {
-        float Frequency = 1046.502F;
+        float Frequency = 622.2540F; // 1046.502F;
         float Omega = Frequency * MathF.Tau / ShinNoteFinderDFT.SampleRate;
         const int SAMPLE_COUNT = 16384;
 
@@ -72,6 +74,74 @@ public class ShinNoteFinderTest
         }
 
         File.WriteAllLines("ProgressiveOutputData.csv", Output);
+    }
+
+    [TestMethod]
+    public void TestSineInputAndOutputEachStep256()
+    {
+        float Frequency = 622.2540F; //1046.502F;
+        float Omega = Frequency * MathF.Tau / ShinNoteFinderDFT.SampleRate;
+        const int SAMPLE_COUNT = 16384;
+
+        string[] Output = new string[SAMPLE_COUNT / 16];
+
+        for (int s = 0; s < SAMPLE_COUNT / 16; s++)
+        {
+            short[] Samples = new short[16];
+            for (int t = 0; t < 16; t++)
+            {
+                float Sin = MathF.Sin(((s * 16) + t) * Omega);
+                short AudioData = (short)MathF.Round(200 * Sin);
+                Samples[t] = AudioData;
+            }
+            ShinNoteFinderDFT.AddAudioData(Samples, true);
+            ShinNoteFinderDFT.CalculateOutput(true);
+
+            StringBuilder Line = new();
+            for (int b = 96; b < 120; b++)
+            {
+                Line.Append(ShinNoteFinderDFT.RawBinMagnitudes[b]);
+                Line.Append(',');
+            }
+            Output[s] = Line.ToString();
+        }
+
+        File.WriteAllLines("ProgressiveOutputData256.csv", Output);
+    }
+
+    [TestMethod]
+    public void TestSineInputAndOutputEachStepSimultaneous()
+    {
+        float Frequency = 622.2540F; //1046.502F;
+        float Omega = Frequency * MathF.Tau / ShinNoteFinderDFT.SampleRate;
+        const int SAMPLE_COUNT = 16384;
+
+        string[] Output = new string[SAMPLE_COUNT / 16];
+
+        for (int s = 0; s < SAMPLE_COUNT / 16; s++)
+        {
+            short[] Samples = new short[16];
+            for (int t = 0; t < 16; t++)
+            {
+                float Sin = MathF.Sin(((s * 16) + t) * Omega);
+                short AudioData = (short)MathF.Round(200 * Sin);
+                Samples[t] = AudioData;
+                ShinNoteFinderDFT.AddAudioData(new short[] { AudioData }, false);
+            }
+            ShinNoteFinderDFT.AddAudioData(Samples, true);
+            ShinNoteFinderDFT.CalculateOutput(true);
+            ShinNoteFinderDFT.CalculateOutput(false);
+
+            /*StringBuilder Line = new();
+            for (int b = 96; b < 120; b++)
+            {
+                Line.Append(ShinNoteFinderDFT.RawBinMagnitudes[b]);
+                Line.Append(',');
+            }
+            Output[s] = Line.ToString();*/
+        }
+
+        File.WriteAllLines("ProgressiveOutputData256.csv", Output);
     }
 
     [TestMethod]
@@ -152,6 +222,7 @@ public class ShinNoteFinderTest
         const short TABLE_AMPLITUDE = short.MaxValue / 2;
         const float ALLOWED_ERROR = 2.0F; // %
 
+        ShinNoteFinderDFT.GetSine(new() { NCLeft = 9725, NCRight = 52764 }, false);
 
         for (int i = 0; i < TEST_STEPS; i++)
         {
@@ -167,4 +238,31 @@ public class ShinNoteFinderTest
             Assert.IsTrue(Difference < ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine.NCLeft} was too large compared to the expected value of {RealSine}");
         }
     }
+
+    [TestMethod]
+    public void TestVecSine()
+    {
+        const float WAVE_LOCATION = 0.58F;
+        const float TEST_RANGE = 0.60F;
+        const int TEST_STEPS = 200;
+        const short TABLE_AMPLITUDE = short.MaxValue / 2;
+        const float ALLOWED_ERROR = 2.0F; // %
+
+        ShinNoteFinderDFT.GetSine(new() { NCLeft = 9725, NCRight = 52764 }, false);
+
+        for (int i = 0; i < TEST_STEPS; i++)
+        {
+            float WaveLocHere = WAVE_LOCATION - TEST_RANGE + (TEST_RANGE * 2 * ((float)i / TEST_STEPS)); // From (WAVE_LOCATION - TEST_RANGE) to (WAVE_LOCATION + TEST_RANGE)
+            Vector256<ushort> Position = Vector256.Create((ushort)(WaveLocHere * 65535.0F)); // yes this is dumb but meh
+            short LUTSine = ShinNoteFinderDFT.GetSine256(Position)[0];
+
+            float RealSine = TABLE_AMPLITUDE * MathF.Sin(WaveLocHere * MathF.Tau);
+            short RealSineRounded = (short)MathF.Round(RealSine);
+            float Difference = (Math.Abs(LUTSine - RealSineRounded) > 5) ? 100F * (LUTSine - RealSineRounded) / RealSineRounded : 0;
+            Console.WriteLine($"{i}:{WaveLocHere:F5},0x{Position[0]:X4},{LUTSine},{RealSineRounded},{Difference:+0.00;-0.00;0.00}%");
+            Assert.IsTrue(Difference > -ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine} was too small compared to the expected value of {RealSine}");
+            Assert.IsTrue(Difference < ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine} was too large compared to the expected value of {RealSine}");
+        }
+    }
+
 }
