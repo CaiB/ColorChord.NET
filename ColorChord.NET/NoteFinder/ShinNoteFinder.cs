@@ -52,13 +52,10 @@ public class ShinNoteFinder : NoteFinderCommon
 
     private static void DoProcessing()
     {
-        Stopwatch Timer = new();
         while (KeepGoing)
         {
-            Timer.Restart();
-            if (LastDataAdd.AddSeconds(5) > DateTime.UtcNow) { Cycle(); }
-            int WaitTime = (int)(ShortestPeriod - Timer.ElapsedMilliseconds);
-            if (WaitTime > 0) { Thread.Sleep(WaitTime); }
+            InputDataEvent.WaitOne();
+            Cycle();
         }
     }
 
@@ -83,6 +80,7 @@ public class ShinNoteFinder : NoteFinderCommon
     public override void Stop()
     {
         KeepGoing = false;
+        InputDataEvent.Set();
         ProcessThread?.Join();
     }
 }

@@ -259,6 +259,7 @@ namespace ColorChord.NET.Sources
                     }
                     //BaseNoteFinder.DFT.AddSamples(ReadyData);
                     NoteFinderCommon.LastDataAdd = DateTime.UtcNow;
+                    NoteFinderCommon.InputDataEvent.Set();
                 }
 
                 ErrorCode = this.CaptureClient.ReleaseBuffer(FramesAvailable);

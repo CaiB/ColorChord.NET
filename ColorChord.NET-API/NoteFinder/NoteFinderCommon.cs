@@ -29,6 +29,8 @@ public abstract class NoteFinderCommon : IConfigurableAttr
     /// <summary> Used to keep track of locations of notes that stay between frames in <see cref="Notes"/>, as that array's order may change. </summary>
     public static int[] PersistentNoteIDs = Array.Empty<int>();
 
+    public static AutoResetEvent InputDataEvent = new(false);
+
     /// <summary>How many note slots there are. Usually not all are in use.</summary>
     public abstract int NoteCount { get; } // TODO: Finish docs
 
