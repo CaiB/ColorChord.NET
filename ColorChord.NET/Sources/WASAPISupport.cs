@@ -53,6 +53,39 @@ namespace Vannatech.CoreAudio.Enumerations
         MatchFormat = 2,
         Ambisonics = 4
     }
+
+    [Flags]
+    public enum SpeakerLocations : uint
+    {
+        FrontLeft = 0x1,
+        FrontRight = 0x2,
+        FrontCenter = 0x4,
+        LowFrequency = 0x8,
+        BackLeft = 0x10,
+        BackRight = 0x20,
+        FrontLeftOfCenter = 0x40,
+        FrontRightOfCenter = 0x80,
+        BackCenter = 0x100,
+        SideLeft = 0x200,
+        SideRight = 0x400,
+        TopCenter = 0x800,
+        TopFrontLeft = 0x1000,
+        TopFrontCenter = 0x2000,
+        TopFrontRight = 0x4000,
+        TopBackLeft = 0x8000,
+        TopBackCenter = 0x10000,
+        TopBackRight = 0x20000,
+
+        Stereo = FrontLeft | FrontRight,
+        FivePointOne = FrontLeft | FrontRight | FrontCenter | BackLeft | BackRight | LowFrequency
+    }
+
+    public enum WaveFormatBasic : ushort
+    {
+        PCM = 1,
+        Float = 3,
+        Extensible = 0xFFFE
+    }
 }
 
 namespace Vannatech.CoreAudio.Structures
@@ -74,37 +107,109 @@ namespace Vannatech.CoreAudio.Structures
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct WAVEFORMATEX
+    public struct WaveFormatEx
     {
         /// <summary>Waveform-audio format type.</summary>
-        public UInt16 wFormatTag;
+        public WaveFormatBasic Format;
 
         /// <summary>Number of audio channels.</summary>
-        public UInt16 nChannels;
+        public ushort ChannelCount;
 
         /// <summary>Sample rate, in samples per second (hertz).</summary>
-        public UInt32 nSamplesPerSec;
+        public uint SampleRate;
 
         /// <summary>The required average data-transfer rate, in bytes per second, for the format tag.</summary>
-        public UInt32 nAvgBytesPerSec;
+        public uint AvgBytesPerSec;
 
         /// <summary>Block alignment, in bytes.</summary>
-        public UInt16 nBlockAlign;
+        public ushort BlockAlignment;
 
         /// <summary>Bits per sample for the format type.</summary>
-        public UInt16 wBitsPerSample;
+        public ushort BitsPerSample;
 
         /// <summary>Size, in bytes, of extra format information appended to the end of the structure.</summary>
-        public UInt16 cbSize;
+        public ushort AppendedSize;
+
+        public static WaveFormatEx? FromPointer(IntPtr pointer) => (WaveFormatEx?)Marshal.PtrToStructure(pointer, typeof(WaveFormatEx));
+        public readonly bool IsExtensible() => this.Format == WaveFormatBasic.Extensible;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct WaveFormatExtensible
+    {
+        /// <summary>Waveform-audio format type. Should always be <see cref="WaveFormatBasic.Extensible"/>.</summary>
+        public WaveFormatBasic Format;
+
+        /// <summary>Number of audio channels.</summary>
+        public ushort ChannelCount;
+
+        /// <summary>Sample rate, in samples per second (hertz).</summary>
+        public uint SampleRate;
+
+        /// <summary>The required average data-transfer rate, in bytes per second, for the format tag.</summary>
+        public uint AvgBytesPerSec;
+
+        /// <summary>Block alignment, in bytes.</summary>
+        public ushort BlockAlignment;
+
+        /// <summary>Bits per sample for the format type.</summary>
+        public ushort BitsPerSample;
+
+        /// <summary>Size, in bytes, of extra format information appended to the end of the structure.</summary>
+        public ushort AppendedSize;
+
+        /// <summary>Information about samples. For uncompressed formats, the real bit count in a sample (without required padding). For compressed formats, number of samples per block.</summary>
+        public ushort Samples;
+
+        /// <summary>Bitmask specifying which speaker channels are present in the stream.</summary>
+        public SpeakerLocations ChannelMask;
+
+        /// <summary>The format of the data. See <see cref="WaveFormatGUIDs"/> for common ones.</summary>
+        public Guid SubFormat;
+
+        public WaveFormatExtensible() { Format = WaveFormatBasic.Extensible; AppendedSize = 22; }
+
+        public static WaveFormatExtensible? FromPointer(IntPtr pointer, out WaveFormatEx? fallback)
+        {
+            fallback = WaveFormatEx.FromPointer(pointer);
+            if (fallback is not WaveFormatEx Base) { return null; }
+            if (!Base.IsExtensible()) { return null; }
+            if (Base.AppendedSize < 22) { return null; } // Not large enough to contain Extensible
+            return (WaveFormatExtensible?)Marshal.PtrToStructure(pointer, typeof(WaveFormatExtensible));
+        }
+        public readonly bool IsExtensible() => this.Format == WaveFormatBasic.Extensible;
     }
 }
 
 namespace Vannatech.CoreAudio.Constants
 {
-    public class AdditionalComIIDs
+    public static class AdditionalComIIDs
     {
         public const string IAudioClient2IID = "726778CD-F60A-4eda-82DE-E47610CD78AA";
         public const string IAudioClient3IID = "7ED4EE07-8E67-4CD4-8C1A-2B7A5987AD42";
+    }
+
+    public static class WaveFormatGUIDs // TODO: init these with the component integers instead of strings
+    {
+        public static readonly Guid PCM   = new("00000001-0000-0010-8000-00aa00389b71");
+        public static readonly Guid Float = new("00000003-0000-0010-8000-00aa00389b71");
+        public static readonly Guid DRM   = new("00000009-0000-0010-8000-00aa00389b71");
+        public static readonly Guid ALaw  = new("00000006-0000-0010-8000-00aa00389b71");
+        public static readonly Guid MuLaw = new("00000007-0000-0010-8000-00aa00389b71");
+        public static readonly Guid ADPCM = new("00000002-0000-0010-8000-00aa00389b71");
+        public static readonly Guid MPEG  = new("00000050-0000-0010-8000-00aa00389b71");
+
+        public static string GetNameFromGUID(Guid format)
+        {
+            if (format == PCM)   { return "PCM"; }
+            if (format == Float) { return "Float"; }
+            if (format == DRM)   { return "DRM"; }
+            if (format == ALaw)  { return "ALaw"; }
+            if (format == MuLaw) { return "MuLaw"; }
+            if (format == ADPCM) { return "ADPCM"; }
+            if (format == MPEG)  { return "MPEG"; }
+            return $"Unknown ({format})";
+        }
     }
 }
 

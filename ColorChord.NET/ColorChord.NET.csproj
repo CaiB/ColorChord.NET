@@ -89,7 +89,7 @@
     <ProjectReference Include="..\ColorChord.NET-API\ColorChord.NET-API.csproj" />
   </ItemGroup>
   <PropertyGroup>
-
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
   <Target Name="CopyOver" AfterTargets="Build">
     <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.dll $(TargetDir)" />

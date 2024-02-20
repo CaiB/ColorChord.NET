@@ -196,16 +196,16 @@ public static class ShinNoteFinderDFT
         Reconfigure();
     }
 
-    public static void AddAudioData(Span<short> newData, bool useVec = USE_VECTORIZED)
+    public static void AddAudioData(short[] newData, uint dataLength, bool useVec = USE_VECTORIZED)
     {
         if (Avx2.IsSupported && useVec)
         {
-            Debug.Assert((newData.Length & 15) == 0, $"Length of new audio data ({newData.Length}) is not a multiple of 16. This makes SIMD mode sad :(");
-            for (int i = 0; i < newData.Length; i += 16) { AddAudioData256(Vector256.LoadUnsafe(ref newData[i])); }
+            Debug.Assert((dataLength & 15) == 0, $"Length of new audio data ({dataLength}) is not a multiple of 16. This makes SIMD mode sad :(");
+            for (int i = 0; i < dataLength; i += 16) { AddAudioData256(Vector256.LoadUnsafe(ref newData[i])); }
         }
         else
         {
-            for (int i = 0; i < newData.Length; i++)
+            for (int i = 0; i < dataLength; i++)
             {
                 AddAudioDataToOctave(newData[i]);
                 //GlobalSampleCounter++;

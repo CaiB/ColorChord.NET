@@ -4,6 +4,7 @@ using ColorChord.NET.API.Sources;
 using ColorChord.NET.Config;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace ColorChord.NET.Sources
@@ -60,20 +61,26 @@ namespace ColorChord.NET.Sources
         /// <param name="output"> Place data here to send to the system. </param>
         /// <param name="framesIn"> How many frames of input data are available. </param>
         /// <param name="framesOut"> How many frames of space are available for output data. </param>
-        private void SoundCallback(IntPtr driver, IntPtr input, IntPtr output, int framesIn, int framesOut)
+        private unsafe void SoundCallback(IntPtr driver, IntPtr input, IntPtr output, int framesIn, int framesOut)
         {
             if (input == IntPtr.Zero) { return; } // Needed for ALSA?
             //Console.WriteLine("CALLBACK with " + framesIn + " frames of input, and " + framesOut + " frames of space for output.");
-            short[] AudioData = new short[framesIn * this.Driver.ChannelCountRecord];
-            Marshal.Copy(input, AudioData, 0, (framesIn * this.Driver.ChannelCountRecord));
+
+            short[]? ProcessedData = NoteFinderCommon.GetBufferToWrite(out int NFBufferRef);
+            if (ProcessedData == null) { return; }
+            Debug.Assert(framesIn <= ProcessedData.Length); // TODO: Handle this properly (if needed?)
+
+            short Channels = this.Driver.ChannelCountRecord;
             for (int Frame = 0; Frame < framesIn; Frame++)
             {
-                float Sample = 0;
-                for (ushort Chn = 0; Chn < this.Driver.ChannelCountRecord; Chn++) { Sample += AudioData[(Frame * this.Driver.ChannelCountRecord) + Chn] / 32767.5F; }
-                NoteFinderCommon.AudioBuffer[NoteFinderCommon.AudioBufferHeadWrite] = Sample / this.Driver.ChannelCountRecord; // Use the average of the channels.
-                NoteFinderCommon.AudioBufferHeadWrite = (NoteFinderCommon.AudioBufferHeadWrite + 1) % NoteFinderCommon.AudioBuffer.Length;
+                int Sample = 0;
+                for (ushort Chn = 0; Chn < Channels; Chn++) { Sample += BitConverter.ToInt16(new ReadOnlySpan<byte>(((short*)input) + ((Frame * Channels) + Chn), sizeof(short))); } // TODO: Double-check if this is correct
+                ProcessedData[Frame] = (short)Sample;
             }
+
+            NoteFinderCommon.FinishBufferWrite(NFBufferRef, (uint)framesIn);
             NoteFinderCommon.LastDataAdd = DateTime.UtcNow;
+            NoteFinderCommon.InputDataEvent.Set();
         }
 
         [StructLayout(LayoutKind.Sequential)]

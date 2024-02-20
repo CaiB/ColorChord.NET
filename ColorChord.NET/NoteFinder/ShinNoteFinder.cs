@@ -28,6 +28,7 @@ public class ShinNoteFinder : NoteFinderCommon
         PersistentNoteIDs = new int[NOTE_QTY];
         OctaveBinValues = new float[BINS_PER_OCTAVE];
         AllBinValues = new float[BINS_PER_OCTAVE * ShinNoteFinderDFT.OctaveCount];
+        SetupBuffers();
     }
 
     public override int NoteCount => NOTE_QTY;
@@ -61,18 +62,15 @@ public class ShinNoteFinder : NoteFinderCommon
 
     private static void Cycle()
     {
-        int WriteHead = AudioBufferHeadWrite;
-        if (WriteHead > AudioBufferHeadRead) // Single chunk
+        do
         {
-            ShinNoteFinderDFT.AddAudioData(AudioBuffer.AsSpan(AudioBufferHeadRead, WriteHead - AudioBufferHeadRead));
-            AudioBufferHeadRead = WriteHead;
-        }
-        else if (WriteHead < AudioBufferHeadRead) // Write has wrapped around, process both sections
-        {
-            ShinNoteFinderDFT.AddAudioData(AudioBuffer.AsSpan(AudioBufferHeadRead));
-            ShinNoteFinderDFT.AddAudioData(AudioBuffer.AsSpan(0, WriteHead));
-            AudioBufferHeadRead = WriteHead;
-        }
+            short[]? Buffer = GetBufferToRead(out int NFBufferRef, out uint BufferSize, out bool MoreBuffers);
+            if (Buffer == null) { break; }
+            ShinNoteFinderDFT.AddAudioData(Buffer, BufferSize);
+
+            FinishBufferRead(NFBufferRef);
+            if (!MoreBuffers) { break; }
+        } while (true);
 
         ShinNoteFinderDFT.CalculateOutput();
     }

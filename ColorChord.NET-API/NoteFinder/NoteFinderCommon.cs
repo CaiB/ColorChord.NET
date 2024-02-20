@@ -1,5 +1,5 @@
 ﻿using ColorChord.NET.API.Config;
-using System;
+using System.Diagnostics;
 
 namespace ColorChord.NET.API.NoteFinder;
 
@@ -43,6 +43,97 @@ public abstract class NoteFinderCommon : IConfigurableAttr
     public abstract void AdjustOutputSpeed(uint period);
 
     public abstract void SetSampleRate(int sampleRate);
+
+
+    private const int INTERMEDIATE_BUFFER_COUNT = 4;
+    private static readonly IntermediateBuffer[] IntermediateBuffers = new IntermediateBuffer[INTERMEDIATE_BUFFER_COUNT];
+    private static readonly int[] IntermediateBuffersToRead = new int[INTERMEDIATE_BUFFER_COUNT];
+
+    public static void SetupBuffers()
+    {
+        for (int i = 0; i < INTERMEDIATE_BUFFER_COUNT; i++)
+        {
+            IntermediateBuffers[i] = new();
+            IntermediateBuffersToRead[i] = -1;
+        }
+    }
+
+    public static short[]? GetBufferToWrite(out int bufferRef)
+    {
+        for (int i = 0; i < INTERMEDIATE_BUFFER_COUNT; i++)
+        {
+            if (!IntermediateBuffers[i].ReadMode)
+            {
+                bufferRef = i;
+                return IntermediateBuffers[i].Buffer;
+            }
+        }
+        Log.Warn("NoteFinder is unable to keep up with incoming audio, some data will be dropped.");
+        bufferRef = -1;
+        return null;
+    }
+
+    public static short[]? GetBufferToRead(out int bufferRef, out uint amountToRead, out bool moreAvailable)
+    {
+        lock (IntermediateBuffersToRead)
+        {
+            if (IntermediateBuffersToRead[0] == -1 || !IntermediateBuffers[IntermediateBuffersToRead[0]].ReadMode)
+            {
+                bufferRef = -1;
+                amountToRead = 0;
+                moreAvailable = false;
+                return null;
+            }
+            else
+            {
+                bufferRef = IntermediateBuffersToRead[0];
+                amountToRead = IntermediateBuffers[bufferRef].DataCount;
+                moreAvailable = IntermediateBuffersToRead[1] != -1 && IntermediateBuffers[IntermediateBuffersToRead[1]].ReadMode;
+                for (int i = 0; i < INTERMEDIATE_BUFFER_COUNT - 1; i++) { IntermediateBuffersToRead[i] = IntermediateBuffersToRead[i + 1]; } // Shift everything left 1
+                IntermediateBuffersToRead[INTERMEDIATE_BUFFER_COUNT - 1] = -1;
+                return IntermediateBuffers[bufferRef].Buffer;
+            }
+        }
+    }
+
+    public static void FinishBufferRead(int bufferRef)
+    {
+        IntermediateBuffers[bufferRef].ReadMode = false;
+    }
+
+    public static void FinishBufferWrite(int bufferRef, uint amountWritten)
+    {
+        IntermediateBuffers[bufferRef].DataCount = amountWritten;
+        IntermediateBuffers[bufferRef].ReadMode = true;
+        lock (IntermediateBuffersToRead)
+        {
+            for (int i = 0; i < INTERMEDIATE_BUFFER_COUNT; i++)
+            {
+                if (IntermediateBuffersToRead[i] == -1)
+                {
+                    IntermediateBuffersToRead[i] = bufferRef;
+                    return;
+                }
+            }
+            Debug.Fail("Have buffer but nowhere to put it???");
+            Log.Error("NoteFinder buffer system encountered something that should be impossible.");
+        }
+    }
+}
+
+internal struct IntermediateBuffer
+{
+    private const int BUFFER_SIZE = 4096; // Even at 20ms 192KHz, audio data is 3840 elements long
+    public short[] Buffer;
+    public uint DataCount;
+    public bool ReadMode;
+
+    public IntermediateBuffer()
+    {
+        this.Buffer = new short[BUFFER_SIZE];
+        this.DataCount = 0;
+        this.ReadMode = false;
+    }
 }
 
 /// <summary> A note after filtering, stabilization and denoising of the raw DFT output. </summary>
