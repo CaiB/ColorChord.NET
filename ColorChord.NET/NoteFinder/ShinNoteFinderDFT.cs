@@ -12,6 +12,7 @@ namespace ColorChord.NET.NoteFinder;
 /// <summary> My own note finder implementation. </summary>
 public static class ShinNoteFinderDFT
 {
+    private const bool ENABLE_SIMD = true;
     private const int MIN_WINDOW_SIZE = 16;
     private const uint MAX_WINDOW_SIZE = 6144;
     private const uint USHORT_RANGE = ushort.MaxValue + 1;
@@ -56,18 +57,18 @@ public static class ShinNoteFinderDFT
 
     /// <summary> Where raw and resampled audio data is stored. </summary>
     /// <remarks> Size is [<see cref="MaxPresentWindowSize"/>] </remarks>
-    private static short[] AudioBuffer;//, AudioBuffer256;
+    private static short[] AudioBuffer;
 
     /// <summary> How large the audio buffer should be treated as being, for each bin. </summary>
     /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
     private static uint[] AudioBufferSizes;
 
     /// <summary> Up to where in the audio buffer data has been added to. </summary>
-    private static ushort AudioBufferAddHead;//, AudioBufferAddHead256;
+    private static ushort AudioBufferAddHead;
 
     /// <summary> Where in the audio buffer each bin has removed data up to. </summary>
     /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
-    private static ushort[] AudioBufferSubHeads;//, AudioBufferSubHeads256;
+    private static ushort[] AudioBufferSubHeads;
 
     /// <summary> How far forward in the sine table this bin should step with every added sample, such that one full sine wave (wrap back to 0) occurs after the number of steps corresponding to the bin frequency. Format is fixed-point 5b+11b. </summary>
     /// <remarks> Indexed by [Bin], size is [<see cref="BinsPerOctave"/>] </remarks>
@@ -79,7 +80,7 @@ public static class ShinNoteFinderDFT
     /// Since addition and subtraction of data does not happen in-phase, both are tracked separately.
     /// </summary>
     /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
-    private static DualU16[] SinTableLocationAdd, SinTableLocationSub;//, SinTableLocationAdd256, SinTableLocationSub256;
+    private static DualU16[] SinTableLocationAdd, SinTableLocationSub;
 
     /// <summary> Stores the current value of the sin*sample and cos*sample product sums, for each bin. </summary>
     /// <remarks> Used instead of <see cref="ProductAccumulators"/> on non-AVX2 systems. Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
@@ -115,10 +116,10 @@ public static class ShinNoteFinderDFT
     public static void Reconfigure()
     {
         AudioBufferSizes = new uint[BinCount];
-        AudioBufferSubHeads = new ushort[BinCount]; //AudioBufferSubHeads256 = new ushort[BinCount];
+        AudioBufferSubHeads = new ushort[BinCount];
         SinTableStepSize = new DualU16[BinCount];
-        SinTableLocationAdd = new DualU16[BinCount]; //SinTableLocationAdd256 = new DualU16[BinCount];
-        SinTableLocationSub = new DualU16[BinCount]; //SinTableLocationSub256 = new DualU16[BinCount];
+        SinTableLocationAdd = new DualU16[BinCount];
+        SinTableLocationSub = new DualU16[BinCount];
         SinProductAccumulators = new DualI64[BinCount];
         CosProductAccumulators = new DualI64[BinCount];
         ProductAccumulators = new Vector256<long>[BinCount];
@@ -142,8 +143,6 @@ public static class ShinNoteFinderDFT
 
             MaxAudioBufferSize = Math.Max(MaxAudioBufferSize, ThisBufferSize);
 
-            
-
             //uint BinInTop = StartOfTopOctave + Bin;
             float NCOffset = SampleRate / (AudioBufferSizes[Bin] * 2F);
             float StepSizeNCL = USHORT_RANGE * (CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin) - NCOffset) / SampleRate;
@@ -159,20 +158,17 @@ public static class ShinNoteFinderDFT
         RealAudioBufferSize += 16; // Add padding so SIMD operations can safely run off the end of the buffer, but this space will remain unused (not reported in MaxPresentWindowSize)
 
         AudioBuffer = new short[RealAudioBufferSize];
-        //AudioBuffer256 = new short[RealAudioBufferSize];
 
         for (uint Bin = 0; Bin < BinCount; Bin++)
         {
             AudioBufferSubHeads[Bin] = (ushort)((1 - AudioBufferSizes[Bin] + MaxAudioBufferSize) % MaxAudioBufferSize);
-            //AudioBufferSubHeads256[Bin] = AudioBufferSubHeads[Bin];
         }
 
         // All bins again, but needs data calculated after the previous one
-        for (uint Bin = 0; Bin < BinCount; Bin++) // TODO: See if this can be optimized, low priority since it should happen very rarely
+        for (uint Bin = 0; Bin < BinCount; Bin++)
         {
             SinTableLocationSub[Bin].NCLeft  = (ushort)(-(SinTableStepSize[Bin].NCLeft  * (AudioBufferSizes[Bin] - 1)));
             SinTableLocationSub[Bin].NCRight = (ushort)(-(SinTableStepSize[Bin].NCRight * (AudioBufferSizes[Bin] - 1)));
-            //SinTableLocationSub256[Bin] = SinTableLocationSub[Bin];
         }
 
         Log.Debug(nameof(ShinNoteFinder) + " bin window lengths:");
@@ -196,67 +192,28 @@ public static class ShinNoteFinderDFT
         Reconfigure();
     }
 
-    public static void AddAudioData(short[] newData, uint dataLength, bool useVec = USE_VECTORIZED)
-    {
-        if (Avx2.IsSupported && useVec)
-        {
-            Debug.Assert((dataLength & 15) == 0, $"Length of new audio data ({dataLength}) is not a multiple of 16. This makes SIMD mode sad :(");
-            for (int i = 0; i < dataLength; i += 16) { AddAudioData256(Vector256.LoadUnsafe(ref newData[i])); }
-        }
-        else
-        {
-            for (int i = 0; i < dataLength; i++)
-            {
-                AddAudioDataToOctave(newData[i]);
-                //GlobalSampleCounter++;
-            }
-        }
-    }
-
-    public static void AddAudioData(Span<float> newData, bool useVec = USE_VECTORIZED) // TODO: Consider removing support for float audio data?
+    public static void AddAudioData(short[] newData, uint dataLength)
     {
         TEMP_CycleCount++;
         TEMP_Timer.Restart();
-        if (Avx2.IsSupported && useVec)
+
+        uint Index = 0;
+        if (Avx2.IsSupported && ENABLE_SIMD)
         {
-            int i = 0;
-            for (i = 0; i < newData.Length && (i + 16) <= newData.Length; i += 16) // TODO: Ugh get rid of all this garbage by just taking in shorts instead
+            uint EndIndex = dataLength - 16;
+            while (Index <= EndIndex)
             {
-                Vector256<float> NewDataF32A = Vector256.LoadUnsafe(ref newData[i]); // TODO: Figure out how to use ReadOnlySpan with this instead
-                Vector256<int> NewDataI32A = Avx.ConvertToVector256Int32(Avx.Multiply(NewDataF32A, Vector256.Create(short.MaxValue - 0.5F)));
-                Vector256<float> NewDataF32B = Vector256.LoadUnsafe(ref newData[i + 8]);
-                Vector256<int> NewDataI32B = Avx.ConvertToVector256Int32(Avx.Multiply(NewDataF32B, Vector256.Create(short.MaxValue - 0.5F)));
-                Vector256<int> NewDataI32SwappedA = Avx2.Permute2x128(NewDataI32A, NewDataI32B, 0b00100000);
-                Vector256<int> NewDataI32SwappedB = Avx2.Permute2x128(NewDataI32A, NewDataI32B, 0b00110001);
-                Vector256<short> NewData = Avx2.PackSignedSaturate(NewDataI32SwappedA, NewDataI32SwappedB);
-                AddAudioData256(NewData);
-            }
-            if (i != newData.Length)
-            {
-                Console.WriteLine($"Awkward {newData.Length - i} items left (did {i} of {newData.Length} vectorized)");
-                for (; i < newData.Length; i++)
-                {
-                    short NewData = (short)(newData[i] * short.MaxValue);
-                    AddAudioDataToOctave(NewData);
-                }
+                AddAudioData256(Vector256.LoadUnsafe(ref newData[Index]));
+                Index += 16;
             }
         }
-        else
-        {
-            for (int i = 0; i < newData.Length; i++)
-            {
-                short NewData = (short)(newData[i] * short.MaxValue);
-                AddAudioDataToOctave(NewData);
-                //GlobalSampleCounter++;
-            }
-        }
+        while (Index < dataLength) { AddAudioData(newData[Index++]); }
+
         TEMP_Timer.Stop();
-        float TicksPerSample = (float)TEMP_Timer.ElapsedTicks / newData.Length;
+        float TicksPerSample = (float)TEMP_Timer.ElapsedTicks / dataLength;
         if (newData.Length > 10) { TEMP_DFTTime = (0.97F * TEMP_DFTTime) + (0.03F * TicksPerSample); }
         if (TEMP_CycleCount % 50 == 0) { Console.WriteLine($"Currently taking {TEMP_DFTTime * 100} ns per audio sample."); }
     }
-
-    private const bool USE_VECTORIZED = true;
 
     private static void AddAudioData256(Vector256<short> newData)
     {
@@ -386,7 +343,7 @@ public static class ShinNoteFinderDFT
         return Result;
     }
 
-    private static void AddAudioDataToOctave(short newData)
+    private static void AddAudioData(short newData)
     {
         ushort BinCount = ShinNoteFinderDFT.BinCount;
         // Subtract old data from accumulators
@@ -468,7 +425,7 @@ public static class ShinNoteFinderDFT
     private static double[] SmoothedSin = new double[500];
     private static double[] SmoothedCos = new double[500];
 
-    public static void CalculateOutput(bool useVec = USE_VECTORIZED)
+    public static void CalculateOutput()
     {
         for (int Bin = 0; Bin < BinsPerOctave; Bin++) { ShinNoteFinder.OctaveBinValues[Bin] = 0; }
 
@@ -481,7 +438,7 @@ public static class ShinNoteFinderDFT
                 // TODO: MegaJanky. Just for developing the SIMD version, will fix later
                 (double Sin, double Cos) RotatedL;
                 (double Sin, double Cos) RotatedR;
-                if (Avx2.IsSupported && useVec)
+                if (Avx2.IsSupported && ENABLE_SIMD)
                 {
                     DualU16 CurrentSineLocations = SinTableLocationAdd[Bin];
                     float AngleL = CurrentSineLocations.NCLeft * MathF.Tau / USHORT_RANGE;
@@ -536,7 +493,7 @@ public static class ShinNoteFinderDFT
         return new(NewX, NewY);
     }
 
-    public static DualI16 GetSine(DualU16 sineTablePosition, bool shiftForCos) // TODO: SIMD this >:D
+    public static DualI16 GetSine(DualU16 sineTablePosition, bool shiftForCos)
     {
         byte WholeLocationL = (byte)(((sineTablePosition.NCLeft  >> 11) + (shiftForCos ? SINE_TABLE_90_OFFSET : 0)) & 0b11111);
         byte WholeLocationR = (byte)(((sineTablePosition.NCRight >> 11) + (shiftForCos ? SINE_TABLE_90_OFFSET : 0)) & 0b11111);
@@ -555,20 +512,6 @@ public static class ShinNoteFinderDFT
         short FractionalPartL = (short)((((ValueUpperL - ValueLowerL) << 8) * ((sineTablePosition.NCLeft  >> 3) & 0xFF)) >> 16); // Wasting the bottom 3 bits of position precision, but otherwise multiplication may overflow int
         short FractionalPartR = (short)((((ValueUpperR - ValueLowerR) << 8) * ((sineTablePosition.NCRight >> 3) & 0xFF)) >> 16);
         return new() { NCLeft = (short)(ValueLowerL + FractionalPartL), NCRight = (short)(ValueLowerR + FractionalPartR) };
-    }
-
-    public static short GetSine1(ushort sineTablePosition)
-    {
-        byte WholeLocation = (byte)((sineTablePosition >> 11) & 0b11111);
-        int LocationModifier = (WholeLocation << 27) >> 31;
-        short ValueLower = (short)((SinWave[WholeLocation & 0b1111] ^ LocationModifier) - LocationModifier); // The sine vector only contains the positive half of the wave, indices in the range 16...31 are just 0...15 but negative value
-
-        byte AdjacentLocation = (byte)((WholeLocation + 1) & 0b11111);
-        int AdjLocationModifier = (AdjacentLocation << 27) >> 31;
-        short ValueUpper = (short)((SinWave[AdjacentLocation & 0b1111] ^ AdjLocationModifier) - AdjLocationModifier);
-
-        short FractionalPart = (short)((((ValueUpper - ValueLower) << 8) * ((sineTablePosition >> 3) & 0xFF)) >> 16); // Wasting the bottom 3 bits of position precision, but otherwise multiplication may overflow int
-        return (short)(ValueLower + FractionalPart);
     }
 
     /// <summary> Calculates the sine value of 16 positions </summary>
