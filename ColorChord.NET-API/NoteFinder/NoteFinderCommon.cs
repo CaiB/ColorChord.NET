@@ -103,6 +103,7 @@ public abstract class NoteFinderCommon : IConfigurableAttr
 
     public static void FinishBufferWrite(int bufferRef, uint amountWritten)
     {
+        if (bufferRef == -1) { return; }
         IntermediateBuffers[bufferRef].DataCount = amountWritten;
         IntermediateBuffers[bufferRef].ReadMode = true;
         lock (IntermediateBuffersToRead)

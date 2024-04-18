@@ -2,13 +2,13 @@
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Sources;
+using ColorChord.NET.API.Utility;
 using ColorChord.NET.Config;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 using System.Threading;
 using Vannatech.CoreAudio.Constants;
 using Vannatech.CoreAudio.Enumerations;
@@ -298,10 +298,8 @@ public class WASAPILoopback : IAudioSource
             else if (FramesAvailable > 0)
             {
                 int BytesPerSample = this.MixFormat.BitsPerSample / 8;
-                int BytesPerFrame = this.BytesPerFrame;
                 int ChannelCount = this.MixFormat.ChannelCount;
                 bool IsPCM = this.FormatIsPCM;
-                IntPtr EndOfBuffer = (nint)(DataBuffer + (FramesAvailable * BytesPerFrame));
 
                 short[]? ProcessedData = NoteFinderCommon.GetBufferToWrite(out int NFBufferRef);
                 if (ProcessedData == null) { goto SkipBuffer; }
@@ -309,50 +307,7 @@ public class WASAPILoopback : IAudioSource
 
                 if (IsPCM && BytesPerSample == 2)
                 {
-                    if (ChannelCount == 1) { Marshal.Copy(DataBuffer, ProcessedData, 0, (int)FramesAvailable); }
-                    else if (ChannelCount == 2)
-                    {
-                        const int BYTES_PER_FRAME = 4;
-                        uint Frame = 0;
-                        if (Avx2.IsSupported)
-                        {
-                            Vector256<short> Ones = Vector256.Create((short)1);
-                            uint EndFrame = FramesAvailable - 16;
-                            while (Frame <= EndFrame)
-                            {
-                                Debug.Assert(DataBuffer + ((Frame + 8) * BYTES_PER_FRAME) < EndOfBuffer, "Reading out of bounds");
-                                Vector256<short> StereoData1 = Vector256.Load((short*)(DataBuffer + (Frame * BYTES_PER_FRAME)));
-                                Vector256<short> StereoData2 = Vector256.Load((short*)(DataBuffer + ((Frame + 8) * BYTES_PER_FRAME)));
-                                Vector256<int> Lower = Avx2.ShiftRightArithmetic(Avx2.MultiplyAddAdjacent(StereoData1, Ones), 1);
-                                Vector256<int> Upper = Avx2.ShiftRightArithmetic(Avx2.MultiplyAddAdjacent(StereoData2, Ones), 1);
-                                Vector256<short> Combined = Avx2.PackSignedSaturate(Lower, Upper);
-                                Vector256<short> Output = Avx2.Permute4x64(Combined.AsInt64(), 0b11011000).AsInt16();
-                                Output.StoreUnsafe(ref ProcessedData[Frame]);
-                                Frame += 16;
-                            }
-                        }
-                        while (Frame < FramesAvailable)
-                        {
-                            Debug.Assert((nint)(((short*)DataBuffer) + (Frame * 2) + 1) < EndOfBuffer, "Reading out of bounds");
-                            short Left  = *(((short*)DataBuffer) + (Frame * 2));
-                            short Right = *(((short*)DataBuffer) + (Frame * 2) + 1);
-                            ProcessedData[Frame] = (short)((Left + Right) / 2);
-                            Frame++;
-                        }
-                    }
-                    else
-                    {
-                        for (uint Frame = 0; Frame < FramesAvailable; Frame++)
-                        {
-                            int Mixdown = 0;
-                            for (int Channel = 0; Channel < ChannelCount; Channel++)
-                            {
-                                Debug.Assert((nint)(((short*)DataBuffer) + (Frame * ChannelCount) + Channel) < EndOfBuffer, "Reading out of bounds");
-                                Mixdown += *(((short*)DataBuffer) + (Frame * ChannelCount) + Channel);
-                            }
-                            ProcessedData[Frame] = (short)(Mixdown / ChannelCount);
-                        }
-                    }
+                    SampleConverter.ShortToShortMixdown(ChannelCount, FramesAvailable, (byte*)DataBuffer, ProcessedData);
 
                     // TODO: Legacy buffer support, remove when this is no longer required
                     for (int i = 0; i < ProcessedData.Length; i++)
@@ -361,89 +316,11 @@ public class WASAPILoopback : IAudioSource
                         NoteFinderCommon.AudioBufferHeadWrite = (NoteFinderCommon.AudioBufferHeadWrite + 1) % NoteFinderCommon.AudioBuffer.Length;
                     }
                 }
-                else if (!IsPCM && BytesPerSample == 4) // TODO: add support for float
+                else if (!IsPCM && BytesPerSample == 4)
                 {
-                    const float SCALE_FACTOR = 32767F;
-                    const float SCALE_FACTOR_2CH = 16383F;
-                    if (ChannelCount == 1)
-                    {
-                        const int BYTES_PER_FRAME = 4;
-                        uint Frame = 0;
-                        if (Avx2.IsSupported)
-                        {
-                            Vector256<float> Scale = Vector256.Create(SCALE_FACTOR);
-                            uint EndFrame = FramesAvailable - 16;
-                            while (Frame <= EndFrame)
-                            {
-                                Debug.Assert(DataBuffer + (Frame * BYTES_PER_FRAME) < EndOfBuffer, "Reading out of bounds");
-                                Vector256<float> MonoData1 = Vector256.Load((float*)(DataBuffer + (Frame * BYTES_PER_FRAME)));
-                                Vector256<float> MonoData2 = Vector256.Load((float*)(DataBuffer + ((Frame + 8) * BYTES_PER_FRAME)));
-                                Vector256<int> IntMonoData1 = Avx.ConvertToVector256Int32(Avx.Multiply(MonoData1, Scale));
-                                Vector256<int> IntMonoData2 = Avx.ConvertToVector256Int32(Avx.Multiply(MonoData2, Scale));
-                                Vector256<short> PackedData = Avx2.PackSignedSaturate(IntMonoData1, IntMonoData2);
-                                Vector256<short> Output = Avx2.Permute4x64(PackedData.AsInt64(), 0b11011000).AsInt16();
-                                Output.StoreUnsafe(ref ProcessedData[Frame]);
-                                Frame += 16;
-                            }
-                        }
-                        while (Frame < FramesAvailable)
-                        {
-                            Debug.Assert((nint)(((float*)DataBuffer) + Frame) < EndOfBuffer, "Reading out of bounds");
-                            float Sample = *(((float*)DataBuffer) + Frame);
-                            ProcessedData[Frame] = (short)(Sample * SCALE_FACTOR);
-                            Frame++;
-                        }
-                    }
-                    else if (ChannelCount == 2)
-                    {
-                        const int BYTES_PER_FRAME = 8;
-                        uint Frame = 0;
-                        if (Avx2.IsSupported)
-                        {
-                            Vector256<float> Scale = Vector256.Create(SCALE_FACTOR_2CH);
-                            uint EndFrame = FramesAvailable - 16;
-                            while (Frame <= EndFrame)
-                            {
-                                Debug.Assert((nint)(DataBuffer + ((Frame + 12) * BYTES_PER_FRAME)) < EndOfBuffer, "Reading out of bounds");
-                                Vector256<float> StereoData1 = Vector256.Load((float*)(DataBuffer + (Frame * BYTES_PER_FRAME)));
-                                Vector256<float> StereoData2 = Vector256.Load((float*)(DataBuffer + ((Frame + 4) * BYTES_PER_FRAME)));
-                                Vector256<float> StereoData3 = Vector256.Load((float*)(DataBuffer + ((Frame + 8) * BYTES_PER_FRAME)));
-                                Vector256<float> StereoData4 = Vector256.Load((float*)(DataBuffer + ((Frame + 12) * BYTES_PER_FRAME)));
-                                Vector256<float> MonoData1 = Avx2.Permute4x64(Avx.HorizontalAdd(StereoData1, StereoData2).AsInt64(), 0b11011000).AsSingle();
-                                Vector256<float> MonoData2 = Avx2.Permute4x64(Avx.HorizontalAdd(StereoData3, StereoData4).AsInt64(), 0b11011000).AsSingle(); // TODO: There's probably a way to do this without 3 permutes
-                                Vector256<int> IntMonoData1 = Avx.ConvertToVector256Int32(Avx.Multiply(MonoData1, Scale));
-                                Vector256<int> IntMonoData2 = Avx.ConvertToVector256Int32(Avx.Multiply(MonoData2, Scale));
-                                Vector256<short> PackedData = Avx2.PackSignedSaturate(IntMonoData1, IntMonoData2);
-                                Vector256<short> Output = Avx2.Permute4x64(PackedData.AsInt64(), 0b11011000).AsInt16();
-                                Output.StoreUnsafe(ref ProcessedData[Frame]);
-                                Frame += 16;
-                            }
-                        }
-                        while (Frame < FramesAvailable)
-                        {
-                            Debug.Assert((nint)(((float*)DataBuffer) + (Frame * 2) + 1) < EndOfBuffer, "Reading out of bounds");
-                            float Left  = *(((float*)DataBuffer) + (Frame * 2));
-                            float Right = *(((float*)DataBuffer) + (Frame * 2) + 1);
-                            ProcessedData[Frame] = (short)((Left + Right) * SCALE_FACTOR_2CH);
-                            Frame++;
-                        }
-                    }
-                    else
-                    {
-                        float ScaleFactor = SCALE_FACTOR / ChannelCount;
-                        for (uint Frame = 0; Frame < FramesAvailable; Frame++)
-                        {
-                            float Mixdown = 0F;
-                            for (int Channel = 0; Channel < ChannelCount; Channel++)
-                            {
-                                Debug.Assert((nint)(((float*)DataBuffer) + (Frame * ChannelCount) + Channel) < EndOfBuffer, "Reading out of bounds");
-                                Mixdown += *(((float*)DataBuffer) + (Frame * ChannelCount) + Channel);
-                            }
-                            ProcessedData[Frame] = (short)(Mixdown * ScaleFactor);
-                        }
-                    }
+                    SampleConverter.FloatToShortMixdown(ChannelCount, FramesAvailable, (byte*)DataBuffer, ProcessedData);
                 }
-                else { } // TODO: Tell the user we can't handle this format
+                else { throw new InvalidDataException($"{nameof(WASAPILoopback)} cannot handle the current audio format: Channels={ChannelCount} BytesPerSample={BytesPerSample} IsPCM={IsPCM}"); }
 
                 NoteFinderCommon.FinishBufferWrite(NFBufferRef, FramesAvailable);
                 NoteFinderCommon.LastDataAdd = DateTime.UtcNow;
