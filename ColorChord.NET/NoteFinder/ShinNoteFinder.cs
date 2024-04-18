@@ -13,8 +13,6 @@ public class ShinNoteFinder : NoteFinderCommon
     private const int NOTE_QTY = 12;
     internal const int BINS_PER_OCTAVE = 24;
 
-    private static uint SampleRate = 48000;
-
     private static Thread? ProcessThread;
     private static bool KeepGoing = true;
 
@@ -23,7 +21,6 @@ public class ShinNoteFinder : NoteFinderCommon
     public ShinNoteFinder(string name, Dictionary<string, object> config)
     {
         Configurer.Configure(this, config);
-        ShinNoteFinderDFT.UpdateSampleRate(SampleRate);
         Notes = new Note[NOTE_QTY];
         PersistentNoteIDs = new int[NOTE_QTY];
         OctaveBinValues = new float[BINS_PER_OCTAVE];
@@ -39,10 +36,7 @@ public class ShinNoteFinder : NoteFinderCommon
         if (period < ShortestPeriod) { ShortestPeriod = period; }
     }
 
-    public override void SetSampleRate(int sampleRate)
-    {
-        
-    }
+    public override void SetSampleRate(int sampleRate) => ShinNoteFinderDFT.UpdateSampleRate((uint)sampleRate);
 
     public override void Start()
     {

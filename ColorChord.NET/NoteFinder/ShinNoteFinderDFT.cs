@@ -13,8 +13,9 @@ namespace ColorChord.NET.NoteFinder;
 public static class ShinNoteFinderDFT
 {
     private const bool ENABLE_SIMD = true;
-    private const int MIN_WINDOW_SIZE = 16;
-    private const uint MAX_WINDOW_SIZE = 6144;
+    private const int MIN_WINDOW_SIZE = 16; // At 48KHz, scaled for other sample rates
+    private const uint MAX_WINDOW_SIZE = 6144; // At 48KHz, scaled for other sample rates
+    private const uint ABSOLUTE_MAX_WINDOW_SIZE = 32768; // Cannot exceed this regardless of sample rate, otherwise the accumulators may overflow
     private const uint USHORT_RANGE = ushort.MaxValue + 1;
 
     private const ushort SINE_TABLE_90_OFFSET = 8;
@@ -90,13 +91,27 @@ public static class ShinNoteFinderDFT
     /// <remarks> Used instead of (<see cref="SinProductAccumulators"/>, <see cref="CosProductAccumulators"/>) on AVX2-enabled systems. Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
     private static Vector256<long>[] ProductAccumulators;
 
+    private static int DataAddedSinceLastBinCalc = 0;
+
+    private static float[] SmoothingFactors;
+    private static float SmoothedAmplitude = 0F;
+    private static double[] SmoothedSinOutputs, SmoothedCosOutputs;
+
+    private static float[] LoudnessCorrectionFactors;
+
     /// <summary> Stores the magnitude output of each bin before any filtering is done. </summary>
     /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
     public static float[] RawBinMagnitudes;
 
+    /// <summary> The frequency in Hz of each raw bin. </summary>
+    /// <remarks> This isn't used in the main algorithm, only for pre-calculation of some data, and to present to the user. </remarks>
+    public static float[] RawBinFrequencies;
+
     private static int TEMP_CycleCount = 0;
     private static float TEMP_DFTTime = 0F;
     private static Stopwatch TEMP_Timer = new();
+
+    private static float IIR_CONST = 0.55F; // TODO: Scale dynamically, higher => more older data //higher => more emphasis on new data
 
     static ShinNoteFinderDFT()
     {
@@ -110,8 +125,11 @@ public static class ShinNoteFinderDFT
         nameof(AudioBufferSizes),
         nameof(AudioBufferSubHeads),
         nameof(SinTableStepSize), nameof(SinTableLocationAdd), nameof(SinTableLocationSub),
-        /*nameof(SinProductAccumulators), nameof(CosProductAccumulators),*/ nameof(ProductAccumulators),
-        nameof(RawBinMagnitudes)
+        nameof(SinProductAccumulators), nameof(CosProductAccumulators), nameof(ProductAccumulators),
+        nameof(SmoothingFactors), nameof(SmoothedSinOutputs), nameof(SmoothedCosOutputs),
+        nameof(LoudnessCorrectionFactors),
+        nameof(RawBinMagnitudes),
+        nameof(RawBinFrequencies)
     )]
     public static void Reconfigure()
     {
@@ -123,7 +141,12 @@ public static class ShinNoteFinderDFT
         SinProductAccumulators = new DualI64[BinCount];
         CosProductAccumulators = new DualI64[BinCount];
         ProductAccumulators = new Vector256<long>[BinCount];
+        SmoothingFactors = new float[BinCount];
+        SmoothedSinOutputs = new double[BinCount];
+        SmoothedCosOutputs = new double[BinCount];
+        LoudnessCorrectionFactors = new float[BinCount];
         RawBinMagnitudes = new float[BinCount];
+        RawBinFrequencies = new float[BinCount];
 
         //float TopStart = StartFrequencyOfTopOctave;
 
@@ -134,12 +157,13 @@ public static class ShinNoteFinderDFT
             //uint WrappedBinIndex = Bin % BinsPerOctave;
 
             float ThisOctaveStart = StartFrequency * MathF.Pow(2, Bin / BinsPerOctave);
-            float TopOctaveBinFreq = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin);
-            float TopOctaveNextBinFreq = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin + 2);
+            float BinFrequency = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin);
+            float NextBinFrequency = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin + 2);
             //float IdealWindowSize = WindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq); // TODO: Add scale factor to shift this from no overlap to -3dB point
-            uint ThisBufferSize = RoundedWindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq, TopOctaveBinFreq, SampleRate);
+            uint ThisBufferSize = RoundedWindowSizeForBinWidth(NextBinFrequency - BinFrequency, BinFrequency, SampleRate);
             //ushort ThisBufferSize = (ushort)Math.Ceiling(IdealWindowSize);
             AudioBufferSizes[Bin] = ThisBufferSize; //Math.Min(MAX_WINDOW_SIZE, ThisBufferSize);
+            RawBinFrequencies[Bin] = BinFrequency;
 
             MaxAudioBufferSize = Math.Max(MaxAudioBufferSize, ThisBufferSize);
 
@@ -150,6 +174,9 @@ public static class ShinNoteFinderDFT
             SinTableStepSize[Bin].NCLeft = (ushort)Math.Round(StepSizeNCL);
             SinTableStepSize[Bin].NCRight = (ushort)Math.Round(StepSizeNCR);
             //Console.WriteLine($"Bin becomes L {CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin) - NCOffset} and R {CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin) + NCOffset} at len {AudioBufferSizes[Bin]}");
+
+            SmoothingFactors[Bin] = 0.9F;
+            LoudnessCorrectionFactors[Bin] = GetLoudnessCorrection(BinFrequency);
         }
         MaxPresentWindowSize = MaxAudioBufferSize;
 
@@ -204,15 +231,25 @@ public static class ShinNoteFinderDFT
             while (Index <= EndIndex)
             {
                 AddAudioData256(Vector256.LoadUnsafe(ref newData[Index]));
+                DataAddedSinceLastBinCalc += 16;
+                if (DataAddedSinceLastBinCalc >= 64) { CalculateBins(); }
                 Index += 16;
             }
         }
-        while (Index < dataLength) { AddAudioData(newData[Index++]); }
+        while (Index < dataLength)
+        {
+            AddAudioData(newData[Index++]);
+            DataAddedSinceLastBinCalc++;
+            if (DataAddedSinceLastBinCalc >= 64) { CalculateBins(); }
+        }
 
         TEMP_Timer.Stop();
         float TicksPerSample = (float)TEMP_Timer.ElapsedTicks / dataLength;
         if (newData.Length > 10) { TEMP_DFTTime = (0.97F * TEMP_DFTTime) + (0.03F * TicksPerSample); }
-        if (TEMP_CycleCount % 50 == 0) { Console.WriteLine($"Currently taking {TEMP_DFTTime * 100} ns per audio sample."); }
+        //if (TEMP_CycleCount % 50 == 0) { Console.WriteLine($"Currently taking {TEMP_DFTTime * 100} ns per audio sample."); }
+
+        const int CHECK_BIN = 96;
+        //if (TEMP_CycleCount % 50 == 0) { Console.WriteLine($"Bin magnitude {CHECK_BIN} ({RawBinFrequencies[CHECK_BIN]}Hz) is at {RawBinMagnitudes[CHECK_BIN]}."); }
     }
 
     private static void AddAudioData256(Vector256<short> newData)
@@ -422,65 +459,122 @@ public static class ShinNoteFinderDFT
         }
     }
 
-    private static double[] SmoothedSin = new double[500];
-    private static double[] SmoothedCos = new double[500];
+    private static void CalculateBins()
+    {
+        int BinCount = ShinNoteFinderDFT.BinCount;
+        Span<double> RotatedValues = stackalloc double[4 * 2];
+
+        Debug.Assert(BinCount % 4 == 0, "BinCount needs to be a multiple of 4.");
+        int BinIndex = 0;
+        while (BinIndex < BinCount)
+        {
+            for (int SubIndex = 0; SubIndex < 4; SubIndex++)
+            {
+                int InnerIndex = BinIndex + SubIndex;
+                Vector256<long> Products = ProductAccumulators[InnerIndex];
+                DualI16 SinVal = GetSine(SinTableLocationAdd[InnerIndex], false);
+                DualI16 CosVal = GetSine(SinTableLocationAdd[InnerIndex], true);
+
+                // Product accumulators are assumed to be up to 32768 32b values summed => 15b * 32b = 47b
+                long RotatedLSin = (Products[0] * CosVal.NCLeft) - (Products[2] * SinVal.NCLeft); // (47b * 16b) - (47b * 16b) = 64b
+                long RotatedLCos = (Products[0] * SinVal.NCLeft) + (Products[2] * CosVal.NCLeft);
+                long RotatedRSin = (Products[1] * CosVal.NCRight) - (Products[3] * SinVal.NCRight);
+                long RotatedRCos = (Products[1] * SinVal.NCRight) + (Products[3] * CosVal.NCRight);
+
+                long Sin = (RotatedLSin >> 32) * (RotatedRSin >> 32); // (64b >> 32) * (64b >> 32) = 64b
+                long Cos = (RotatedLCos >> 32) * (RotatedRCos >> 32);
+
+                RotatedValues[SubIndex] = Sin;
+                RotatedValues[SubIndex + 4] = Cos; // RotatedValues = {Sin[BinIndex:BinIndex+3], Cos[BinIndex:BinIndex+3]}
+
+                (double Sin, double Cos) RotatedL;
+                (double Sin, double Cos) RotatedR;
+                DualU16 CurrentSineLocations = SinTableLocationAdd[InnerIndex];
+                float AngleL = CurrentSineLocations.NCLeft * MathF.Tau / USHORT_RANGE;
+                float AngleR = CurrentSineLocations.NCRight * MathF.Tau / USHORT_RANGE;
+
+                RotatedL = RotatePoint(ProductAccumulators[InnerIndex][0], ProductAccumulators[InnerIndex][2], AngleL);
+                RotatedR = RotatePoint(ProductAccumulators[InnerIndex][1], ProductAccumulators[InnerIndex][3], AngleR);
+
+                double SinI = RotatedL.Sin * RotatedR.Sin;
+                double CosI = RotatedL.Cos * RotatedR.Cos;
+
+                if (!(Avx2.IsSupported && ENABLE_SIMD))
+                {
+                    double PreviousSinVal = SmoothedSinOutputs[InnerIndex];
+                    double PreviousCosVal = SmoothedCosOutputs[InnerIndex];
+                    // TODO: Implement IIRs if re-enabled in SIMD
+
+                    SmoothedSinOutputs[InnerIndex] = PreviousSinVal + Sin;
+                    SmoothedCosOutputs[InnerIndex] = PreviousCosVal + Cos;
+                }
+            }
+
+            if (Avx2.IsSupported && ENABLE_SIMD)
+            {
+                Vector256<double> PreviousSinVals = Vector256.LoadUnsafe(ref SmoothedSinOutputs[BinIndex]);
+                Vector256<double> PreviousCosVals = Vector256.LoadUnsafe(ref SmoothedCosOutputs[BinIndex]);
+                //Vector128<float> IIRa32 = Vector128.LoadUnsafe(ref SmoothingFactors[BinIndex]);
+                //Vector256<double> IIRa = Avx.ConvertToVector256Double(IIRa32);
+                //Vector256<double> IIRb = Avx.ConvertToVector256Double(Sse.Subtract(Vector128.Create(1F), IIRa32));
+
+                Vector256<double> NewSinVals = Vector256.LoadUnsafe(ref RotatedValues[0]);
+                //Vector256<double> SmoothedSinVals = Avx.Add(Avx.Multiply(PreviousSinVals, IIRb), Avx.Multiply(NewSinVals, IIRa));
+                Vector256<double> SmoothedSinVals = Avx.Add(PreviousSinVals, NewSinVals);// Avx.Multiply(NewSinVals, IIRa));
+                Vector256<double> NewCosVals = Vector256.LoadUnsafe(ref RotatedValues[4]);
+                //Vector256<double> SmoothedCosVals = Avx.Add(Avx.Multiply(PreviousCosVals, IIRb), Avx.Multiply(NewCosVals, IIRa));
+                Vector256<double> SmoothedCosVals = Avx.Add(PreviousCosVals, NewCosVals);// Avx.Multiply(NewCosVals, IIRa));
+
+                SmoothedSinVals.StoreUnsafe(ref SmoothedSinOutputs[BinIndex]);
+                SmoothedCosVals.StoreUnsafe(ref SmoothedCosOutputs[BinIndex]);
+            }
+
+            BinIndex += 4;
+        }
+        SmoothedAmplitude += 1F;
+    }
 
     public static void CalculateOutput()
     {
-        for (int Bin = 0; Bin < BinsPerOctave; Bin++) { ShinNoteFinder.OctaveBinValues[Bin] = 0; }
+        int BinCount = ShinNoteFinderDFT.BinCount;
+        for (int Bin = 0; Bin < BinsPerOctave; Bin++) { ShinNoteFinder.OctaveBinValues[Bin] = 0; } // TODO: Move out of the DFT
 
-        checked
+        CalculateBins();
+
+        int BinIndex = 0;
+        while (BinIndex < BinCount)
         {
-            for (int Bin = 0; Bin < BinCount; Bin++)
-            {
-                //if (Bin >= 96) { Console.WriteLine($"{Bin},{SinProductAccumulators[Bin].NCLeft},{SinProductAccumulators[Bin].NCRight},{CosProductAccumulators[Bin].NCLeft},{CosProductAccumulators[Bin].NCRight}"); }
-                
-                // TODO: MegaJanky. Just for developing the SIMD version, will fix later
-                (double Sin, double Cos) RotatedL;
-                (double Sin, double Cos) RotatedR;
-                if (Avx2.IsSupported && ENABLE_SIMD)
-                {
-                    DualU16 CurrentSineLocations = SinTableLocationAdd[Bin];
-                    float AngleL = CurrentSineLocations.NCLeft * MathF.Tau / USHORT_RANGE;
-                    float AngleR = CurrentSineLocations.NCRight * MathF.Tau / USHORT_RANGE;
+            Vector256<double> AmplitudeScale = Vector256.Create((double)SmoothedAmplitude);
+            Vector256<double> SmoothedSinVals = Avx.Divide(Vector256.LoadUnsafe(ref SmoothedSinOutputs[BinIndex]), AmplitudeScale);
+            Vector256<double> SmoothedCosVals = Avx.Divide(Vector256.LoadUnsafe(ref SmoothedCosOutputs[BinIndex]), AmplitudeScale);
 
-                    RotatedL = RotatePoint(ProductAccumulators[Bin][0], ProductAccumulators[Bin][2], AngleL);
-                    RotatedR = RotatePoint(ProductAccumulators[Bin][1], ProductAccumulators[Bin][3], AngleR);
-                }
-                else
-                {
-                    DualU16 CurrentSineLocations = SinTableLocationAdd[Bin];
-                    float AngleL = CurrentSineLocations.NCLeft * MathF.Tau / USHORT_RANGE;
-                    float AngleR = CurrentSineLocations.NCRight * MathF.Tau / USHORT_RANGE;
+            Vector256<double> SinCosSums = Vector256.Add(SmoothedSinVals, SmoothedCosVals);
+            Vector256<double> SinCosSumsNegated = Avx2.Xor(SinCosSums.AsUInt64(), Vector256.Create(0x8000_0000_0000_0000UL)).AsDouble();
+            Vector256<double> Magnitudes = Avx.Sqrt(Avx.Max(Vector256<double>.Zero, SinCosSumsNegated));
 
-                    //RotatedL = RotatePoint(SinProductAccumulators[Bin].NCLeft,  CosProductAccumulators[Bin].NCLeft,  AngleL);
-                    //RotatedR = RotatePoint(SinProductAccumulators[Bin].NCRight, CosProductAccumulators[Bin].NCRight, AngleR);
-                    RotatedL = RotatePoint(ProductAccumulators[Bin][0], ProductAccumulators[Bin][2], AngleL);
-                    RotatedR = RotatePoint(ProductAccumulators[Bin][1], ProductAccumulators[Bin][3], AngleR);
-                }
+            Vector256<double> WindowSizes = Avx.ConvertToVector256Double(Vector128.LoadUnsafe(ref AudioBufferSizes[BinIndex]).AsInt32());
+            Vector128<float> ScaledMagnitudes = Avx.ConvertToVector128Single(Avx.Divide(Avx.Sqrt(Avx.Divide(Magnitudes, WindowSizes)), Vector256.Create(3.0D))); // Scales such that a 0dB signal is approximately 1.0 // TODO: Check if this is still true
+            Vector128<float> NewMagnitudes = Sse.Add(Sse.Multiply(Vector128.LoadUnsafe(ref RawBinMagnitudes[BinIndex]), Vector128.Create(1F - IIR_CONST)), Sse.Multiply(ScaledMagnitudes, Vector128.Create(IIR_CONST)));
+            //ScaledMagnitudes.StoreUnsafe(ref RawBinMagnitudes[BinIndex]);
+            NewMagnitudes.StoreUnsafe(ref RawBinMagnitudes[BinIndex]);
 
-                double Sin = RotatedL.Sin * RotatedR.Sin;
-                double Cos = RotatedL.Cos * RotatedR.Cos;
-
-                float IIR_CONST = 0.65F;
-                //float IIR_CONST = 1.0F;
-                SmoothedSin[Bin] = (SmoothedSin[Bin] * (1 - IIR_CONST)) + (Sin * IIR_CONST);
-                SmoothedCos[Bin] = (SmoothedCos[Bin] * (1 - IIR_CONST)) + (Cos * IIR_CONST);
+            //Avx.Multiply(SmoothedSinVals, Vector256.Create((double)IIR_CONST)).StoreUnsafe(ref SmoothedSinOutputs[BinIndex]);
+            //Avx.Multiply(SmoothedCosVals, Vector256.Create((double)IIR_CONST)).StoreUnsafe(ref SmoothedCosOutputs[BinIndex]);
 
 
-                //float Magnitude = (float)Math.Sqrt(Math.Max(0F, -(Sin + Cos)));
-                float Magnitude = (float)Math.Sqrt(Math.Max(0F, -(SmoothedSin[Bin] + SmoothedCos[Bin])));
-                RawBinMagnitudes[Bin] = Magnitude / AudioBufferSizes[Bin];
 
-                // Traditional DFT for debugging
-                //double SimpleSq = ((double)SinProductAccumulators[Bin].NCLeft * SinProductAccumulators[Bin].NCLeft) + ((double)CosProductAccumulators[Bin].NCLeft * CosProductAccumulators[Bin].NCLeft);
-                //RawBinMagnitudes[Bin] = (float)Math.Sqrt(Math.Max(0, SimpleSq)) / AudioBufferSizes[Bin];
+            Vector256<double>.Zero.StoreUnsafe(ref SmoothedSinOutputs[BinIndex]);
+            Vector256<double>.Zero.StoreUnsafe(ref SmoothedCosOutputs[BinIndex]);
 
+            BinIndex += 4;
+        }
+        SmoothedAmplitude = 0F; //*= IIR_CONST;
 
-                float OutBinVal = MathF.Sqrt(RawBinMagnitudes[Bin]) / 2000;
-                ShinNoteFinder.OctaveBinValues[Bin % BinsPerOctave] += OutBinVal / OctaveCount;
-                ShinNoteFinder.AllBinValues[Bin] = OutBinVal;
-            }
+        for (int Bin = 0; Bin < BinCount; Bin++) // TODO: Move out of the DFT
+        {
+            float OutBinVal = RawBinMagnitudes[Bin] * LoudnessCorrectionFactors[Bin];
+            ShinNoteFinder.OctaveBinValues[Bin % BinsPerOctave] += OutBinVal / OctaveCount;
+            ShinNoteFinder.AllBinValues[Bin] = MathF.Max(0, OutBinVal - 0.08F);
         }
     }
 
@@ -562,21 +656,66 @@ public static class ShinNoteFinderDFT
 
     // Everyone loves magic numbers :)
     // These were determined through simulations and regressions, which can be found in the Simulations folder in the root of the ColorChord.NET repository.
-    private static float BinWidthAtWindowSize(float windowSize) => 50222.5926786413F / (windowSize + 11.483904495504245F);
-    private static float WindowSizeForBinWidth(float binWidth) => (50222.5926786413F / binWidth) - 11.483904495504245F;
+    private static float BinWidthAtWindowSize(float windowSize, float sampleRate) => sampleRate * 1.046304014F / (windowSize + 11.483904495504245F);
+    private static float WindowSizeForBinWidth(float binWidth, float sampleRate) => (sampleRate * 1.046304014F / binWidth) - 11.483904495504245F; // TODO: The sample rate scaling doesn't seem quite correct here
 
     private static uint RoundedWindowSizeForBinWidth(float binWidth, float frequency, float sampleRate)
     {
-        float IdealWindowSize = WindowSizeForBinWidth(binWidth);
+        float IdealWindowSize = WindowSizeForBinWidth(binWidth, sampleRate);
         float PeriodInSamples = sampleRate / frequency;
         float PeriodsInWindow = IdealWindowSize / PeriodInSamples;
-        float MaxWindowSizePeriods = MathF.Ceiling(MAX_WINDOW_SIZE / PeriodInSamples);
-        float MinWindowSizePeriods = MathF.Floor(MIN_WINDOW_SIZE / PeriodInSamples);
+        float MaxWindowSizePeriods = MathF.Ceiling(MAX_WINDOW_SIZE * (sampleRate / 48000F) / PeriodInSamples);
+        float MinWindowSizePeriods = MathF.Floor(MIN_WINDOW_SIZE * (sampleRate / 48000F) / PeriodInSamples);
 
-        //Console.WriteLine($"Period is {PeriodInSamples}, want {PeriodsInWindow}x");
-        return (uint)MathF.Round(MathF.Max(MinWindowSizePeriods, MathF.Min(MaxWindowSizePeriods, MathF.Round(PeriodsInWindow))) * PeriodInSamples + (PeriodInSamples * 0.5F));
+        Console.WriteLine($"Period is {PeriodInSamples}, want {PeriodsInWindow}x");
+        return (uint)Math.Min(ABSOLUTE_MAX_WINDOW_SIZE, MathF.Round(MathF.Max(MinWindowSizePeriods, MathF.Min(MaxWindowSizePeriods, MathF.Round(PeriodsInWindow))) * PeriodInSamples + (PeriodInSamples * 0.5F)));
     }
 
     private static float CalculateNoteFrequency(float octaveStart, uint binsPerOctave, uint binIndex) => octaveStart * GetNoteFrequencyMultiplier(binsPerOctave, binIndex);
     private static float GetNoteFrequencyMultiplier(uint binsPerOctave, uint binIndex) => MathF.Pow(2F, (float)binIndex / binsPerOctave);
+
+    /// <summary> Gets a factor to multiply the output amplitude by to correct for percieved loudness. </summary>
+    /// <remarks> Output is based on ISO 226:2023 data, and assumes a fixed loudness, and that the item being multiplied is sqrt(dB level). </remarks>
+    /// <param name="frequency"> The frequency of the bin to get correction factor for </param>
+    /// <returns> Scaling factor between 0.0~1.0 for the given frequency </returns>
+    /// 
+    private static float GetLoudnessCorrection(float frequency)
+    {
+        const float LOUDNESS = 50F; // in phon
+        const float CORRECTION_FACTOR = 0.33F; // Fully correcting seems to be overkill, only do this much (corrects dB * this, so nonlinear)
+        ReadOnlySpan<float> Frequencies = new float[] { 20F, 25F, 31.5F, 40F, 50F, 63F, 80F, 100F, 125F, 160F, 200F, 250F, 315F, 400F, 500F, 630F, 800F, 1000F, 1250F, 1600F, 2000F, 2500F, 3150F, 4000F, 5000F, 6300F, 8000F, 10000F, 12500F };
+        ReadOnlySpan<float> af = new float[] { 0.635F, 0.602F, 0.569F, 0.537F, 0.509F, 0.482F, 0.456F, 0.433F, 0.412F, 0.391F, 0.373F, 0.357F, 0.343F, 0.33F, 0.32F, 0.311F, 0.303F, 0.3F, 0.295F, 0.292F, 0.29F, 0.29F, 0.289F, 0.289F, 0.289F, 0.293F, 0.303F, 0.323F, 0.354F };
+        ReadOnlySpan<float> LU = new float[] { -31.5F, -27.2F, -23.1F, -19.3F, -16.1F, -13.1F, -10.4F, -8.2F, -6.3F, -4.6F, -3.2F, -2.1F, -1.2F, -0.5F, 0F, 0.4F, 0.5F, 0F, -2.7F, -4.2F, -1.2F, 1.4F, 2.3F, 1F, -2.3F, -7.2F, -11.2F, -10.9F, -3.5F };
+        ReadOnlySpan<float> Tf = new float[] { 78.1F, 68.7F, 59.5F, 51.1F, 44F, 37.5F, 31.5F, 26.5F, 22.1F, 17.9F, 14.4F, 11.4F, 8.6F, 6.2F, 4.4F, 3F, 2.2F, 2.4F, 3.5F, 1.7F, -1.3F, -4.2F, -6F, -5.4F, -1.5F, 6F, 12.6F, 13.9F, 12.3F };
+
+        int IndexLower = 0, IndexUpper = 0;
+        if (frequency < Frequencies[^1])
+        {
+            for (int i = 0; i < Frequencies.Length; i++)
+            {
+                if (Frequencies[i] > frequency)
+                {
+                    IndexUpper = i;
+                    IndexLower = Math.Max(0, i - 1);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            IndexUpper = Frequencies.Length - 1;
+            IndexLower = Frequencies.Length - 1;
+        }
+        float dBAtLower = (10F / af[IndexLower] * MathF.Log10((MathF.Pow(4E-10F, 0.3F - af[IndexLower]) * (MathF.Pow(10F, 0.03F * LOUDNESS) - MathF.Pow(10F, 0.072F))) + MathF.Pow(10F, af[IndexLower] * (Tf[IndexLower] + LU[IndexLower]) / 10F))) - LU[IndexLower];
+        float dBAtUpper = (10F / af[IndexUpper] * MathF.Log10((MathF.Pow(4E-10F, 0.3F - af[IndexUpper]) * (MathF.Pow(10F, 0.03F * LOUDNESS) - MathF.Pow(10F, 0.072F))) + MathF.Pow(10F, af[IndexUpper] * (Tf[IndexUpper] + LU[IndexUpper]) / 10F))) - LU[IndexUpper];
+        // This just uses linear interpolation, and incorrectly assumes dB and frequency scale linearly. However, the error caused by these bad assumptions should be minimal, and I can't be bothered to implement a more complex correct version.
+        // Remember, this is a visualization, not a scientific tool :)
+        float InnerPosition = (IndexUpper == IndexLower) ? 0F : (frequency - Frequencies[IndexLower]) / (Frequencies[IndexUpper] - Frequencies[IndexLower]);
+        Debug.Assert(InnerPosition <= 1F);
+        Debug.Assert(InnerPosition >= 0F);
+        float dBAtFreq = (dBAtUpper * InnerPosition) + (dBAtLower * (1F - InnerPosition));
+        // Since the amplitude has its sqrt taken a second time, dB = (20 * log_10(amplitude)) * 2
+        // As such, to get a scaling factor we need to divide the exponent by 20 * 2 instead of just 20
+        return MathF.Pow(10F, (LOUDNESS - dBAtFreq) * CORRECTION_FACTOR / 40F);
+    }
 }
