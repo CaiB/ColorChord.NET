@@ -28,9 +28,13 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
     };
 
     private int VertexBufferHandle, VertexArrayHandle, TextureHandle;
-    private int LocationBinCount, LocationScaleFactor;
+    private int LocationBinCount, LocationScaleFactor, LocationExponent;
 
-    private float ScaleFactor = 0.5F;
+    [ConfigFloat("ScaleFactor", 0F, 1000F, 4F)]
+    private float ScaleFactor = 4F;
+
+    [ConfigFloat("ScaleExponent", 0F, 10F, 3F)]
+    private float Exponent = 3F;
 
     /// <summary> Whether this output is ready to accept data and draw. </summary>
     private bool SetupDone = false;
@@ -71,6 +75,8 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         GL.Uniform1(this.LocationBinCount, ShinNoteFinderDFT.BinCount);
         this.LocationScaleFactor = this.Shader.GetUniformLocation("ScaleFactor");
         GL.Uniform1(this.LocationScaleFactor, this.ScaleFactor);
+        this.LocationExponent = this.Shader.GetUniformLocation("Exponent");
+        GL.Uniform1(this.LocationExponent, this.Exponent);
 
         // Prepare and upload vertex data
         GL.BindVertexArray(this.VertexArrayHandle);

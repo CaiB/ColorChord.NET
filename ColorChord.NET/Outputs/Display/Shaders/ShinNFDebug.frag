@@ -7,6 +7,7 @@ in vec2 TexCoord;
 uniform int BinCount;
 uniform sampler2D Texture;
 uniform float ScaleFactor;
+uniform float Exponent;
 
 out vec4 FragColor;
 
@@ -29,7 +30,7 @@ vec3 AngleToRGB(float angle, float val)
 void main()
 {
     int SectionHere = int(floor(TexCoord.x * BinCount));
-    float HeightHere = pow(texture(Texture, vec2((SectionHere + 0.5) / BinCount, 0.5)).r, 3.0) * ScaleFactor;
+    float HeightHere = pow(texture(Texture, vec2((SectionHere + 0.5) / BinCount, 0.5)).r, Exponent) * ScaleFactor;
     vec3 Colour = AngleToRGB(mod(float(SectionHere) / BINS_PER_OCATVE, 1.0), 1);
     FragColor = vec4(step(abs(TexCoord.y), HeightHere) * Colour, 1.0);
 }
