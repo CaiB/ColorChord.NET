@@ -24,6 +24,7 @@ namespace ColorChord.NET
 {
     public static class ColorChord
     {
+        This is an intentional error
         private static string ConfigFile = "config.json";
 
         public static IAudioSource? Source { get; private set; }
