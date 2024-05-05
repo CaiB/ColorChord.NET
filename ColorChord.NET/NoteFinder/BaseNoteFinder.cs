@@ -140,10 +140,6 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
     public static readonly NoteDistribution[] NoteDistributions = new NoteDistribution[NOTE_QTY];
 
-    /// <summary> The non-folded frequency bins, used inter-frame to do smoothing, then folded to form the spectrum. </summary>
-    /// <remarks> Data contained from previous cycles is re-used during next cycle to do smoothing. </remarks>
-    private static readonly float[] FrequencyBinValues = new float[TOTAL_DFT_BINS];
-
     public static float LastLowFreqSum = 0;
 
     public static int LastLowFreqCount = 0;
@@ -163,6 +159,8 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
         Notes = new Note[NOTE_QTY];
         PersistentNoteIDs = new int[NOTE_QTY];
         OctaveBinValues = new float[BINS_PER_OCTAVE];
+        AllBinValues = new float[TOTAL_DFT_BINS];
+        SetupBuffers();
     }
 
     /// <summary> Updates the sample rate if the audio source has changed. Also recalculates bin frequencies to match. </summary>
@@ -196,6 +194,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     public override void Stop()
     {
         KeepGoing = false;
+        InputDataEvent.Set();
         ProcessThread?.Join();
     }
 
@@ -209,15 +208,33 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     /// <summary> Runs until <see cref="KeepGoing"/> becomes false, processing incoming audio data. </summary>
     private static void DoProcessing()
     {
-        Stopwatch Timer = new();
         while (KeepGoing)
         {
-            Timer.Restart();
-            if (LastDataAdd.AddSeconds(5) > DateTime.UtcNow) { Cycle(); }
-            int WaitTime = (int)(ShortestPeriod - Timer.ElapsedMilliseconds);
-            if (WaitTime > 0) { Thread.Sleep(WaitTime); }
+            InputDataEvent.WaitOne();
+
+            bool MoreBuffers;
+            uint NewDataRead = 0;
+            do
+            {
+                short[]? NewBuffer = GetBufferToRead(out int NFBufferRef, out uint BufferSize, out MoreBuffers);
+                if (NewBuffer == null) { break; }
+
+                for (int i = 0; i < BufferSize; i++)
+                {
+                    AudioBuffer[AudioBufferHeadWrite] = NewBuffer[i];
+                    AudioBufferHeadWrite = (AudioBufferHeadWrite + 1) % AudioBuffer.Length;
+                }
+                NewDataRead += BufferSize;
+
+                FinishBufferRead(NFBufferRef);
+
+                Cycle();
+            }
+            while (MoreBuffers);
         }
     }
+
+    public override void UpdateOutputs() { }
 
     private static void Cycle()
     {
@@ -240,23 +257,23 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
             NewData *= DFTDataAmplifier; // Amplify incoming data by a constant
             NewData *= (1 + (DFTSensitivitySlope * RawBinIndex)); // Apply a frequency-dependent amplifier to increase sensitivity at higher frequencies.
 
-            FrequencyBinValues[RawBinIndex] = (FrequencyBinValues[RawBinIndex] * DFTIIRMultiplier) + // Keep data from last frame, but reduce by a factor.
-                                           (NewData * (1 - DFTIIRMultiplier)); // Add new data
+            AllBinValues[RawBinIndex] = (AllBinValues[RawBinIndex] * DFTIIRMultiplier) + // Keep data from last frame, but reduce by a factor.
+                                         (NewData * (1 - DFTIIRMultiplier)); // Add new data
         }
 
         // Taper off the first and last octave.
         // This is to prevent frequency content at the edges of our bin set from creating discontinuities in the folded bins.
         for (int OctaveBinIndex = 0; OctaveBinIndex < BINS_PER_OCTAVE; OctaveBinIndex++)
         {
-            FrequencyBinValues[OctaveBinIndex] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the first octave
-            FrequencyBinValues[TOTAL_DFT_BINS - OctaveBinIndex - 1] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the last octave
+            AllBinValues[OctaveBinIndex] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the first octave
+            AllBinValues[TOTAL_DFT_BINS - OctaveBinIndex - 1] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the last octave
         }
 
         // Fold the bins to make one single octave-length array, where all like notes (e.g. C2, C3, C4) are combined, regardless of their original octave.
         for (int BinIndex = 0; BinIndex < BINS_PER_OCTAVE; BinIndex++)
         {
             float Amplitude = 0;
-            for (int Octave = 0; Octave < OCTAVES; Octave++) { Amplitude += FrequencyBinValues[(Octave * BINS_PER_OCTAVE) + BinIndex]; }
+            for (int Octave = 0; Octave < OCTAVES; Octave++) { Amplitude += AllBinValues[(Octave * BINS_PER_OCTAVE) + BinIndex]; }
             OctaveBinValues[BinIndex] = Amplitude;
         }
 

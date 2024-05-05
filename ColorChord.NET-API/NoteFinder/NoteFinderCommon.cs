@@ -37,6 +37,7 @@ public abstract class NoteFinderCommon : IConfigurableAttr
     public abstract int BinsPerOctave { get; }
 
     public abstract void Start();
+    public abstract void UpdateOutputs();
 
     public abstract void Stop();
 
@@ -94,6 +95,15 @@ public abstract class NoteFinderCommon : IConfigurableAttr
                 return IntermediateBuffers[bufferRef].Buffer;
             }
         }
+    }
+
+    public static bool IsBufferAvailableToWrite()
+    {
+        for (int i = 0; i < INTERMEDIATE_BUFFER_COUNT; i++)
+        {
+            if (!IntermediateBuffers[i].ReadMode) { return true; }
+        }
+        return false;
     }
 
     public static void FinishBufferRead(int bufferRef)

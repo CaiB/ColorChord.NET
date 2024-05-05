@@ -54,6 +54,16 @@ namespace ColorChord.NET
             ExtensionHandler.InitExtensions();
             ReadConfig();
             ExtensionHandler.PostInitExtensions();
+
+            StopSignal.Wait();
+            Log.Info("Exiting...");
+            ExtensionHandler.StopExtensions();
+            Source?.Stop();
+            NoteFinder?.Stop();
+            foreach (IVisualizer Visualizer in VisualizerInsts.Values) { Visualizer.Stop(); }
+            foreach (IOutput Output in OutputInsts.Values) { Output.Stop(); }
+            foreach (Controller Controller in ControllerInsts.Values) { Controller.Stop(); }
+            foreach (Thread Thread in InstanceThreads) { Thread.Join(); }
         }
 
         private static void WriteHelp()
@@ -102,13 +112,13 @@ namespace ColorChord.NET
                 using (MD5 MD5 = MD5.Create())
                 {
                     byte[] ConfigHash = MD5.ComputeHash(Reader);
-                    if (ConfigHash.Length != DefaultConfigInfo.DefaultConfigFileMD5.Length / 2) { Log.Warn("Failed to check if the config file is default due to hashes not matdching in length"); }
+                    if (ConfigHash.Length != DefaultConfigInfo.DefaultConfigFileMD5.Length / 2) { Log.Warn("Failed to check if the config file is default due to hashes not matching in length"); }
                     else
                     {
                         bool IsEqual = true;
                         for (int i = 0; i < ConfigHash.Length; i++)
                         {
-                            byte DefaultHashHere = byte.Parse(DefaultConfigInfo.DefaultConfigFileMD5.AsSpan(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                            byte DefaultHashHere = byte.Parse(DefaultConfigInfo.DefaultConfigFileMD5.AsSpan(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture); // TODO: Replace this with a ReadOnlySpan of bytes instead of parsing a string
                             if (DefaultHashHere != ConfigHash[i])
                             {
                                 IsEqual = false;
@@ -144,16 +154,6 @@ namespace ColorChord.NET
             // Controllers
             ReadAndApplyControllers(JSON);
             Log.Info("Finished processing config file.");
-
-            StopSignal.Wait();
-            Log.Info("Exiting...");
-            ExtensionHandler.StopExtensions();
-            Source?.Stop();
-            NoteFinder?.Stop();
-            foreach (IVisualizer Visualizer in VisualizerInsts.Values) { Visualizer.Stop(); }
-            foreach (IOutput Output in OutputInsts.Values) { Output.Stop(); }
-            foreach (Controller Controller in ControllerInsts.Values) { Controller.Stop(); }
-            foreach (Thread Thread in InstanceThreads) { Thread.Join(); }
         }
 
         public static void Stop() => StopSignal.Set();

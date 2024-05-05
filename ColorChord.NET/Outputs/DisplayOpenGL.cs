@@ -1,6 +1,7 @@
 ﻿using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
+using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Outputs.Display;
 using ColorChord.NET.API.Visualizers;
@@ -47,6 +48,10 @@ namespace ColorChord.NET.Outputs
         [Controllable(ConfigNames.ENABLE)]
         [ConfigBool(ConfigNames.ENABLE, true)]
         public bool Enabled { get; set; }
+
+        [Controllable("UseVSync", 1)]
+        [ConfigBool("UseVSync", true)]
+        public bool UseVSync { get; set; } = true;
 
         private int DefaultWidth, DefaultHeight;
 
@@ -121,11 +126,14 @@ namespace ColorChord.NET.Outputs
         }
 
         public void SettingWillChange(int controlID) { }
-        public void SettingChanged(int controlID) { }
+        public void SettingChanged(int controlID)
+        {
+            if (controlID == 1) { this.VSync = this.UseVSync ? VSyncMode.On : VSyncMode.Off; }
+        }
 
         protected override void OnLoad()
         {
-            this.VSync = VSyncMode.On;
+            this.VSync = this.UseVSync ? VSyncMode.On : VSyncMode.Off;
             //GL.DebugMessageCallback(DebugCallbackRef, IntPtr.Zero);
             GL.ClearColor(0.2F, 0.2F, 0.2F, 1.0F);
 
@@ -137,6 +145,7 @@ namespace ColorChord.NET.Outputs
         protected override void OnRenderFrame(FrameEventArgs evt)
         {
             if (this.Stopping) { this.Display?.Close(); return; }
+            ColorChord.NoteFinder?.UpdateOutputs();
             GL.Clear(ClearBufferMask.ColorBufferBit);
 
             this.Display?.Render();

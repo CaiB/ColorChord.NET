@@ -162,6 +162,7 @@ public static class SampleConverter
         }
         else
         {
+            EndOfBuffer = (nint)(inputBuffer + (inputFramesAvailable * sizeof(float) * channelCount));
             float ScaleFactor = SCALE_FACTOR / channelCount;
             for (uint Frame = 0; Frame < inputFramesAvailable; Frame++)
             {

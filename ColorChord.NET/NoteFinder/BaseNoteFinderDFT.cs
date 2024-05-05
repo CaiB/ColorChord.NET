@@ -190,7 +190,7 @@ namespace ColorChord.NET.NoteFinder
         /// <param name="binFrequencies">The frequency for each of the bins. Length must always be equal to <see cref="TOTALBINS"/>.</param>
         /// <param name="audioBuffer">The array to read audio data from. Only data added since last time will be read each time this function is called.</param>
         /// <param name="locationInAudioData">The location in the audio buffer to read up to, and where reading will continue on the next run.</param>
-        public static void DoDFTProgressive32(ref float[] binsOut, float[] binFrequencies, float[] audioBuffer, int locationInAudioData)
+        public static void DoDFTProgressive32(ref float[] binsOut, float[] binFrequencies, short[] audioBuffer, int locationInAudioData)
         {
             OutputBins = binsOut;
             Array.Copy(LastRunOutput, binsOut, TOTALBINS);
@@ -204,7 +204,7 @@ namespace ColorChord.NET.NoteFinder
 
             for (int i = LastBufferReadLocation; i != locationInAudioData; i = (i + 1) % audioBuffer.Length)
             {
-                short InputSample = (short)(audioBuffer[i] * 4095);
+                short InputSample = (short)(audioBuffer[i] / 8);
                 HandleInt(InputSample); // Handle reset or lower octaves (even indices in schedule)
                 HandleInt(InputSample); // Handle top octave (odd indices in schedule)
             }
