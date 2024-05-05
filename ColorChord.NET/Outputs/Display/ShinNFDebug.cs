@@ -65,14 +65,14 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         GL.ActiveTexture(TextureUnit.Texture0);
         GL.BindTexture(TextureTarget.Texture2D, this.TextureHandle);
 
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, ShinNoteFinderDFT.BinCount, 1, 0, PixelFormat.Red, PixelType.Float, new float[ShinNoteFinderDFT.BinCount]);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, NoteFinderCommon.AllBinValues.Length, 1, 0, PixelFormat.Red, PixelType.Float, new float[NoteFinderCommon.AllBinValues.Length]);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToBorder);
 
         this.LocationBinCount = this.Shader.GetUniformLocation("BinCount");
-        GL.Uniform1(this.LocationBinCount, ShinNoteFinderDFT.BinCount);
+        GL.Uniform1(this.LocationBinCount, NoteFinderCommon.AllBinValues.Length);
         this.LocationScaleFactor = this.Shader.GetUniformLocation("ScaleFactor");
         GL.Uniform1(this.LocationScaleFactor, this.ScaleFactor);
         this.LocationExponent = this.Shader.GetUniformLocation("Exponent");
@@ -95,7 +95,7 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         if (!this.SetupDone) { return; }
         this.Shader!.Use();
 
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, ShinNoteFinderDFT.BinCount, 1, 0, PixelFormat.Red, PixelType.Float, NoteFinderCommon.AllBinValues);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, NoteFinderCommon.AllBinValues.Length, 1, 0, PixelFormat.Red, PixelType.Float, NoteFinderCommon.AllBinValues);
         GL.BindVertexArray(this.VertexArrayHandle);
         GL.DrawArrays(PrimitiveType.Triangles, 0, Geometry.Length / 2);
     }

@@ -308,13 +308,6 @@ public class WASAPILoopback : IAudioSource
                 if (IsPCM && BytesPerSample == 2)
                 {
                     SampleConverter.ShortToShortMixdown(ChannelCount, FramesAvailable, (byte*)DataBuffer, ProcessedData);
-
-                    // TODO: Legacy buffer support, remove when this is no longer required
-                    for (int i = 0; i < ProcessedData.Length; i++)
-                    {
-                        NoteFinderCommon.AudioBuffer[NoteFinderCommon.AudioBufferHeadWrite] = ProcessedData[i];
-                        NoteFinderCommon.AudioBufferHeadWrite = (NoteFinderCommon.AudioBufferHeadWrite + 1) % NoteFinderCommon.AudioBuffer.Length;
-                    }
                 }
                 else if (!IsPCM && BytesPerSample == 4)
                 {

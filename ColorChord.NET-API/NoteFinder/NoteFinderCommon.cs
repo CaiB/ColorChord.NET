@@ -5,12 +5,6 @@ namespace ColorChord.NET.API.NoteFinder;
 
 public abstract class NoteFinderCommon : IConfigurableAttr
 {
-    /// <summary> The buffer for audio data gathered from a system device. Circular buffer, with the current write position stored in <see cref="AudioBufferHeadWrite"/>. </summary>
-    public static float[] AudioBuffer { get; protected set; } = new float[8192]; // TODO: Make buffer size adjustable or auto-set based on sample rate (might be too short for super-high rates)
-
-    /// <summary> Where in the <see cref="AudioBuffer"/> we are currently adding new audio data. </summary>
-    public static int AudioBufferHeadWrite { get; set; } = 0;
-
     /// <summary> When data was last added to the buffer. Used to detect idle state. </summary>
     public static DateTime LastDataAdd { get; set; }
 

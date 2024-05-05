@@ -127,9 +127,15 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     private static float NoteOutputChop = 0.05F;
     #endregion
 
-    // Data that is used in Cycle(), and not used elsewhere.
+    // Data that is used in Cycle/DoProcessing, and not used elsewhere.
     // These would make more sense to just be created and assigned inside, but keeping them out here reduces the number of memory allocations done.
     #region CycleData
+    /// <summary> The buffer for audio data gathered from a system device. Circular buffer, with the current write position stored in <see cref="AudioBufferHeadWrite"/>. </summary>
+    public static short[] AudioBuffer { get; private set; } = new short[8192]; // TODO: Make buffer size adjustable or auto-set based on sample rate (might be too short for super-high rates)
+
+    /// <summary> Where in the <see cref="AudioBuffer"/> we are currently adding new audio data. </summary>
+    public static int AudioBufferHeadWrite { get; set; } = 0;
+
     /// <summary> The frequency in Hz, that each of the raw bins from the DFT corresponds to. </summary>
     /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
     private static readonly float[] RawBinFrequencies = new float[TOTAL_DFT_BINS];
