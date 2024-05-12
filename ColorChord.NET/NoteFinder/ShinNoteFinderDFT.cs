@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.API;
+using ColorChord.NET.API.Config;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -36,7 +37,8 @@ public static class ShinNoteFinderDFT
     */
 
     /// <summary> The number of octaves to analyze. </summary>
-    public static uint OctaveCount = 8;
+    [ConfigInt("Octaves", 1, 20, 6)]
+    public static uint OctaveCount = 6;
 
     /// <summary> How long our sample window is. </summary>
     public static uint MaxPresentWindowSize = 8192;
@@ -44,7 +46,8 @@ public static class ShinNoteFinderDFT
     /// <summary> The sample rate of the incoming audio signal, and our reference waveforms. </summary>
     public static uint SampleRate = 48000;
 
-    public static float StartFrequency = 27.5f;
+    [ConfigFloat("StartFreq", 0F, 20000F, 55F)]
+    public static float StartFrequency = 55F;
 
     /// <summary> The number of DFT bins per octave. </summary>
     public static uint BinsPerOctave => BINS_PER_OCTAVE;
@@ -98,7 +101,8 @@ public static class ShinNoteFinderDFT
     private static float SmoothedAmplitude = 0F;
     private static double[] SmoothedSinOutputs, SmoothedCosOutputs;
 
-    private static float LoudnessCorrectionAmount = 0.3F;
+    [ConfigFloat("LoudnessCorrection", 0F, 1F, 0.33F)]
+    private static float LoudnessCorrectionAmount = 0.33F;
 
     private static float[] LoudnessCorrectionFactors;
 

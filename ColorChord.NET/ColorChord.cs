@@ -50,6 +50,9 @@ namespace ColorChord.NET
                 Log.Warn("Could not find config file. Creating and using default.");
                 WriteDefaultConfig();
             }
+
+            ColorChordAPI.Configurer = ConfigurerInst.Inst;
+
             ExtensionHandler.LoadExtensions();
             ExtensionHandler.InitExtensions();
             ReadConfig();
@@ -361,6 +364,29 @@ namespace ColorChord.NET
                 }
             }
             return Items;
+        }
+
+        /// <summary>Tries to find a currently loaded component based on its role and name.</summary>
+        /// <param name="path">A path in the format "<see cref="Component"/>.Name", except for Source and NoteFinder components, where only the first part is needed, and the rest is ignored if present.</param>
+        /// <returns>null if the component couldn't be found, otherwise the instance</returns>
+        public static object? GetInstanceFromPath(string path)
+        {
+            int IndexSep1 = path.IndexOf('.');
+            ReadOnlySpan<char> ComponentType = (IndexSep1 < 0) ? path : path.AsSpan(0, IndexSep1);
+            Component Component = Component.None;
+            if (Enum.TryParse(ComponentType, true, out Component ParsedComponent)) { Component = ParsedComponent; }
+
+            if (Component == Component.Source) { return Source; }
+            else if (Component == Component.NoteFinder) { return NoteFinder; }
+
+            int IndexSep2 = path.IndexOf('.', IndexSep1 + 1);
+            if (IndexSep2 < 0) { return null; }
+            string ComponentName = path.Substring(IndexSep1 + 1, IndexSep2 - IndexSep1 - 1);
+
+            if (Component == Component.Visualizers) { return VisualizerInsts.TryGetValue(ComponentName, out IVisualizer? Visualizer) ? Visualizer : null; }
+            else if (Component == Component.Outputs) { return OutputInsts.TryGetValue(ComponentName, out IOutput? Output) ? Output : null; }
+            else if (Component == Component.Controllers) { return ControllerInsts.TryGetValue(ComponentName, out Controller? Controller) ? Controller : null; }
+            return null;
         }
 
     }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
@@ -136,6 +137,10 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     /// <summary> Where in the <see cref="AudioBuffer"/> we are currently adding new audio data. </summary>
     public static int AudioBufferHeadWrite { get; set; } = 0;
 
+    private static Stopwatch CycleTimer = new();
+    private static float CycleTimeTicks;
+    private static uint CycleCount = 0;
+
     /// <summary> The frequency in Hz, that each of the raw bins from the DFT corresponds to. </summary>
     /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
     private static readonly float[] RawBinFrequencies = new float[TOTAL_DFT_BINS];
@@ -234,7 +239,13 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
 
                 FinishBufferRead(NFBufferRef);
 
+                CycleTimer.Restart();
                 Cycle();
+                CycleTimer.Stop();
+
+                const float TIMER_IIR = 0.97F;
+                if (BufferSize > 32) { CycleTimeTicks = (CycleTimeTicks * TIMER_IIR) + ((float)CycleTimer.ElapsedTicks / BufferSize * (1F - TIMER_IIR)); }
+                if (++CycleCount % 500 == 0) { Log.Debug($"{nameof(BaseNoteFinder)} is taking {CycleTimeTicks * 0.1F:F3}us per sample."); }
             }
             while (MoreBuffers);
         }

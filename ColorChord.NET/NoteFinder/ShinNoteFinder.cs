@@ -26,12 +26,14 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
 
     public ShinNoteFinder(string name, Dictionary<string, object> config)
     {
+        Configurer.Configure(typeof(ShinNoteFinderDFT), config, false);
         Configurer.Configure(this, config);
         Notes = new Note[NOTE_QTY];
         PersistentNoteIDs = new int[NOTE_QTY];
         OctaveBinValues = new float[ShinNoteFinderDFT.BinsPerOctave];
         AllBinValues = new float[ShinNoteFinderDFT.BinsPerOctave * ShinNoteFinderDFT.OctaveCount];
         SetupBuffers();
+        ShinNoteFinderDFT.Reconfigure();
     }
 
     public override int NoteCount => NOTE_QTY;
