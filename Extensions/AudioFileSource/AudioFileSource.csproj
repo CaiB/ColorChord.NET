@@ -28,7 +28,7 @@
     </ItemGroup>
 
     <Error Condition="!Exists(@(ILRepackPackage->'%(FullPath)'))" Text="You are trying to use the ILRepack package, but it is not installed or at the correct location" />
-    <Exec Command="@(ILRepackPackage->'%(fullpath)') /out:$(TargetPath) /wildcards /target:library /lib:$(OutputPath) $(TargetPath) $(OutputPath)NAudio*.dll" />
+    <Exec Command="@(ILRepackPackage->'%(fullpath)') /out:$(TargetPath) /wildcards /target:library /lib:$(OutputPath) $(TargetPath) $(OutputPath)/NAudio*.dll" />
   </Target>
 
 </Project>
