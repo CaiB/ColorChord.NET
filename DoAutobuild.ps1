@@ -4,7 +4,7 @@
 if ($LastExitCode -NE 0) { Exit -1; }
 
 $ExtensionDirs = Get-ChildItem "$env:APPVEYOR_BUILD_FOLDER\Extensions\" -Directory
-$ExtensionDirs | ForEach-Object
+$ExtensionDirs | ForEach-Object `
 {
     & dotnet publish "$env:APPVEYOR_BUILD_FOLDER\Extensions\$($_.Name)\$($_.Name).csproj" --output "$env:APPVEYOR_BUILD_FOLDER\Extensions\PublishResult" -p:OutputPath="$env:APPVEYOR_BUILD_FOLDER\Extensions\PublishResult" --configuration Release --verbosity minimal
     if ($LastExitCode -NE 0) { Exit -1; }
