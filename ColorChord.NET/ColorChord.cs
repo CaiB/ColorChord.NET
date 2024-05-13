@@ -224,7 +224,7 @@ namespace ColorChord.NET
                 if (VisType == null) { Log.Error($"A visualizer is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
                 if (VisName == null) { Log.Error($"A visualizer is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
 
-                IVisualizer? Vis = CreateObject<IVisualizer>(VisType.StartsWith('#') ? VisType : "ColorChord.NET.Visualizers." + VisType, Entry, true);
+                IVisualizer? Vis = CreateObject<IVisualizer>(VisType.StartsWith('#') ? VisType : "ColorChord.NET.Visualizers." + VisType, Entry);
                 if (Vis == null) { Log.Error($"Could not create visualizer \"{VisName}\". Check to make sure the type \"{VisType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
                 VisualizerInsts.Add(VisName, Vis);
             }
@@ -245,7 +245,7 @@ namespace ColorChord.NET
                 if (OutType == null) { Log.Error($"An output is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
                 if (OutName == null) { Log.Error($"An output is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
 
-                IOutput? Out = CreateObject<IOutput>(OutType.StartsWith('#') ? OutType : "ColorChord.NET.Outputs." + OutType, Entry, true);
+                IOutput? Out = CreateObject<IOutput>(OutType.StartsWith('#') ? OutType : "ColorChord.NET.Outputs." + OutType, Entry);
                 if (Out == null) { Log.Error($"Could not create output \"{OutName}\". Check to make sure the type \"{OutType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
                 OutputInsts.Add(OutName, Out);
             }
@@ -265,7 +265,7 @@ namespace ColorChord.NET
                 if (ControlType == null) { Log.Error($"A controller is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
                 if (ControlName == null) { Log.Error($"A controller is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
 
-                Controller? Ctrl = CreateObject<Controller>(ControlType.StartsWith('#') ? ControlType : "ColorChord.NET.Controllers." + ControlType, Entry, true, true);
+                Controller? Ctrl = CreateObject<Controller>(ControlType.StartsWith('#') ? ControlType : "ColorChord.NET.Controllers." + ControlType, Entry, true);
                 if (Ctrl == null) { Log.Error($"Could not create controller \"{ControlName}\". Check to make sure the type \"{ControlType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
                 ControllerInsts.Add(ControlName, Ctrl);
             }
@@ -275,8 +275,9 @@ namespace ColorChord.NET
         /// <typeparam name="BaseType"> The interface that the resulting object must implement. </typeparam>
         /// <param name="fullName"> The full name (namespace + type) of the object to create. </param>
         /// <param name="configEntry"> The config entry containing options that should be applied to the resulting object. </param>
+        /// <param name="provideControllerInterface">Whether the constructor needs to be provided with an <see cref="IControllerInterface"/></param>
         /// <returns> A configured, ready object, or null if it was not able to be made. </returns>
-        private static BaseType? CreateObject<BaseType>(string fullName, JToken configEntry, bool complexConfig = false, bool provideControllerInterface = false) where BaseType : IConfigurableAttr
+        private static BaseType? CreateObject<BaseType>(string fullName, JToken configEntry, bool provideControllerInterface = false) where BaseType : IConfigurableAttr
         {
             Type? ObjType;
             if (fullName.StartsWith('#'))
@@ -297,7 +298,7 @@ namespace ColorChord.NET
                 ManualResetEventSlim InstInitialized = new();
                 Thread InstThread = new(() =>
                 {
-                    Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry, complexConfig), provideControllerInterface);
+                    Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry), provideControllerInterface);
                     InstInitialized.Set();
                     if (Instance is IVisualizer Vis) { Vis.Start(); }
                     else if (Instance is IOutput Outp) { Outp.Start(); }
@@ -310,7 +311,7 @@ namespace ColorChord.NET
             }
             else
             {
-                Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry, complexConfig), provideControllerInterface);
+                Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry), provideControllerInterface);
                 if (Instance is IVisualizer Vis) { Vis.Start(); }
                 else if (Instance is IOutput Outp) { Outp.Start(); }
                 else if (Instance is Controller Ctrl) { Ctrl.Start(); }
@@ -327,15 +328,14 @@ namespace ColorChord.NET
 
         /// <summary> Takes a JSON token, and converts all single-valued children into a Dictionary. </summary>
         /// <param name="parent"> The JSON token whose child elements should be converted. </param>
-        /// <param name="convertComplex"> Whether to also convert arrays and objects, or to just convert single value items. </param>
         /// <returns> A Dictionary containing all properties contained in the parent element. </returns>
-        private static Dictionary<string, object> ToDict(JToken parent, bool convertComplex = false) // TODO: Revisit when convertComplex is on (why not always?)
+        private static Dictionary<string, object> ToDict(JToken parent)
         {
             Dictionary<string, object> Items = new();
             foreach(JToken ItemToken in parent.Children())
             {
                 JProperty Item = (JProperty)ItemToken;
-                if (Item.Value is JArray Array && convertComplex) // TODO: See if Object needs to be handled.
+                if (Item.Value is JArray Array) // TODO: See if Object needs to be handled.
                 {
                     if (Array.First == null) { continue; }
                     if (Array.First.Type == JTokenType.Object)
@@ -343,7 +343,7 @@ namespace ColorChord.NET
                         Dictionary<string, object>[] ArrayItems = new Dictionary<string, object>[Array.Count];
                         for (int i = 0; i < ArrayItems.Length; i++)
                         {
-                            ArrayItems[i] = ToDict(Array[i], true);
+                            ArrayItems[i] = ToDict(Array[i]);
                         }
                         Items.Add(Item.Name, ArrayItems);
                     }
