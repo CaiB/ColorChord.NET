@@ -131,7 +131,7 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
             TimingReceiverData[] OldData = TimingReceivers;
             TimingReceiverData[] NewData = new TimingReceiverData[OldData.Length - 1];
             if (Index > 0) { Array.Copy(OldData, 0, NewData, 0, Index); } // Copy items on the left of the removed item
-            if (Index < OldData.Length - 1) { Array.Copy(OldData, Index, NewData, Index - 1, OldData.Length - Index - 1); } // Copy items on the right of the removed item
+            else if (Index < OldData.Length - 1) { Array.Copy(OldData, Index + 1, NewData, Index, OldData.Length - Index - 1); } // Copy items on the right of the removed item
 
             TimingReceivers = NewData;
         }
@@ -140,6 +140,7 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
     internal static void RunTimingReceivers(uint samplesProcessed)
     {
         if (!IsTimingSource) { return; }
+        bool CalculatedOutput = false;
         lock (TimingReceivers)
         {
             for (int i = 0; i < TimingReceivers.Length; i++)
@@ -148,11 +149,13 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
                 Receiver.CurrentIncrement += samplesProcessed;
                 if (Receiver.CurrentIncrement >= Receiver.Period)
                 {
+                    if (!CalculatedOutput) { ShinNoteFinderDFT.CalculateOutput(); CalculatedOutput = true; }
                     Receiver.Receiver.Invoke();
                     Receiver.CurrentIncrement -= Receiver.Period;
                     if (Receiver.Period != 0 && Receiver.CurrentIncrement > Receiver.Period * 16)
                     {
-                        Log.Warn($"{nameof(ShinNoteFinder)} has timing receiver that is falling behind, the receiver {Receiver.Receiver} has a period of {Receiver.Period} samples which is too short to effectively call."); }
+                        Log.Warn($"{nameof(ShinNoteFinder)} has timing receiver that is falling behind, the receiver {Receiver.Receiver} has a period of {Receiver.Period} samples which is too short to effectively call.");
+                    }
                 }
             }
         }

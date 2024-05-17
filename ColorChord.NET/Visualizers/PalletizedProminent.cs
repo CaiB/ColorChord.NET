@@ -30,6 +30,7 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
     [ConfigFloat("TimePeriod", -1000000, 1000000, 100)]
     private float TimePeriod = 100F;
 
+    private bool IsOwnTimeSource = true;
     private ITimingSource? ConnectedTimingSource { get; set; } = null;
 
     private uint[] Data = new uint[1];
@@ -84,6 +85,7 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
         ITimingSource? NewSource;
         if (this.TimeSource.ToLower() == "this") { NewSource = new GenericTimingSourceSingle(); }
         else { NewSource = ColorChord.GetInstanceFromPath(this.TimeSource) as ITimingSource; }
+        this.IsOwnTimeSource = this.TimeSource.ToLower() == "this";
 
         this.ConnectedTimingSource?.RemoveTimingReceiver(Update);
         NewSource?.AddTimingReceiver(Update, this.TimePeriod);
@@ -107,6 +109,7 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
     public void Update()
     {
         if (NoteFinderCommon.OctaveBinValues == null) { return; }
+        if (this.IsOwnTimeSource) { ColorChord.NoteFinder?.UpdateOutputs(); }
 
         float MaxValue = 0F;
         int MaxIndex = 0;

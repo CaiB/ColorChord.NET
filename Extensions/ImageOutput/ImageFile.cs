@@ -56,7 +56,7 @@ public class ImageFile : IOutput
         Rgba32[] CurrentData = this.WritingToA ? this.DataA : this.DataB;
         for (int y = 0; y < this.Height; y++)
         {
-            CurrentData[(this.ImageWidth * y) + this.WriteHead] = new((byte)(NewData[y] >> 16), (byte)(NewData[y] >> 8), (byte)NewData[y], 0xFF);
+            CurrentData[(this.ImageWidth * (this.Height - y - 1)) + this.WriteHead] = new((byte)(NewData[y] >> 16), (byte)(NewData[y] >> 8), (byte)NewData[y], 0xFF);
         }
         ++this.WriteHead;
         if (this.WriteHead == this.ImageWidth)
