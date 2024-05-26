@@ -12,10 +12,10 @@ public static class VisualizerTools
     public static float CCToHue(float note)
     {
         const float ONE_THIRD = 1F / 3F;
-        const float TWO_THRIDS = 2F / 3F;
+        const float TWO_THIRDS = 2F / 3F;
         note %= 1F;
         if (note < ONE_THIRD) { return (ONE_THIRD - note) * 180F; }
-        else if (note < TWO_THRIDS) { return ((1F + ONE_THIRD) - note) * 360F; }
+        else if (note < TWO_THIRDS) { return ((1F + ONE_THIRD) - note) * 360F; }
         else { return ((1F - note) * 540F) + 60F; }
     }
 
@@ -27,12 +27,12 @@ public static class VisualizerTools
     public static uint CCToRGB(float note, float sat, float value)
     {
         const float ONE_THIRD = 1F / 3F;
-        const float TWO_THRIDS = 2F / 3F;
+        const float TWO_THIRDS = 2F / 3F;
         if (Sse41.IsSupported && ALLOW_SIMD)
         {
             Vector128<float> SHIFT = Vector128.Create((1F / 6F), (4F / 3F), 0F, (5F / 3F));
             Vector128<float> SCALE = Vector128.Create(0.5F, 1F, 0F, 1.5F);
-            Vector128<float> THRESHOLDS = Vector128.Create(ONE_THIRD, TWO_THRIDS, 10F, 10F);
+            Vector128<float> THRESHOLDS = Vector128.Create(ONE_THIRD, TWO_THIRDS, 10F, 10F);
 
             Vector128<float> Note = Vector128.Create(note);
             Vector128<float> NoteFrac = Sse.Subtract(Note, Sse41.RoundToNegativeInfinity(Note));
@@ -48,7 +48,7 @@ public static class VisualizerTools
             note -= MathF.Floor(note);
             float Hue;
             if (note <= ONE_THIRD) { Hue = (1F / 6F) - (note * 0.5F); }
-            else if (note <= TWO_THRIDS) { Hue = (4F / 3F) - note; }
+            else if (note <= TWO_THIRDS) { Hue = (4F / 3F) - note; }
             else { Hue = (5F / 3F) - (note * 1.5F); }
             return HSVToRGB(Hue, sat, value);
         }
