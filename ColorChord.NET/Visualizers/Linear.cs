@@ -255,7 +255,7 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
                 if (OutSaturation > 1) { OutSaturation = 1; }
                 if (OutSaturation > LEDLimit) { OutSaturation = LEDLimit; }
 
-                uint Colour = VisualizerTools.CCtoHEX(Notes[NoteIndex].Position, 1.0F, OutSaturation);
+                uint Colour = VisualizerTools.CCToRGB(Notes[NoteIndex].Position, 1.0F, OutSaturation);
                 this.OutputDataContinuous[this.OutputCountContinuous].R = (byte)((Colour >> 16) & 0xff);
                 this.OutputDataContinuous[this.OutputCountContinuous].G = (byte)((Colour >> 8) & 0xff);
                 this.OutputDataContinuous[this.OutputCountContinuous].B = (byte)((Colour) & 0xff);
@@ -350,7 +350,7 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
                 if (OutSaturation > 1) { OutSaturation = 1; }
                 if (OutSaturation > LEDLimit) { OutSaturation = LEDLimit; }
 
-                uint Colour = VisualizerTools.CCtoHEX(LastLEDColours[LEDIndex], 1.0F, OutSaturation);
+                uint Colour = VisualizerTools.CCToRGB(LastLEDColours[LEDIndex], 1.0F, OutSaturation);
 
                 this.OutputDataDiscrete[LEDIndex] = Colour;
             }

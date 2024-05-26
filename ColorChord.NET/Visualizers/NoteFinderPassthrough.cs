@@ -40,7 +40,7 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
     {
         float[] RawData = NoteFinderCommon.AllBinValues!;
         if (this.Data.Length != RawData.Length) { this.Data = new uint[RawData.Length]; }
-        for (int i = 0; i < RawData.Length; i++) { this.Data[i] = VisualizerTools.CCtoHEX((i % 24) / 24F, 1F, MathF.Pow(RawData[i] * 2, 2)); }
+        for (int i = 0; i < RawData.Length; i++) { this.Data[i] = VisualizerTools.CCToRGB((i % 24) / 24F, 1F, MathF.Pow(RawData[i] * 2, 2)); }
         foreach(IOutput Out in this.Outputs) { Out.Dispatch(); }
     }
 

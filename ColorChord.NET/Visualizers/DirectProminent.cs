@@ -87,7 +87,7 @@ public class DirectProminent : IVisualizer, IDiscrete1D
         if (MaxValue == 0F) { this.Data[0] = 0; }
         else
         {
-            this.Data[0] = VisualizerTools.CCtoHEX((float)MaxIndex / NoteFinderCommon.OctaveBinValues.Length, 1F, MathF.Pow(MaxValue, this.SaturationExponent) * this.SaturationAmplifier);
+            this.Data[0] = VisualizerTools.CCToRGB((float)MaxIndex / NoteFinderCommon.OctaveBinValues.Length, 1F, MathF.Pow(MaxValue, this.SaturationExponent) * this.SaturationAmplifier);
         }
 
         foreach (IOutput Output in this.Outputs) { Output.Dispatch(); }

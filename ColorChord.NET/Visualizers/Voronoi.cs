@@ -242,7 +242,7 @@ public class Voronoi : IVisualizer, IDiscrete2D, IControllableAttr
                         float Saturation = NoteFinderCommon.Notes[BestMatch].AmplitudeFinal * this.SaturationAmplifier;
                         if (Saturation > 1F) { Saturation = 1F; }
                         float Note = NoteFinderCommon.Notes[BestMatch].Position / this.BinsPerOctave;
-                        Colour = VisualizerTools.CCtoHEX(Note, 1F, MathF.Pow(Saturation, this.OutGamma));
+                        Colour = VisualizerTools.CCToRGB(Note, 1F, MathF.Pow(Saturation, this.OutGamma));
                     }
                     this.OutputDataDiscrete[X, Y] = Colour;
                 }
