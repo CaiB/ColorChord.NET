@@ -70,6 +70,7 @@
     <EmbeddedResource Remove="MainForm.resx" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="Outputs\Display\Shaders\CaptureCompare.frag" />
     <None Remove="Outputs\Display\Shaders\CloudChamberRing.frag" />
     <None Remove="Outputs\Display\Shaders\CloudChamberTrails.frag" />
     <None Remove="Outputs\Display\Shaders\ColorRibbon.frag" />
@@ -106,5 +107,8 @@
 	</Target>
 	<ItemGroup>
 		<Compile Include="$(ProjectDir)Config\DefaultConfigInfo.cs" />
+	</ItemGroup>
+	<ItemGroup>
+	  <EmbeddedResource Include="Outputs\Display\Shaders\CaptureCompare.frag" />
 	</ItemGroup>
 </Project>
