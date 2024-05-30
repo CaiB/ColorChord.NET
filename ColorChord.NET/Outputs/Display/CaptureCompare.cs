@@ -3,6 +3,7 @@ using ColorChord.NET.API.Outputs.Display;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
 using OpenTK.Graphics.OpenGL4;
+using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using System;
@@ -23,12 +24,13 @@ public class CaptureCompare : IDisplayMode
     private int TextureHandleA, TextureHandleB, TextureHandleCaptureA, TextureHandleCaptureB;
     private int TextureWidthA, TextureWidthB;//, TextureLengthA, TextureLengthB;
 
-    private int LocationAdvanceALive, LocationAdvanceBLive, LocationAdvanceACapture, LocationAdvanceBCapture;
+    private int LocationAdvanceALive, LocationAdvanceBLive, LocationAdvanceACapture, LocationAdvanceBCapture, LocationACaptureBounds, LocationBCaptureBounds;
 
     private uint[] NewTextureDataA, NewTextureDataB;
     private int UploadedTextureLocA, UploadedTextureLocB, PopulatedTextureLocA, PopulatedTextureLocB;
 
-    private bool DoCaptureA, DoCaptureB;
+    private bool DoCaptureA, DoCaptureB, PushNewBounds;
+    private Vector2 CaptureABounds, CaptureBBounds;
 
     private bool SetupDone = false;
 
@@ -122,10 +124,14 @@ public class CaptureCompare : IDisplayMode
         this.LocationAdvanceBLive = this.Shader.GetUniformLocation("AdvanceBLive");
         this.LocationAdvanceACapture = this.Shader.GetUniformLocation("AdvanceACapture");
         this.LocationAdvanceBCapture = this.Shader.GetUniformLocation("AdvanceBCapture");
+        this.LocationACaptureBounds = this.Shader.GetUniformLocation("CaptureABounds");
+        this.LocationBCaptureBounds = this.Shader.GetUniformLocation("CaptureBBounds");
 
         this.SetupDone = true;
 
-        this.HostWindow.UpdateFrame += UpdateFrame;
+        this.HostWindow.KeyDown += OnKeyDown;
+        this.HostWindow.MouseDown += OnMouseDown;
+        this.HostWindow.MouseUp += OnMouseUp;
     }
 
     public bool SupportsFormat(IVisualizerFormat format) => format is IDiscrete1D;
@@ -183,6 +189,13 @@ public class CaptureCompare : IDisplayMode
             GL.Uniform1(this.LocationAdvanceBCapture, (float)this.UploadedTextureLocA / TEX_HEIGHT);
             this.DoCaptureB = false;
         }
+
+        if (this.PushNewBounds)
+        {
+            GL.Uniform2(this.LocationACaptureBounds, this.CaptureABounds);
+            GL.Uniform2(this.LocationBCaptureBounds, this.CaptureBBounds);
+            this.PushNewBounds = false;
+        }
         
 
         GL.BindVertexArray(this.VertexArrayHandle);
@@ -191,11 +204,56 @@ public class CaptureCompare : IDisplayMode
 
     }
 
-    public void UpdateFrame(FrameEventArgs evt)
+    private void OnMouseUp(MouseButtonEventArgs args)
     {
-        KeyboardState KeyState = this.HostWindow.KeyboardState;
-        if (KeyState.IsKeyDown(Keys.A)) { this.DoCaptureA = true; }
-        if (KeyState.IsKeyDown(Keys.Z)) { this.DoCaptureB = true; }
+        float HalfWidth = this.HostWindow.Width / 2F;
+        float HalfHeight = this.HostWindow.Height / 2F;
+        if (this.HostWindow.MousePosition.X <= HalfWidth) // Capture
+        {
+            float EndPos = this.HostWindow.MousePosition.X / HalfWidth;
+            if (this.HostWindow.MousePosition.Y <= HalfHeight)
+            {
+                this.CaptureABounds = new(MathF.Min(this.CaptureABounds.X, EndPos), MathF.Max(this.CaptureABounds.X, EndPos));
+            }
+            else
+            {
+                this.CaptureBBounds = new(MathF.Min(this.CaptureBBounds.X, EndPos), MathF.Max(this.CaptureBBounds.X, EndPos));
+            }
+            this.PushNewBounds = true;
+        }
+    }
+
+    private void OnMouseDown(MouseButtonEventArgs args)
+    {
+        float HalfWidth = this.HostWindow.Width / 2F;
+        float HalfHeight = this.HostWindow.Height / 2F;
+        if (this.HostWindow.MousePosition.X <= HalfWidth) // Capture
+        {
+            if (this.HostWindow.MousePosition.Y <= HalfHeight) { this.CaptureABounds = new(this.HostWindow.MousePosition.X / HalfWidth); }
+            else { this.CaptureBBounds = new(this.HostWindow.MousePosition.X / HalfWidth); }
+        }
+    }
+
+    private void OnKeyDown(KeyboardKeyEventArgs evt)
+    {
+        if (evt.Key == Keys.A)
+        {
+            this.DoCaptureA = true;
+            this.CaptureABounds = new(0F, 1F);
+            this.PushNewBounds = true;
+        }
+        if (evt.Key == Keys.Z)
+        {
+            this.DoCaptureB = true;
+            this.CaptureBBounds = new(0F, 1F);
+            this.PushNewBounds = true;
+        }
+        if (evt.Key == Keys.Q)
+        {
+            this.CaptureABounds = new(0F, 1F);
+            this.CaptureBBounds = new(0F, 1F);
+            this.PushNewBounds = true;
+        }
     }
 
     public void Resize(int width, int height) { }

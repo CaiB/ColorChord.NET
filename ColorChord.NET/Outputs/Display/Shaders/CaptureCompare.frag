@@ -8,6 +8,7 @@ uniform sampler2D TextureUnitALive, TextureUnitBLive, TextureUnitACapture, Textu
 uniform float HorizontalSplit;
 
 uniform float AdvanceALive, AdvanceBLive, AdvanceACapture, AdvanceBCapture;
+uniform vec2 CaptureABounds, CaptureBBounds;
 
 /*vec3 HSVToRGB(vec3 c)
 {
@@ -32,11 +33,17 @@ void main()
     {
         if (TexCoord.y < 0.5) // A
         {
-            TextureColour = texture(TextureUnitACapture, (vec2(1.0 - TexCoord.y, TexCoord.x) - vec2(0.0, -AdvanceACapture / 2.0)) * vec2(1.0 / HorizontalSplit, 2.0));
+            vec2 AreaPos = TexCoord * vec2(1.0 / HorizontalSplit, 2.0);
+            vec2 AreaResized = vec2(AreaPos.x * (CaptureABounds.y - CaptureABounds.x) + CaptureABounds.x, AreaPos.y);
+            vec2 TexturePos = vec2(1.0 - AreaResized.y, AreaResized.x + AdvanceACapture);
+            TextureColour = texture(TextureUnitACapture, TexturePos);
         }
         else // B
         {
-            TextureColour = texture(TextureUnitBCapture, (vec2(0.5 - TexCoord.y, TexCoord.x) - vec2(0.0, -AdvanceBCapture / 2.0)) * vec2(1.0 / HorizontalSplit, 2.0));
+            vec2 AreaPos = (TexCoord - vec2(0.0, 0.5)) * vec2(1.0 / HorizontalSplit, 2.0);
+            vec2 AreaResized = vec2(AreaPos.x * (CaptureBBounds.y - CaptureBBounds.x) + CaptureBBounds.x, AreaPos.y);
+            vec2 TexturePos = vec2(1.0 - AreaResized.y, AreaResized.x + AdvanceBCapture);
+            TextureColour = texture(TextureUnitBCapture, TexturePos);
         }
     }
     else // Live
