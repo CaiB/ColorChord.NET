@@ -7,7 +7,7 @@ uniform sampler2D TextureUnitALive, TextureUnitBLive, TextureUnitACapture, Textu
 
 uniform float HorizontalSplit;
 
-uniform float AdvanceA;
+uniform float AdvanceALive, AdvanceBLive, AdvanceACapture, AdvanceBCapture;
 
 /*vec3 HSVToRGB(vec3 c)
 {
@@ -32,18 +32,18 @@ void main()
     {
         if (TexCoord.y < 0.5) // A
         {
-            TextureColour = texture(TextureUnitACapture, TexCoord * vec2(1.0 / HorizontalSplit, 2.0));
+            TextureColour = texture(TextureUnitACapture, (vec2(1.0 - TexCoord.y, TexCoord.x) - vec2(0.0, -AdvanceACapture / 2.0)) * vec2(1.0 / HorizontalSplit, 2.0));
         }
         else // B
         {
-            TextureColour = texture(TextureUnitBCapture, (TexCoord - vec2(0.0, 0.5)) * vec2(1.0 / HorizontalSplit, 2.0));
+            TextureColour = texture(TextureUnitBCapture, (vec2(0.5 - TexCoord.y, TexCoord.x) - vec2(0.0, -AdvanceBCapture / 2.0)) * vec2(1.0 / HorizontalSplit, 2.0));
         }
     }
     else // Live
     {
         if (TexCoord.y < 0.5) // A
         {
-            TextureColour = texture(TextureUnitALive, (vec2(1.0 - TexCoord.y, TexCoord.x) - vec2(0.0, HorizontalSplit - (AdvanceA / 2.0))) * vec2(2.0, 1.0 / (1.0 - HorizontalSplit)));
+            TextureColour = texture(TextureUnitALive, (vec2(1.0 - TexCoord.y, TexCoord.x) - vec2(0.0, HorizontalSplit - (AdvanceALive / 2.0))) * vec2(2.0, 1.0 / (1.0 - HorizontalSplit)));
         }
         else // B
         {
