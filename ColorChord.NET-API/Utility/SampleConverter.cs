@@ -32,7 +32,7 @@ public static class SampleConverter
             const int BYTES_PER_FRAME = 4;
             EndOfBuffer = (nint)(inputBuffer + (inputFramesAvailable * BYTES_PER_FRAME));
             uint Frame = 0;
-            if (Avx2.IsSupported)
+            if (Avx2.IsSupported && inputFramesAvailable >= 16)
             {
                 Vector256<short> Ones = Vector256.Create((short)1);
                 uint EndFrame = inputFramesAvailable - 16;
@@ -100,7 +100,7 @@ public static class SampleConverter
             const int BYTES_PER_FRAME = 4;
             EndOfBuffer = (nint)(inputBuffer + (inputFramesAvailable * BYTES_PER_FRAME));
             uint Frame = 0;
-            if (Avx2.IsSupported)
+            if (Avx2.IsSupported && inputFramesAvailable >= 16)
             {
                 Vector256<float> Scale = Vector256.Create(SCALE_FACTOR);
                 uint EndFrame = inputFramesAvailable - 16;
@@ -130,7 +130,7 @@ public static class SampleConverter
             const int BYTES_PER_FRAME = 8;
             EndOfBuffer = (nint)(inputBuffer + (inputFramesAvailable * BYTES_PER_FRAME));
             uint Frame = 0;
-            if (Avx2.IsSupported)
+            if (Avx2.IsSupported && inputFramesAvailable >= 16)
             {
                 Vector256<float> Scale = Vector256.Create(SCALE_FACTOR_2CH);
                 uint EndFrame = inputFramesAvailable - 16;
