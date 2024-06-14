@@ -47,6 +47,11 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     [ConfigFloat("LightSiding", 0F, 100F, 1F)]
     public float LightSiding { get; set; }
 
+    /// <summary>Whether new notes should appear in semi-random locations (false), or all notes should always remain sorted by their colour (true).</summary>
+    [Controllable("IsOrdered")]
+    [ConfigBool("IsOrdered", false)]
+    public bool IsOrdered { get; set; }
+
     /// <summary> Whether to use smoothed input data (to reduce flicker at the cost of higher response time), or only the latest data. </summary>
     [Controllable("SteadyBright")]
     [ConfigBool("SteadyBright", false)]
@@ -168,13 +173,24 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     private int PrevAdvance;
     private readonly float[] LastVectorCenters; // Where the center-point of each block was last frame
 
+    private struct InternalNote : IComparable<InternalNote>
+    {
+        /// <summary>The amplitudes of each note, time-smoothed</summary>
+        public float AmplitudeSmooth { get; set; }
+        /// <summary>The amplitudes of each note, with minimal time-smoothing</summary>
+        public float AmplitudeFast { get; set; }
+        /// <summary>The locations of the notes on the scale, range 0 ~ 1</summary>
+        public float Position { get; set; }
+
+        public int CompareTo(InternalNote other) => this.Position.CompareTo(other.Position);
+    }
+
     public void Update()
     {
+
         lock (this.SettingUpdateLock)
         {
-            float[] NoteAmplitudes = new float[this.NoteCount]; // The amplitudes of each note, time-smoothed
-            float[] NoteAmplitudesFast = new float[this.NoteCount]; // The amplitudes of each note, with minimal time-smoothing
-            float[] NotePositions = new float[this.NoteCount]; // The locations of the notes, range 0 ~ 1.
+            InternalNote[] Notes = new InternalNote[this.NoteCount];
             float AmplitudeSum = 0;
 
             if (this.OutputDataDiscrete.Length != this.LEDCount) { UpdateSize(); }
@@ -182,23 +198,23 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
             // Populate data from the NoteFinder.
             for (int i = 0; i < this.NoteCount; i++)
             {
-                NotePositions[i] = NoteFinderCommon.Notes[i].Position / this.BinsPerOctave;
-                NoteAmplitudes[i] = MathF.Pow(NoteFinderCommon.Notes[i].AmplitudeFiltered, this.LightSiding);
-                NoteAmplitudesFast[i] = MathF.Pow(NoteFinderCommon.Notes[i].Amplitude, this.LightSiding);
-                AmplitudeSum += NoteAmplitudes[i];
+                Notes[i].Position = NoteFinderCommon.Notes[i].Position / this.BinsPerOctave;
+                Notes[i].AmplitudeSmooth = MathF.Pow(NoteFinderCommon.Notes[i].AmplitudeFiltered, this.LightSiding);
+                Notes[i].AmplitudeFast = MathF.Pow(NoteFinderCommon.Notes[i].Amplitude, this.LightSiding);
+                AmplitudeSum += Notes[i].AmplitudeSmooth;
             }
 
             // Adjust AmplitudeSum to remove notes that are too weak to be included.
             float AmplitudeSumAdj = 0;
             for (int i = 0; i < this.NoteCount; i++)
             {
-                NoteAmplitudes[i] -= this.LEDFloor * AmplitudeSum;
-                if (NoteAmplitudes[i] / AmplitudeSum < 0) // Note too weak, remove it from consideration.
+                Notes[i].AmplitudeSmooth -= this.LEDFloor * AmplitudeSum;
+                if (Notes[i].AmplitudeSmooth / AmplitudeSum < 0) // Note too weak, remove it from consideration.
                 {
-                    NoteAmplitudes[i] = 0;
-                    NoteAmplitudesFast[i] = 0;
+                    Notes[i].AmplitudeSmooth = 0;
+                    Notes[i].AmplitudeFast = 0;
                 }
-                AmplitudeSumAdj += NoteAmplitudes[i];
+                AmplitudeSumAdj += Notes[i].AmplitudeSmooth;
             }
             AmplitudeSum = AmplitudeSumAdj;
             // AmplitudeSum now only includes notes that are large enough (relative to others) to be worth displaying.
@@ -212,36 +228,38 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
             this.OutputCountContinuous = 0;
             float[] VectorCenters = new float[this.NoteCount];
 
+            if (this.IsOrdered) { Array.Sort(Notes); } // Sort the notes by their location on the scale; map this to the line
+
             // Fill the LED slots with available notes.
             for (int NoteIndex = 0; NoteIndex < this.NoteCount; NoteIndex++)
             {
                 // How many of the LEDs should be taken up by this colour.
-                int LEDCountColour = (int)((NoteAmplitudes[NoteIndex] / AmplitudeSum) * this.LEDCount);
+                int LEDCountColour = (int)((Notes[NoteIndex].AmplitudeSmooth / AmplitudeSum) * this.LEDCount);
                 // Fill those LEDs with this note's data.
                 for (int LEDIndex = 0; LEDIndex < LEDCountColour && LEDsFilled < this.LEDCount; LEDIndex++)
                 {
-                    LEDColours[LEDsFilled] = NotePositions[NoteIndex];
-                    LEDAmplitudes[LEDsFilled] = NoteAmplitudes[NoteIndex];
-                    LEDAmplitudesFast[LEDsFilled] = NoteAmplitudesFast[NoteIndex];
+                    LEDColours[LEDsFilled] = Notes[NoteIndex].Position;
+                    LEDAmplitudes[LEDsFilled] = Notes[NoteIndex].AmplitudeSmooth;
+                    LEDAmplitudesFast[LEDsFilled] = Notes[NoteIndex].AmplitudeFast;
                     LEDsFilled++;
                 }
 
                 // For continuous outputs
-                float VectorSizeColour = (NoteAmplitudes[NoteIndex] / AmplitudeSum);
+                float VectorSizeColour = (Notes[NoteIndex].AmplitudeSmooth / AmplitudeSum);
                 if (VectorSizeColour == 0 || float.IsNaN(VectorSizeColour)) { continue; }
                 this.OutputDataContinuous[this.OutputCountContinuous].Location = VectorPosition;
                 this.OutputDataContinuous[this.OutputCountContinuous].Size = VectorSizeColour;
                 VectorCenters[NoteIndex] = VectorPosition + (VectorSizeColour / 2);
 
-                float OutSaturation = (this.SteadyBright ? NoteAmplitudes[NoteIndex] : NoteAmplitudesFast[NoteIndex]) * this.SaturationAmplifier;
+                float OutSaturation = (this.SteadyBright ? Notes[NoteIndex].AmplitudeSmooth : Notes[NoteIndex].AmplitudeFast) * this.SaturationAmplifier;
                 if (OutSaturation > 1) { OutSaturation = 1; }
                 if (OutSaturation > LEDLimit) { OutSaturation = LEDLimit; }
 
-                uint Colour = VisualizerTools.CCtoHEX(NotePositions[NoteIndex], 1.0F, OutSaturation);
+                uint Colour = VisualizerTools.CCToRGB(Notes[NoteIndex].Position, 1.0F, OutSaturation);
                 this.OutputDataContinuous[this.OutputCountContinuous].R = (byte)((Colour >> 16) & 0xff);
                 this.OutputDataContinuous[this.OutputCountContinuous].G = (byte)((Colour >> 8) & 0xff);
                 this.OutputDataContinuous[this.OutputCountContinuous].B = (byte)((Colour) & 0xff);
-                this.OutputDataContinuous[this.OutputCountContinuous].Colour = NotePositions[NoteIndex];
+                this.OutputDataContinuous[this.OutputCountContinuous].Colour = Notes[NoteIndex].Position;
 
                 VectorPosition += VectorSizeColour;
                 this.OutputCountContinuous++;
@@ -306,7 +324,7 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
                 float VectorCenterOffset = 0;
                 for (int NoteIndex = 0; NoteIndex < this.NoteCount; NoteIndex++)
                 {
-                    VectorCenterOffset += (VectorCenters[NoteIndex] - LastVectorCenters[NoteIndex]) * NoteAmplitudes[NoteIndex]; // TODO: CONSIDER USINGBLOCK SIZE INSTEAD OF AMPLITUDE
+                    VectorCenterOffset += (VectorCenters[NoteIndex] - LastVectorCenters[NoteIndex]) * Notes[NoteIndex].AmplitudeSmooth; // TODO: CONSIDER USINGBLOCK SIZE INSTEAD OF AMPLITUDE
                 }
                 //VectorCenterOffset /= (this.OutputCountContinuous + 2); // This is now an average offset.
                 const float IIR = 0.6F;
@@ -332,7 +350,7 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
                 if (OutSaturation > 1) { OutSaturation = 1; }
                 if (OutSaturation > LEDLimit) { OutSaturation = LEDLimit; }
 
-                uint Colour = VisualizerTools.CCtoHEX(LastLEDColours[LEDIndex], 1.0F, OutSaturation);
+                uint Colour = VisualizerTools.CCToRGB(LastLEDColours[LEDIndex], 1.0F, OutSaturation);
 
                 this.OutputDataDiscrete[LEDIndex] = Colour;
             }

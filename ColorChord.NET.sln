@@ -17,7 +17,17 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Extensions", "Extensions", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UDPReceiverController", "Extensions\UDPReceiverController\UDPReceiverController.csproj", "{D045E5CD-0ADD-4582-B385-9E1CC1D0F752}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WindowsController", "Extensions\WindowsController\WindowsController.csproj", "{58EA93DE-89DD-4BBD-9633-9BD3A50A57A2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WindowsController", "Extensions\WindowsController\WindowsController.csproj", "{58EA93DE-89DD-4BBD-9633-9BD3A50A57A2}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AudioFileSource", "Extensions\AudioFileSource\AudioFileSource.csproj", "{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}"
+	ProjectSection(ProjectDependencies) = postProject
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0} = {2851D19F-7B96-4EA3-8438-90F186C07CC0}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ImageOutput", "Extensions\ImageOutput\ImageOutput.csproj", "{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{2851D19F-7B96-4EA3-8438-90F186C07CC0} = {2851D19F-7B96-4EA3-8438-90F186C07CC0}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -89,6 +99,30 @@ Global
 		{58EA93DE-89DD-4BBD-9633-9BD3A50A57A2}.Release|x64.Build.0 = Release|Any CPU
 		{58EA93DE-89DD-4BBD-9633-9BD3A50A57A2}.Release|x86.ActiveCfg = Release|Any CPU
 		{58EA93DE-89DD-4BBD-9633-9BD3A50A57A2}.Release|x86.Build.0 = Release|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Debug|x64.Build.0 = Debug|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Debug|x86.Build.0 = Debug|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Release|x64.ActiveCfg = Release|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Release|x64.Build.0 = Release|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Release|x86.ActiveCfg = Release|Any CPU
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A}.Release|x86.Build.0 = Release|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Debug|x64.Build.0 = Debug|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Debug|x86.Build.0 = Debug|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Release|x64.ActiveCfg = Release|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Release|x64.Build.0 = Release|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Release|x86.ActiveCfg = Release|Any CPU
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -96,6 +130,8 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{D045E5CD-0ADD-4582-B385-9E1CC1D0F752} = {9C6DF1A6-92A4-4CC9-99C5-C9CFBECB6E09}
 		{58EA93DE-89DD-4BBD-9633-9BD3A50A57A2} = {9C6DF1A6-92A4-4CC9-99C5-C9CFBECB6E09}
+		{5B4403E3-7DB6-4ADA-A52F-C80F0E01892A} = {9C6DF1A6-92A4-4CC9-99C5-C9CFBECB6E09}
+		{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1} = {9C6DF1A6-92A4-4CC9-99C5-C9CFBECB6E09}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6679A80E-95B6-4840-BC13-0D43DF7E70FD}

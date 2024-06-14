@@ -1,6 +1,7 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net7.0</TargetFramework>
+	<RollForward>LatestMajor</RollForward>
     <OutputType>Exe</OutputType>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <PlatformTarget>x64</PlatformTarget>
@@ -38,6 +39,8 @@
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough3Textured.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.vert" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\RadialPoles.frag" />
+    <EmbeddedResource Include="Outputs\Display\Shaders\ShinNFDebug.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2Textured.frag" />
@@ -56,7 +59,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="Newtonsoft.Json">
-      <Version>13.0.1</Version>
+      <Version>13.0.2</Version>
     </PackageReference>
     <PackageReference Include="OpenTK" Version="4.6.7" />
     <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
@@ -67,6 +70,7 @@
     <EmbeddedResource Remove="MainForm.resx" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="Outputs\Display\Shaders\CaptureCompare.frag" />
     <None Remove="Outputs\Display\Shaders\CloudChamberRing.frag" />
     <None Remove="Outputs\Display\Shaders\CloudChamberTrails.frag" />
     <None Remove="Outputs\Display\Shaders\ColorRibbon.frag" />
@@ -77,6 +81,8 @@
     <None Remove="Outputs\Display\Shaders\Passthrough3Textured.vert" />
     <None Remove="Outputs\Display\Shaders\Radar.frag" />
     <None Remove="Outputs\Display\Shaders\Radar.vert" />
+    <None Remove="Outputs\Display\Shaders\RadialPoles.frag" />
+    <None Remove="Outputs\Display\Shaders\ShinNFDebug.frag" />
     <None Remove="Outputs\Display\Shaders\SmoothRadialBright.frag" />
     <None Remove="Outputs\Display\Shaders\tube3d.frag" />
     <None Remove="Outputs\Display\Shaders\tube3d.vert" />
@@ -85,7 +91,7 @@
     <ProjectReference Include="..\ColorChord.NET-API\ColorChord.NET-API.csproj" />
   </ItemGroup>
   <PropertyGroup>
-
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
   <Target Name="CopyOver" AfterTargets="Build">
     <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.dll $(TargetDir)" />
@@ -95,4 +101,14 @@
     <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.dll $(PublishDir)" />
     <Exec Command="XCOPY /f /y $(ProjectDir)..\Libraries\CNFA.so $(PublishDir)" />
   </Target>
+
+    <Target Name="PreBuild" BeforeTargets="CoreCompile">
+        <Exec Command="powershell -ExecutionPolicy Unrestricted -File &quot;$(ProjectDir)..\GenBuildInfo.ps1&quot; -ConfigHashFile &quot;$(ProjectDir)Config\DefaultConfigInfo.cs&quot; -ConfigFile &quot;$(ProjectDir)sample-config.json&quot;" />
+	</Target>
+	<ItemGroup>
+		<Compile Include="$(ProjectDir)Config\DefaultConfigInfo.cs" />
+	</ItemGroup>
+	<ItemGroup>
+	  <EmbeddedResource Include="Outputs\Display\Shaders\CaptureCompare.frag" />
+	</ItemGroup>
 </Project>

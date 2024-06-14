@@ -1,5 +1,5 @@
 image: Visual Studio 2022
-version: 0.7.0.{build}
+version: 0.8.0.{build}
 branches:
   only:
   - master
@@ -25,31 +25,7 @@ dotnet_csproj:
   informational_version: '{version}'
 build_script:
 - pwsh: >-
-    & nuget restore
-
-
-    & dotnet publish "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\ColorChord.NET.csproj" --output "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\PublishResult" --configuration Release --verbosity minimal
-
-
-    $ExtensionDirs = Get-ChildItem "$env:APPVEYOR_BUILD_FOLDER\Extensions\" -Directory
-
-
-    $ExtensionDirs | ForEach-Object {
-
-
-    & dotnet publish "$env:APPVEYOR_BUILD_FOLDER\Extensions\$($_.Name)\$($_.Name).csproj" --output "$env:APPVEYOR_BUILD_FOLDER\Extensions\PublishResult" --configuration Release --verbosity minimal
-
-
-    }
-
-
-    Remove-Item "$env:APPVEYOR_BUILD_FOLDER\Extensions\PublishResult\ColorChord.NET-API.*"
-
-
-    & 7z a "ColorChord.NET-autobuild-v$($env:appveyor_build_version).zip" "$env:APPVEYOR_BUILD_FOLDER\ColorChord.NET\PublishResult\*"
-
-
-    & 7z a "ColorChord.NET-Extensions-autobuild-v$($env:appveyor_build_version).zip" "$env:APPVEYOR_BUILD_FOLDER\Extensions\PublishResult\*"
+    . $env:APPVEYOR_BUILD_FOLDER\DoAutobuild.ps1
 artifacts:
 - path: ColorChord.NET*autobuild-v*.zip
 deploy:

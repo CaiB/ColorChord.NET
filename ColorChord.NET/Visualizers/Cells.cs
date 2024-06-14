@@ -288,7 +288,7 @@ public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
                     float Saturation = BinValues[BinID] * this.SaturationAmplifier;
                     float SaturationUsed = (this.SteadyBright ? SaturationSlow : Saturation);
                     if (SaturationUsed > 1) { SaturationUsed = 1; }
-                    this.OutputData[LEDInd] = VisualizerTools.CCtoHEX(BinColours[BinID], 1.0F, SaturationUsed);
+                    this.OutputData[LEDInd] = VisualizerTools.CCToRGB(BinColours[BinID], 1.0F, SaturationUsed);
                 }
             }
         }

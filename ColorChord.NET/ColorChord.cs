@@ -5,15 +5,18 @@ using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.Config;
 using ColorChord.NET.Controllers;
 using ColorChord.NET.Extensions;
 using ColorChord.NET.NoteFinder;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Data;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Threading;
 using static ColorChord.NET.API.Config.ConfigNames;
 
@@ -36,8 +39,10 @@ namespace ColorChord.NET
         {
             for(int i = 0; i < args.Length; i++)
             {
-                if (args[i] == "config" && args.Length > i + 1) { ConfigFile = args[++i]; }
-                if (args[i] == "debug") { Log.EnableDebug = true; }
+                string ThisArg = args[i].ToLower();
+                if (ThisArg == "--config" && args.Length > i + 1) { ConfigFile = args[++i]; }
+                if (ThisArg == "--debug") { Log.EnableDebug = true; }
+                if (ThisArg == "--help" || ThisArg == "-h" || ThisArg == "-?" || ThisArg == "/h" || ThisArg == "/help" || ThisArg == "/?") { WriteHelp(); Environment.Exit(0); }
             }
 
             if (!File.Exists(ConfigFile)) // No config file
@@ -45,10 +50,30 @@ namespace ColorChord.NET
                 Log.Warn("Could not find config file. Creating and using default.");
                 WriteDefaultConfig();
             }
+
+            ColorChordAPI.Configurer = ConfigurerInst.Inst;
+
             ExtensionHandler.LoadExtensions();
             ExtensionHandler.InitExtensions();
             ReadConfig();
             ExtensionHandler.PostInitExtensions();
+
+            StopSignal.Wait();
+            Log.Info("Exiting...");
+            ExtensionHandler.StopExtensions();
+            Source?.Stop();
+            NoteFinder?.Stop();
+            foreach (IVisualizer Visualizer in VisualizerInsts.Values) { Visualizer.Stop(); }
+            foreach (IOutput Output in OutputInsts.Values) { Output.Stop(); }
+            foreach (Controller Controller in ControllerInsts.Values) { Controller.Stop(); }
+            foreach (Thread Thread in InstanceThreads) { Thread.Join(); }
+        }
+
+        private static void WriteHelp()
+        {
+            Console.WriteLine("--config <file>: Specifies the config file that ColorChord.NET should read");
+            Console.WriteLine("--debug: Outputs additional debug information");
+            Console.WriteLine("--help: Outputs usage information (this)");
         }
 
         private static void WriteDefaultConfig()
@@ -76,8 +101,37 @@ namespace ColorChord.NET
         public static void ReadConfig()
         {
             JObject JSON;
-            using (StreamReader Reader = File.OpenText(ConfigFile)) { JSON = JObject.Parse(Reader.ReadToEnd()); }
-            Log.Info("Reading and applying configuration file \"" + ConfigFile + "\"...");
+            using (FileStream Reader = File.Open(ConfigFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                // Parse the config file to JSON
+                using (StreamReader StringReader = new(Reader, leaveOpen: true))
+                {
+                    JSON = JObject.Parse(StringReader.ReadToEnd());
+                    Log.Info("Reading and applying configuration file \"" + ConfigFile + "\"...");
+                }
+
+                // Check the MD5 of the config file against the default
+                Reader.Seek(0, SeekOrigin.Begin);
+                using (MD5 MD5 = MD5.Create())
+                {
+                    byte[] ConfigHash = MD5.ComputeHash(Reader);
+                    if (ConfigHash.Length != DefaultConfigInfo.DefaultConfigFileMD5.Length / 2) { Log.Warn("Failed to check if the config file is default due to hashes not matching in length"); }
+                    else
+                    {
+                        bool IsEqual = true;
+                        for (int i = 0; i < ConfigHash.Length; i++)
+                        {
+                            byte DefaultHashHere = byte.Parse(DefaultConfigInfo.DefaultConfigFileMD5.AsSpan(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture); // TODO: Replace this with a ReadOnlySpan of bytes instead of parsing a string
+                            if (DefaultHashHere != ConfigHash[i])
+                            {
+                                IsEqual = false;
+                                break;
+                            }
+                        }
+                        if (IsEqual) { Log.Warn($"It appears you are using the default config file, located at \"{Reader.Name}\". Make any changes as needed."); }
+                    }
+                }
+            }
 
             // Note Finder
             NoteFinderCommon? NoteFinder = ReadAndApplyNoteFinder(JSON);
@@ -103,16 +157,6 @@ namespace ColorChord.NET
             // Controllers
             ReadAndApplyControllers(JSON);
             Log.Info("Finished processing config file.");
-
-            StopSignal.Wait();
-            Log.Info("Exiting...");
-            ExtensionHandler.StopExtensions();
-            Source?.Stop();
-            NoteFinder?.Stop();
-            foreach (IVisualizer Visualizer in VisualizerInsts.Values) { Visualizer.Stop(); }
-            foreach (IOutput Output in OutputInsts.Values) { Output.Stop(); }
-            foreach (Controller Controller in ControllerInsts.Values) { Controller.Stop(); }
-            foreach (Thread Thread in InstanceThreads) { Thread.Join(); }
         }
 
         public static void Stop() => StopSignal.Set();
@@ -180,7 +224,7 @@ namespace ColorChord.NET
                 if (VisType == null) { Log.Error($"A visualizer is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
                 if (VisName == null) { Log.Error($"A visualizer is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
 
-                IVisualizer? Vis = CreateObject<IVisualizer>(VisType.StartsWith('#') ? VisType : "ColorChord.NET.Visualizers." + VisType, Entry, true);
+                IVisualizer? Vis = CreateObject<IVisualizer>(VisType.StartsWith('#') ? VisType : "ColorChord.NET.Visualizers." + VisType, Entry);
                 if (Vis == null) { Log.Error($"Could not create visualizer \"{VisName}\". Check to make sure the type \"{VisType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
                 VisualizerInsts.Add(VisName, Vis);
             }
@@ -201,7 +245,7 @@ namespace ColorChord.NET
                 if (OutType == null) { Log.Error($"An output is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
                 if (OutName == null) { Log.Error($"An output is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
 
-                IOutput? Out = CreateObject<IOutput>(OutType.StartsWith('#') ? OutType : "ColorChord.NET.Outputs." + OutType, Entry, true);
+                IOutput? Out = CreateObject<IOutput>(OutType.StartsWith('#') ? OutType : "ColorChord.NET.Outputs." + OutType, Entry);
                 if (Out == null) { Log.Error($"Could not create output \"{OutName}\". Check to make sure the type \"{OutType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
                 OutputInsts.Add(OutName, Out);
             }
@@ -221,7 +265,7 @@ namespace ColorChord.NET
                 if (ControlType == null) { Log.Error($"A controller is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
                 if (ControlName == null) { Log.Error($"A controller is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
 
-                Controller? Ctrl = CreateObject<Controller>(ControlType.StartsWith('#') ? ControlType : "ColorChord.NET.Controllers." + ControlType, Entry, true, true);
+                Controller? Ctrl = CreateObject<Controller>(ControlType.StartsWith('#') ? ControlType : "ColorChord.NET.Controllers." + ControlType, Entry, true);
                 if (Ctrl == null) { Log.Error($"Could not create controller \"{ControlName}\". Check to make sure the type \"{ControlType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
                 ControllerInsts.Add(ControlName, Ctrl);
             }
@@ -231,8 +275,9 @@ namespace ColorChord.NET
         /// <typeparam name="BaseType"> The interface that the resulting object must implement. </typeparam>
         /// <param name="fullName"> The full name (namespace + type) of the object to create. </param>
         /// <param name="configEntry"> The config entry containing options that should be applied to the resulting object. </param>
+        /// <param name="provideControllerInterface">Whether the constructor needs to be provided with an <see cref="IControllerInterface"/></param>
         /// <returns> A configured, ready object, or null if it was not able to be made. </returns>
-        private static BaseType? CreateObject<BaseType>(string fullName, JToken configEntry, bool complexConfig = false, bool provideControllerInterface = false) where BaseType : IConfigurableAttr
+        private static BaseType? CreateObject<BaseType>(string fullName, JToken configEntry, bool provideControllerInterface = false) where BaseType : IConfigurableAttr
         {
             Type? ObjType;
             if (fullName.StartsWith('#'))
@@ -253,7 +298,7 @@ namespace ColorChord.NET
                 ManualResetEventSlim InstInitialized = new();
                 Thread InstThread = new(() =>
                 {
-                    Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry, complexConfig), provideControllerInterface);
+                    Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry), provideControllerInterface);
                     InstInitialized.Set();
                     if (Instance is IVisualizer Vis) { Vis.Start(); }
                     else if (Instance is IOutput Outp) { Outp.Start(); }
@@ -266,7 +311,7 @@ namespace ColorChord.NET
             }
             else
             {
-                Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry, complexConfig), provideControllerInterface);
+                Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry), provideControllerInterface);
                 if (Instance is IVisualizer Vis) { Vis.Start(); }
                 else if (Instance is IOutput Outp) { Outp.Start(); }
                 else if (Instance is Controller Ctrl) { Ctrl.Start(); }
@@ -283,15 +328,14 @@ namespace ColorChord.NET
 
         /// <summary> Takes a JSON token, and converts all single-valued children into a Dictionary. </summary>
         /// <param name="parent"> The JSON token whose child elements should be converted. </param>
-        /// <param name="convertComplex"> Whether to also convert arrays and objects, or to just convert single value items. </param>
         /// <returns> A Dictionary containing all properties contained in the parent element. </returns>
-        private static Dictionary<string, object> ToDict(JToken parent, bool convertComplex = false) // TODO: Revisit when convertComplex is on (why not always?)
+        private static Dictionary<string, object> ToDict(JToken parent)
         {
             Dictionary<string, object> Items = new();
             foreach(JToken ItemToken in parent.Children())
             {
                 JProperty Item = (JProperty)ItemToken;
-                if (Item.Value is JArray Array && convertComplex) // TODO: See if Object needs to be handled.
+                if (Item.Value is JArray Array) // TODO: See if Object needs to be handled.
                 {
                     if (Array.First == null) { continue; }
                     if (Array.First.Type == JTokenType.Object)
@@ -299,7 +343,7 @@ namespace ColorChord.NET
                         Dictionary<string, object>[] ArrayItems = new Dictionary<string, object>[Array.Count];
                         for (int i = 0; i < ArrayItems.Length; i++)
                         {
-                            ArrayItems[i] = ToDict(Array[i], true);
+                            ArrayItems[i] = ToDict(Array[i]);
                         }
                         Items.Add(Item.Name, ArrayItems);
                     }
@@ -320,6 +364,29 @@ namespace ColorChord.NET
                 }
             }
             return Items;
+        }
+
+        /// <summary>Tries to find a currently loaded component based on its role and name.</summary>
+        /// <param name="path">A path in the format "<see cref="Component"/>.Name", except for Source and NoteFinder components, where only the first part is needed, and the rest is ignored if present.</param>
+        /// <returns>null if the component couldn't be found, otherwise the instance</returns>
+        public static object? GetInstanceFromPath(string path)
+        {
+            int IndexSep1 = path.IndexOf('.');
+            ReadOnlySpan<char> ComponentType = (IndexSep1 < 0) ? path : path.AsSpan(0, IndexSep1);
+            Component Component = Component.None;
+            if (Enum.TryParse(ComponentType, true, out Component ParsedComponent)) { Component = ParsedComponent; }
+
+            if (Component == Component.Source) { return Source; }
+            else if (Component == Component.NoteFinder) { return NoteFinder; }
+
+            int IndexSep2 = path.IndexOf('.', IndexSep1 + 1);
+            if (IndexSep2 < 0) { return null; }
+            string ComponentName = path.Substring(IndexSep1 + 1, IndexSep2 - IndexSep1 - 1);
+
+            if (Component == Component.Visualizers) { return VisualizerInsts.TryGetValue(ComponentName, out IVisualizer? Visualizer) ? Visualizer : null; }
+            else if (Component == Component.Outputs) { return OutputInsts.TryGetValue(ComponentName, out IOutput? Output) ? Output : null; }
+            else if (Component == Component.Controllers) { return ControllerInsts.TryGetValue(ComponentName, out Controller? Controller) ? Controller : null; }
+            return null;
         }
 
     }

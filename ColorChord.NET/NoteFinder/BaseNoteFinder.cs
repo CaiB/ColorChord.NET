@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
@@ -127,26 +128,28 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     private static float NoteOutputChop = 0.05F;
     #endregion
 
-    // Data that is used in Cycle(), and not used elsewhere.
+    // Data that is used in Cycle/DoProcessing, and not used elsewhere.
     // These would make more sense to just be created and assigned inside, but keeping them out here reduces the number of memory allocations done.
     #region CycleData
+    /// <summary> The buffer for audio data gathered from a system device. Circular buffer, with the current write position stored in <see cref="AudioBufferHeadWrite"/>. </summary>
+    public static short[] AudioBuffer { get; private set; } = new short[8192]; // TODO: Make buffer size adjustable or auto-set based on sample rate (might be too short for super-high rates)
+
+    /// <summary> Where in the <see cref="AudioBuffer"/> we are currently adding new audio data. </summary>
+    public static int AudioBufferHeadWrite { get; set; } = 0;
+
+    private static Stopwatch CycleTimer = new();
+    private static float CycleTimeTicks;
+    private static uint CycleCount = 0;
+
     /// <summary> The frequency in Hz, that each of the raw bins from the DFT corresponds to. </summary>
     /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
     private static readonly float[] RawBinFrequencies = new float[TOTAL_DFT_BINS];
-
-    /// <summary> The frequency spectrum, folded to overlap into a single octave length. </summary>
-    /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
-    private static readonly float[] OctaveBinValues = new float[BINS_PER_OCTAVE];
 
     private static int CurrentNoteID = 1;
 
     /// <summary> The individual note distributions (peaks) detected this cycle. </summary>
     /// <remarks> Data contained from previous cycles not used during next cycle. </remarks>
     public static readonly NoteDistribution[] NoteDistributions = new NoteDistribution[NOTE_QTY];
-
-    /// <summary> The non-folded frequency bins, used inter-frame to do smoothing, then folded to form the spectrum. </summary>
-    /// <remarks> Data contained from previous cycles is re-used during next cycle to do smoothing. </remarks>
-    private static readonly float[] FrequencyBinValues = new float[TOTAL_DFT_BINS];
 
     public static float LastLowFreqSum = 0;
 
@@ -166,6 +169,9 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
         SetSampleRate(SampleRate); // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
         Notes = new Note[NOTE_QTY];
         PersistentNoteIDs = new int[NOTE_QTY];
+        OctaveBinValues = new float[BINS_PER_OCTAVE];
+        AllBinValues = new float[TOTAL_DFT_BINS];
+        SetupBuffers();
     }
 
     /// <summary> Updates the sample rate if the audio source has changed. Also recalculates bin frequencies to match. </summary>
@@ -191,7 +197,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     public override void Start()
     {
         KeepGoing = true;
-        ProcessThread = new Thread(DoProcessing);
+        ProcessThread = new Thread(DoProcessing) { Name = nameof(BaseNoteFinder) };
         ProcessThread.Start();
     }
 
@@ -199,6 +205,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     public override void Stop()
     {
         KeepGoing = false;
+        InputDataEvent.Set();
         ProcessThread?.Join();
     }
 
@@ -212,15 +219,39 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     /// <summary> Runs until <see cref="KeepGoing"/> becomes false, processing incoming audio data. </summary>
     private static void DoProcessing()
     {
-        Stopwatch Timer = new();
         while (KeepGoing)
         {
-            Timer.Restart();
-            if (LastDataAdd.AddSeconds(5) > DateTime.UtcNow) { Cycle(); }
-            int WaitTime = (int)(ShortestPeriod - Timer.ElapsedMilliseconds);
-            if (WaitTime > 0) { Thread.Sleep(WaitTime); }
+            InputDataEvent.WaitOne();
+
+            bool MoreBuffers;
+            uint NewDataRead = 0;
+            do
+            {
+                short[]? NewBuffer = GetBufferToRead(out int NFBufferRef, out uint BufferSize, out MoreBuffers);
+                if (NewBuffer == null) { break; }
+
+                for (int i = 0; i < BufferSize; i++)
+                {
+                    AudioBuffer[AudioBufferHeadWrite] = NewBuffer[i];
+                    AudioBufferHeadWrite = (AudioBufferHeadWrite + 1) % AudioBuffer.Length;
+                }
+                NewDataRead += BufferSize;
+
+                FinishBufferRead(NFBufferRef);
+
+                CycleTimer.Restart();
+                Cycle();
+                CycleTimer.Stop();
+
+                const float TIMER_IIR = 0.97F;
+                if (BufferSize > 32) { CycleTimeTicks = (CycleTimeTicks * TIMER_IIR) + ((float)CycleTimer.ElapsedTicks / BufferSize * (1F - TIMER_IIR)); }
+                if (++CycleCount % 500 == 0) { Log.Debug($"{nameof(BaseNoteFinder)} is taking {CycleTimeTicks * 0.1F:F3}us per sample."); }
+            }
+            while (MoreBuffers);
         }
     }
+
+    public override void UpdateOutputs() { }
 
     private static void Cycle()
     {
@@ -243,23 +274,23 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
             NewData *= DFTDataAmplifier; // Amplify incoming data by a constant
             NewData *= (1 + (DFTSensitivitySlope * RawBinIndex)); // Apply a frequency-dependent amplifier to increase sensitivity at higher frequencies.
 
-            FrequencyBinValues[RawBinIndex] = (FrequencyBinValues[RawBinIndex] * DFTIIRMultiplier) + // Keep data from last frame, but reduce by a factor.
-                                           (NewData * (1 - DFTIIRMultiplier)); // Add new data
+            AllBinValues[RawBinIndex] = (AllBinValues[RawBinIndex] * DFTIIRMultiplier) + // Keep data from last frame, but reduce by a factor.
+                                         (NewData * (1 - DFTIIRMultiplier)); // Add new data
         }
 
         // Taper off the first and last octave.
         // This is to prevent frequency content at the edges of our bin set from creating discontinuities in the folded bins.
         for (int OctaveBinIndex = 0; OctaveBinIndex < BINS_PER_OCTAVE; OctaveBinIndex++)
         {
-            FrequencyBinValues[OctaveBinIndex] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the first octave
-            FrequencyBinValues[TOTAL_DFT_BINS - OctaveBinIndex - 1] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the last octave
+            AllBinValues[OctaveBinIndex] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the first octave
+            AllBinValues[TOTAL_DFT_BINS - OctaveBinIndex - 1] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the last octave
         }
 
         // Fold the bins to make one single octave-length array, where all like notes (e.g. C2, C3, C4) are combined, regardless of their original octave.
         for (int BinIndex = 0; BinIndex < BINS_PER_OCTAVE; BinIndex++)
         {
             float Amplitude = 0;
-            for (int Octave = 0; Octave < OCTAVES; Octave++) { Amplitude += FrequencyBinValues[(Octave * BINS_PER_OCTAVE) + BinIndex]; }
+            for (int Octave = 0; Octave < OCTAVES; Octave++) { Amplitude += AllBinValues[(Octave * BINS_PER_OCTAVE) + BinIndex]; }
             OctaveBinValues[BinIndex] = Amplitude;
         }
 

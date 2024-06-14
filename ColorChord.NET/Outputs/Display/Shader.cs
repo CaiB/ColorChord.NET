@@ -28,7 +28,7 @@ namespace ColorChord.NET.Outputs.Display
             }
             using (Stream? FragmentStream = Asm.GetManifestResourceStream(PATH_PREFIX + fragmentPath))
             {
-                if (FragmentStream == null) { throw new Exception($"Could not load fragment shader \"{PATH_PREFIX}{vertexPath}\""); }
+                if (FragmentStream == null) { throw new Exception($"Could not load fragment shader \"{PATH_PREFIX}{fragmentPath}\""); }
                 using (StreamReader FragmentReader = new(FragmentStream, Encoding.UTF8)) { FragmentShaderSource = FragmentReader.ReadToEnd(); }
             }
 

@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+	<RollForward>LatestMajor</RollForward>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>CC.NET-Ext-$(MSBuildProjectName)</AssemblyName>
+    <RootNamespace>ColorChord.NET.Extensions.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+	<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ILRepack" Version="2.0.33">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ColorChord.NET-API\ColorChord.NET-API.csproj" />
+  </ItemGroup>
+
+  <Target Name="ILRepack" AfterTargets="Build">
+    <ItemGroup>
+      <ILRepackPackage Include="$(NuGetPackageRoot)\ilrepack\*\tools\ilrepack.exe" />
+    </ItemGroup>
+
+    <Error Condition="!Exists(@(ILRepackPackage->'%(FullPath)'))" Text="You are trying to use the ILRepack package, but it is not installed or at the correct location" />
+    <Exec Command="@(ILRepackPackage->'%(fullpath)') /out:$(TargetPath) /wildcards /target:library /lib:$(OutputPath) $(TargetPath) $(OutputPath)/NAudio*.dll" />
+  </Target>
+
+</Project>

@@ -11,6 +11,9 @@ public interface IVisualizerFormat { }
 public interface IDiscrete1D : IVisualizerFormat
 {
     int GetCountDiscrete();
+
+    /// <summary>Gets the discrete data array</summary>
+    /// <returns>An array of length equal to <see cref="GetCountDiscrete"/>, where each item is a uint containing 0x00RRGGBB.</returns>
     uint[] GetDataDiscrete();
 }
 

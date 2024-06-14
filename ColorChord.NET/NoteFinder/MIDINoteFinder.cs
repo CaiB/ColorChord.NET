@@ -6,39 +6,43 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-
+/*
 namespace ColorChord.NET.NoteFinder
 {
-    public class MIDINoteFinder
+    public class MIDINoteFinder : NoteFinderCommon
     {
         private const byte NOTES = 128;
         private const byte CHANNELS = 16;
         private const byte OCTAVE_NOTES = 12;
 
         /// <summary> The speed (in ms between runs) at which the note finder needs to run, set by the fastest visualizer. </summary>
-        public static uint ShortestPeriod { get; private set; } = 100;
+        public uint ShortestPeriod { get; private set; } = 100;
 
         /// <summary> Whether to keep processing, or shut down operations.  </summary>
-        private static bool KeepGoing = true;
+        private bool KeepGoing = true;
 
         /// <summary> The thread doing the actual note data processing. </summary>
-        private static Thread? ProcessThread;
+        private Thread? ProcessThread;
 
         /// <summary>Maps [Channel, NoteID] => Volume</summary>
-        private static readonly byte[,] InputNoteStatus = new byte[CHANNELS, NOTES];
+        private readonly byte[,] InputNoteStatus = new byte[CHANNELS, NOTES];
 
         /// <summary>Keeps track of the summed volume of all current notes.</summary>
-        private static uint TotalVolume = 0;
+        private uint TotalVolume = 0;
 
         /// <summary>Maps [Channel] => Pitch bend. Extents are +/- 0x2000</summary>
-        private static readonly short[] PitchBends = new short[CHANNELS];
+        private readonly short[] PitchBends = new short[CHANNELS];
 
-        public static readonly Note[] Notes = new Note[OCTAVE_NOTES];
+        public readonly Note[] Notes = new Note[OCTAVE_NOTES];
 
-        public static readonly int[] PersistentNoteIDs = new int[OCTAVE_NOTES];
+        public override int NoteCount { get => OCTAVE_NOTES; }
+
+        public override int BinsPerOctave { get => OCTAVE_NOTES; }
+
+        public readonly int[] PersistentNoteIDs = new int[OCTAVE_NOTES];
 
         /// <summary> Starts the processing thread. </summary>
-        public static void Start()
+        public override void Start()
         {
             KeepGoing = true;
             ProcessThread = new Thread(DoProcessing);
@@ -46,14 +50,23 @@ namespace ColorChord.NET.NoteFinder
         }
 
         /// <summary> Stops the processing thread. </summary>
-        public static void Stop()
+        public override void Stop()
         {
             KeepGoing = false;
             ProcessThread?.Join();
         }
 
+        public override void SetSampleRate(int sampleRate) { } // Does nothing, sample rate doesn't mean anything for MIDI
+
+        /// <summary> Adjusts the note finder run interval if the newly added visualizer/output needs it to run faster, otherwise does nothing. </summary>
+        /// <param name="period"> The period, in milliseconds, that you need the note finder to run at or faster than. </param>
+        public override void AdjustOutputSpeed(uint period)
+        {
+            if (period < this.ShortestPeriod) { this.ShortestPeriod = period; }
+        }
+
         /// <summary> Runs until <see cref="KeepGoing"/> becomes false, processing incoming audio data. </summary>
-        private static void DoProcessing()
+        private void DoProcessing()
         {
             Stopwatch Timer = new();
             while (KeepGoing)
@@ -61,12 +74,12 @@ namespace ColorChord.NET.NoteFinder
                 Timer.Restart();
                 //if (LastDataAdd.AddSeconds(5) > DateTime.UtcNow) { Cycle(); }
                 Cycle();
-                int WaitTime = (int)(ShortestPeriod - Timer.ElapsedMilliseconds);
+                int WaitTime = (int)(this.ShortestPeriod - Timer.ElapsedMilliseconds);
                 if (WaitTime > 0) { Thread.Sleep(WaitTime); }
             }
         }
 
-        public static void ProcessMessage(byte status, ushort data)
+        public void ProcessMessage(byte status, ushort data)
         {
             byte Channel = (byte)(status & 0x0F);
             byte Velocity = (byte)(data >> 8);
@@ -107,3 +120,4 @@ namespace ColorChord.NET.NoteFinder
 
     }
 }
+*/

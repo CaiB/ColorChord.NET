@@ -139,7 +139,7 @@ public class Prominent : IVisualizer, IDiscrete1D, IControllableAttr
         {
             // Assign all LEDs this colour
             if (OutAmplitude > 1F) { OutAmplitude = 1F; }
-            uint Colour = VisualizerTools.CCtoHEX(OutNote, 1F, OutAmplitude);
+            uint Colour = VisualizerTools.CCToRGB(OutNote, 1F, OutAmplitude);
             for (int LED = 0; LED < this.LEDCount; LED++) { this.OutputDataDiscrete[LED] = Colour; }
         }
     }

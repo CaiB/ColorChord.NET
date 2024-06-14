@@ -1,250 +1,288 @@
 using System;
+using System.IO;
 using System.Reflection;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using System.Runtime.Serialization;
+using System.Text;
 using ColorChord.NET.NoteFinder;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using static OpenTK.Graphics.OpenGL.GL;
 
-namespace ColorChordTests
+namespace ColorChordTests;
+
+[TestClass]
+public class ShinNoteFinderTest
 {
-    [TestClass]
-    public class ShinNoteFinderTest
+    public ShinNoteFinderTest()
     {
-        [TestMethod]
-        [DataRow((byte)24)]
-        [DataRow((byte)192)]
-        [DataRow((byte)96)]
-        public void BinFrequencyList(byte binsPer)
+        ShinNoteFinder a = new("Testing NoteFinder", new());
+    }
+
+    [TestMethod]
+    public void TestInit()
+    {
+        ShinNoteFinderDFT.Reconfigure();
+    }
+    
+    [TestMethod]
+    public void TestDataAdd()
+    {
+        ShinNoteFinderDFT.AddAudioData(new short[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 }, 32);
+    }
+
+    [TestMethod]
+    public void TestSineInput()
+    {
+        float Frequency = 1046.502F;
+        float Omega = Frequency * MathF.Tau / ShinNoteFinderDFT.SampleRate;
+
+        short[] AudioData = new short[2500];
+        for (int i = 0; i < AudioData.Length; i++)
         {
-            const float BASE_FREQ = 55F;
-            const byte OCTAVES = 5;
-            ShinNoteFinderDFT NF = new ShinNoteFinderDFT();
-            NF.OctaveCount = OCTAVES;
-            NF.BinsPerOctave = binsPer;
-            NF.CalculateFrequencies(BASE_FREQ);
-
-            FieldInfo BinFreq = typeof(ShinNoteFinderDFT).GetField("BinFrequencies", BindingFlags.NonPublic | BindingFlags.Instance);
-            float[] Value = (float[])BinFreq.GetValue(NF);
-
-            // Make sure we have the correct number of frequency bins.
-            Assert.AreEqual(OCTAVES * binsPer, Value.Length, "Bin count was incorrect");
-
-            // Make sure the first bin is the base frequency we set earlier.
-            Assert.AreEqual(BASE_FREQ, Value[0], "Base frequency was incorrectly set");
-
-            float CalcNextOctave = Value[binsPer];
-
-            // Make sure the bin 1 octave up is double the base frequency.
-            Assert.IsTrue(Math.Abs((BASE_FREQ * 2) - CalcNextOctave) < 0.0001F, "Higher frequencies were incorrectly calculated");
+            float Sin = MathF.Sin(i * Omega);
+            AudioData[i] = (short)MathF.Round(200 * Sin);
         }
 
-        [TestMethod]
-        [DataRow(73.42F, 10, DisplayName = "D2")] // Bottom octave
-        [DataRow(92.50F, 18, DisplayName = "F#2")] // Bottom octave
-        [DataRow(100.87F, 21, DisplayName = "G2-G#2 midpoint")] // Bottom octave
-        [DataRow(185.00F, 42, DisplayName = "F#3")]
-        [DataRow(698.46F, 88, DisplayName = "F5")]
-        [DataRow(1174.66F, 106, DisplayName = "D6")] // Top octave
-        public void OutputBinTestSingleValueWithPureSine(float testFreq, int expectedPeak)
+        ShinNoteFinderDFT.AddAudioData(AudioData, (uint)AudioData.Length);
+        ShinNoteFinderDFT.CalculateOutput();
+    }
+
+    [TestMethod]
+    public void TestSineInputAndOutputEachStep()
+    {
+        float Frequency = 622.2540F; // 1046.502F;
+        float Omega = Frequency * MathF.Tau / ShinNoteFinderDFT.SampleRate;
+        const int SAMPLE_COUNT = 16384;
+
+        string[] Output = new string[SAMPLE_COUNT];
+
+        for (int s = 0; s < SAMPLE_COUNT; s++)
         {
-            const float BASE_FREQ = 55F; // A2
+            float Sin = MathF.Sin(s * Omega);
+            short AudioData = (short)MathF.Round(200 * Sin);
+            ShinNoteFinderDFT.AddAudioData(new short[] { AudioData }, 1);
+            ShinNoteFinderDFT.CalculateOutput();
 
-            ShinNoteFinderDFT NF = new ShinNoteFinderDFT();
-            NF.CalculateFrequencies(BASE_FREQ);
-            NF.FillReferenceTables();
-            NF.PrepareSampleStorage();
-
-            // Fill input.
-            float Omega1 = testFreq * MathF.PI * 2 / NF.SampleRate;
-
-            float[] TestWaveform = new float[NF.WindowSize / 2];
-            for (uint i = 0; i < TestWaveform.Length; i++)
+            StringBuilder Line = new();
+            for (int b = 96; b < 120; b++)
             {
-                TestWaveform[i] = MathF.Sin(i * Omega1);
+                Line.Append(ShinNoteFinderDFT.RawBinMagnitudes[b]);
+                Line.Append(',');
             }
-            NF.AddSamples(TestWaveform);
-            //NF.SaveData();
-
-            // Get output
-            float[] Output = NF.Magnitudes;
-
-            // Find peak
-            float PeakVal = -1F;
-            int PeakInd = -1;
-
-            for (int i = 0; i < Output.Length; i++)
-            {
-                if (Output[i] > PeakVal)
-                {
-                    PeakVal = Output[i];
-                    PeakInd = i;
-                }
-            }
-
-            // Make sure peak is correct and large enough
-            Assert.IsTrue(PeakVal > 1500F, "Peak was not large enough");
-            Assert.IsTrue(PeakInd == expectedPeak, "Peak was in the wrong place");
-
-            // Make sure all far-away bins are small enough
-            for (int i = 0; i < Output.Length; i++)
-            {
-                if (Math.Abs(i - PeakInd) > 3) { Assert.IsTrue(Output[i] < (PeakVal / 2), "Other frequencies had content too strong compared to peak"); }
-            }
+            Output[s] = Line.ToString();
         }
 
-        [TestMethod] // Note that the first one has to be the lower frequency.
-        [DataRow(73.42F, 92.50F, 10, 18, 0.5F, DisplayName = "D2 + F#2, 1:1 ratio")]
-        // [DataRow(92.50F, 103.83F, 18, 22, 0.5F, DisplayName = "F#2 + G#2, 1:1 ratio")] // This fails due to low noise at low frequencies, not an implementation fault.
-        [DataRow(698.46F, 1174.66F, 88, 106, 0.5F, DisplayName = "F5 + D6, 1:1 ratio")]
-        [DataRow(130.81F, 987.77F, 30, 100, 0.3F, DisplayName = "C3 + B5, 3:7 ratio")]
-        public void OutputBinTestCompondSineProprotional(float testFreq1, float testFreq2, int expectedPeak1, int expectedPeak2, float ratio)
+        File.WriteAllLines("ProgressiveOutputData.csv", Output);
+    }
+
+    [TestMethod]
+    public void TestSineInputAndOutputEachStep256()
+    {
+        float Frequency = 622.2540F; //1046.502F;
+        float Omega = Frequency * MathF.Tau / ShinNoteFinderDFT.SampleRate;
+        const int SAMPLE_COUNT = 16384;
+
+        string[] Output = new string[SAMPLE_COUNT / 16];
+
+        for (int s = 0; s < SAMPLE_COUNT / 16; s++)
         {
-            const float BASE_FREQ = 55F; // A2
-
-            ShinNoteFinderDFT NF = new ShinNoteFinderDFT();
-            NF.CalculateFrequencies(BASE_FREQ);
-            NF.FillReferenceTables();
-            NF.PrepareSampleStorage();
-
-            // Fill input.
-            float Omega1 = testFreq1 * MathF.PI * 2 / NF.SampleRate;
-            float Omega2 = testFreq2 * MathF.PI * 2 / NF.SampleRate;
-
-            float[] TestWaveform = new float[NF.WindowSize / 2];
-            for (uint i = 0; i < TestWaveform.Length; i++)
+            short[] Samples = new short[16];
+            for (int t = 0; t < 16; t++)
             {
-                float Wave1 = ratio * MathF.Sin(i * Omega1);
-                float Wave2 = (1 - ratio) * MathF.Sin(i * Omega2);
-                TestWaveform[i] = Wave1 + Wave2;
+                float Sin = MathF.Sin(((s * 16) + t) * Omega);
+                short AudioData = (short)MathF.Round(200 * Sin);
+                Samples[t] = AudioData;
             }
-            NF.AddSamples(TestWaveform);
+            ShinNoteFinderDFT.AddAudioData(Samples, (uint)Samples.Length);
+            ShinNoteFinderDFT.CalculateOutput();
 
-            // Get output
-            float[] Output = NF.Magnitudes;
-
-            // Find peaks
-            float PeakVal1 = -1F;
-            float PeakVal2 = -1F;
-            int PeakInd1 = -1;
-            int PeakInd2 = -1;
-
-            for (int i = 0; i < Output.Length; i++)
+            StringBuilder Line = new();
+            for (int b = 96; b < 120; b++)
             {
-                if (Output[i] > PeakVal1)
-                {
-                    PeakVal2 = PeakVal1;
-                    PeakVal1 = Output[i];
-                    PeakInd2 = PeakInd1;
-                    PeakInd1 = i;
-                }
-                else if (Output[i] > PeakVal2)
-                {
-                    PeakVal2 = Output[i];
-                    PeakInd2 = i;
-                }
+                Line.Append(ShinNoteFinderDFT.RawBinMagnitudes[b]);
+                Line.Append(',');
             }
-
-            // Sort the peaks
-            if (PeakInd1 > PeakInd2)
-            {
-                float ValTemp = PeakVal1;
-                PeakVal1 = PeakVal2;
-                PeakVal2 = ValTemp;
-                int IndTemp = PeakInd1;
-                PeakInd1 = PeakInd2;
-                PeakInd2 = IndTemp;
-            }
-
-            // Make sure peaks are correct and large enough
-            Assert.IsTrue(PeakVal1 > (1500F * ratio), "Peak 1 was not large enough");
-            Assert.IsTrue(PeakVal2 > (1500F * (1 - ratio)), "Peak 2 was not large enough");
-
-            Assert.IsTrue(PeakInd1 == expectedPeak1, "Peak 1 was in the wrong place");
-            Assert.IsTrue(PeakInd2 == expectedPeak2, "Peak 2 was in the wrong place");
-
-            // Make sure the ratio is about right
-            float Total = PeakVal1 + PeakVal2;
-            Assert.IsTrue(Math.Abs((PeakVal1 / Total) - ratio) < 0.05F, "Peak 1 was not balanced to ratio");
-            Assert.IsTrue(Math.Abs((PeakVal2 / Total) - (1 - ratio)) < 0.05F, "Peak 2 was not balanced to ratio");
-
-            // Make sure all far-away bins are small enough
-            for (int i = 0; i < Output.Length; i++)
-            {
-                if (Math.Abs(i - PeakInd1) > 3 &&
-                    Math.Abs(i - PeakInd2) > 3)
-                {
-                    Assert.IsTrue(Output[i] < (Math.Max(PeakVal1, PeakVal2) / 1.5F), "Too much noise far away from peaks");
-                }
-            }
+            Output[s] = Line.ToString();
         }
 
-        [TestMethod]
-        public void CheckOctavePattern()
+        File.WriteAllLines("ProgressiveOutputData256.csv", Output);
+    }
+
+    [TestMethod]
+    public void TestSineInputAndOutputEachStepSimultaneous()
+    {
+        float Frequency = 622.2540F; //1046.502F;
+        float Omega = Frequency * MathF.Tau / ShinNoteFinderDFT.SampleRate;
+        const int SAMPLE_COUNT = 16384;
+
+        string[] Output = new string[SAMPLE_COUNT / 16];
+
+        for (int s = 0; s < SAMPLE_COUNT / 16; s++)
         {
-            const float BASE_FREQ = 55F; // A2
-            const float SIGNAL_FREQ = 880F;
-            const float PHASE_OFFSET = MathF.PI / 4; // Apply a small phase offset so that the signal doesn't start at 0.
-
-            ShinNoteFinderDFT NF = new ShinNoteFinderDFT();
-            NF.CalculateFrequencies(BASE_FREQ);
-            NF.FillReferenceTables();
-            NF.PrepareSampleStorage();
-
-            float Omega = SIGNAL_FREQ * MathF.PI * 2 / NF.SampleRate;
-
-            // Add the first sample, so we should only see content in the topmost octave
-            NF.AddSample(MathF.Sin((0 * Omega) + PHASE_OFFSET), true);
-            CheckAllBins((NF.OctaveCount - 1) * NF.BinsPerOctave);
-
-            // Second sample, now the top two octaves should be calculated.
-            NF.AddSample(MathF.Sin((1 * Omega) + PHASE_OFFSET), true);
-            CheckAllBins((NF.OctaveCount - 2) * NF.BinsPerOctave);
-
-            // Third sample, only the top octave should update
-            NF.AddSample(MathF.Sin((2 * Omega) + PHASE_OFFSET), true);
-            CheckAllBins((NF.OctaveCount - 2) * NF.BinsPerOctave);
-
-            // Fourth sample, the top 3 octaves should all get calculated
-            NF.AddSample(MathF.Sin((3 * Omega) + PHASE_OFFSET), true);
-            CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
-
-            // Fifth sample, only top octave
-            NF.AddSample(MathF.Sin((4 * Omega) + PHASE_OFFSET), true);
-            CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
-
-            // Sixth sample, top 2 octaves
-            NF.AddSample(MathF.Sin((5 * Omega) + PHASE_OFFSET), true);
-            CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
-
-            // Seventh sample, only top
-            NF.AddSample(MathF.Sin((6 * Omega) + PHASE_OFFSET), true);
-            CheckAllBins((NF.OctaveCount - 3) * NF.BinsPerOctave);
-
-            // Eighth sample, top 4 octaves should all be calculated.
-            NF.AddSample(MathF.Sin((7 * Omega) + PHASE_OFFSET), true);
-            CheckAllBins((NF.OctaveCount - 4) * NF.BinsPerOctave);
-
-            // 9th - 15th samples, same pattern, no new octaves yet
-            for (int i = 8; i < 15; i++)
+            short[] Samples = new short[16];
+            for (int t = 0; t < 16; t++)
             {
-                NF.AddSample(MathF.Sin((i * Omega) + PHASE_OFFSET), true);
-                CheckAllBins((NF.OctaveCount - 4) * NF.BinsPerOctave);
+                float Sin = MathF.Sin(((s * 16) + t) * Omega);
+                short AudioData = (short)MathF.Round(200 * Sin);
+                Samples[t] = AudioData;
+                ShinNoteFinderDFT.AddAudioData(new short[] { AudioData }, 1);
+            }
+            ShinNoteFinderDFT.AddAudioData(Samples, (uint)Samples.Length);
+            ShinNoteFinderDFT.CalculateOutput();
+
+            StringBuilder Line = new();
+            for (int b = 96; b < 120; b++)
+            {
+                Line.Append(ShinNoteFinderDFT.RawBinMagnitudes[b]);
+                Line.Append(',');
+            }
+            Output[s] = Line.ToString();
+        }
+
+        File.WriteAllLines("ProgressiveOutputData256.csv", Output);
+    }
+
+    [TestMethod]
+    public void TestSineThenSilentInput()
+    {
+        float Frequency = 1046.502F;
+        float Omega = Frequency * MathF.Tau / ShinNoteFinderDFT.SampleRate;
+
+        short[] AudioData = new short[4096];
+        for (int i = 0; i < AudioData.Length; i++)
+        {
+            float Sin = MathF.Sin(i * Omega);
+            AudioData[i] = (short)MathF.Round(short.MaxValue * Sin);
+        }
+
+        ShinNoteFinderDFT.AddAudioData(AudioData, (uint)AudioData.Length);
+        ShinNoteFinderDFT.CalculateOutput();
+        ShinNoteFinderDFT.AddAudioData(new short[8192], 8192);
+        ShinNoteFinderDFT.CalculateOutput();
+    }
+
+    [TestMethod]
+    public void TestDCInput()
+    {
+        const short DC_VALUE = 500;
+        short[] AudioData = new short[4096];
+        for (int i = 0; i < AudioData.Length; i++) { AudioData[i] = DC_VALUE; }
+        ShinNoteFinderDFT.AddAudioData(AudioData, (uint)AudioData.Length);
+        ShinNoteFinderDFT.CalculateOutput();
+        ShinNoteFinderDFT.AddAudioData(new short[8192], 8192);
+        ShinNoteFinderDFT.CalculateOutput();
+    }
+
+    [TestMethod]
+    public void OutputResponseData()
+    {
+        float MinFreq = 880F;
+        float MaxFreq = 1760F;
+        int Steps = 400;
+
+        string[] OutputLines = new string[Steps];
+
+        uint WindowSize = ShinNoteFinderDFT.MaxPresentWindowSize;
+        for (int f = 0; f < Steps; f++)
+        {
+            float FreqHere = MinFreq + ((float)f / Steps * (MaxFreq - MinFreq)); // Linear, maybe make log later on?
+            float Omega = FreqHere * MathF.Tau / ShinNoteFinderDFT.SampleRate;
+
+            short[] AudioData = new short[WindowSize + 123];
+            for (int s = 0; s < AudioData.Length; s++)
+            {
+                float Sin = MathF.Sin(s * Omega);
+                AudioData[s] = (short)MathF.Round(1000 * Sin);
             }
 
-            // 16th sample, top 5 octaves should be calculated.
-            NF.AddSample(MathF.Sin((15 * Omega) + PHASE_OFFSET), true);
-            CheckAllBins((NF.OctaveCount - 5) * NF.BinsPerOctave);
-
-            void CheckAllBins(int contentStart)
+            ShinNoteFinderDFT.AddAudioData(AudioData, (uint)AudioData.Length);
+            ShinNoteFinderDFT.CalculateOutput();
+            StringBuilder ThisLine = new();
+            ThisLine.Append(FreqHere);
+            ThisLine.Append(',');
+            for (int b = 0; b < ShinNoteFinderDFT.RawBinMagnitudes.Length; b++)
             {
-                for (ushort i = 0; i < contentStart; i++) // This octave should not yet have been calculated.
-                {
-                    Assert.IsTrue(NF.Magnitudes[i] == 0, "Bin " + i + " should have been empty");
-                }
-                for (ushort i = (ushort)contentStart; i < NF.BinCount; i++) // All other bins should have at least a slight amount of content.
-                {
-                    Assert.IsTrue(NF.Magnitudes[i] != 0, "Bin " + i + " should not have been empty");
-                }
+                ThisLine.Append(ShinNoteFinderDFT.RawBinMagnitudes[b]);
+                ThisLine.Append(',');
             }
+            OutputLines[f] = ThisLine.ToString();
+        }
+
+        File.WriteAllLines("OutputResponseData.csv", OutputLines);
+    }
+
+    [TestMethod]
+    public void TestSinInterpolation()
+    {
+        const float WAVE_LOCATION = 0.18F;
+        const float TEST_RANGE = 0.03F;
+        const int TEST_STEPS = 20;
+        const short TABLE_AMPLITUDE = 4095;
+        const float ALLOWED_ERROR = 2.0F; // %
+
+        ShinNoteFinderDFT.GetSine(new() { NCLeft = 9725, NCRight = 52764 }, false);
+
+        for (int i = 0; i < TEST_STEPS; i++)
+        {
+            float WaveLocHere = WAVE_LOCATION - TEST_RANGE + (TEST_RANGE * 2 * ((float)i / TEST_STEPS)); // From (WAVE_LOCATION - TEST_RANGE) to (WAVE_LOCATION + TEST_RANGE)
+            ShinNoteFinderDFT.DualU16 Position = new() { NCLeft = (ushort)(WaveLocHere * 65535.0F), NCRight = (ushort)(WaveLocHere * 65535.0F) };
+            ShinNoteFinderDFT.DualI16 LUTSine = ShinNoteFinderDFT.GetSine(Position, false);
+
+            float RealSine = TABLE_AMPLITUDE * MathF.Sin(WaveLocHere * MathF.Tau);
+            short RealSineRounded = (short)MathF.Round(RealSine);
+            float Difference = 100F * (LUTSine.NCLeft - RealSineRounded) / RealSineRounded;
+            Console.WriteLine($"{i}:{WaveLocHere:F5},0x{Position.NCLeft:X4},{LUTSine.NCLeft},{RealSineRounded},{Difference:+0.00;-0.00;0.00}%");
+            Assert.IsTrue(Difference > -ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine.NCLeft} was too small compared to the expected value of {RealSine}");
+            Assert.IsTrue(Difference < ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine.NCLeft} was too large compared to the expected value of {RealSine}");
+        }
+    }
+
+    [TestMethod]
+    public void TestVecSine()
+    {
+        const float WAVE_LOCATION = 0.58F;
+        const float TEST_RANGE = 0.60F;
+        const int TEST_STEPS = 200;
+        const short TABLE_AMPLITUDE = 4095;
+        const float ALLOWED_ERROR = 2.0F; // %
+
+        ShinNoteFinderDFT.GetSine(new() { NCLeft = 9725, NCRight = 52764 }, false);
+
+        for (int i = 0; i < TEST_STEPS; i++)
+        {
+            float WaveLocHere = WAVE_LOCATION - TEST_RANGE + (TEST_RANGE * 2 * ((float)i / TEST_STEPS)); // From (WAVE_LOCATION - TEST_RANGE) to (WAVE_LOCATION + TEST_RANGE)
+            Vector256<ushort> Position = Vector256.Create((ushort)(WaveLocHere * 65535.0F)); // yes this is dumb but meh
+            short LUTSine = ShinNoteFinderDFT.GetSine256(Position)[0];
+
+            float RealSine = TABLE_AMPLITUDE * MathF.Sin(WaveLocHere * MathF.Tau);
+            short RealSineRounded = (short)MathF.Round(RealSine);
+            float Difference = (Math.Abs(LUTSine - RealSineRounded) > 5) ? 100F * (LUTSine - RealSineRounded) / RealSineRounded : 0;
+            Console.WriteLine($"{i}:{WaveLocHere:F5},0x{Position[0]:X4},{LUTSine},{RealSineRounded},{Difference:+0.00;-0.00;0.00}%");
+            Assert.IsTrue(Difference > -ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine} was too small compared to the expected value of {RealSine}");
+            Assert.IsTrue(Difference < ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSine} was too large compared to the expected value of {RealSine}");
+        }
+    }
+
+    [TestMethod]
+    public void TestVecWrapRead()
+    {
+        ushort BUFFER_LEN = 48;
+        short[] DataBuffer = new short[BUFFER_LEN + 16];
+        for (int i = 0; i < DataBuffer.Length; i++) { DataBuffer[i] = (short)((i >= BUFFER_LEN) ? -i : i); }
+
+        MethodInfo TargetMethod = typeof(ShinNoteFinderDFT).GetMethod("ReadArrayWraparound", BindingFlags.Static | BindingFlags.NonPublic);
+
+        for (int h = BUFFER_LEN - 15; h < BUFFER_LEN; h++)
+        {
+            short[] Expected = new short[16];
+            for (int i = 0; i < Expected.Length; i++) { Expected[i] = DataBuffer[(h + i) % BUFFER_LEN]; }
+
+            object? ResultObj = TargetMethod.Invoke(null, new object[] { DataBuffer, BUFFER_LEN, (uint)h });
+            Vector256<short> Result = ResultObj as Vector256<short>? ?? throw new Exception("Could not get result from method call");
+
+            for (int i = 0; i < Expected.Length; i++) { Assert.AreEqual(Expected[i], Result[i], $"Item at index {i} was not as expected when reading from {h}."); }
+            Console.WriteLine($"Finished checking offset {h} ({BUFFER_LEN - h} from back + {16 - (BUFFER_LEN - h)} from front)");
         }
     }
 }
