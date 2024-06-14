@@ -24,11 +24,11 @@ public class ShinNoteFinderTest
     {
         ShinNoteFinderDFT.Reconfigure();
     }
-
+    
     [TestMethod]
     public void TestDataAdd()
     {
-        ShinNoteFinderDFT.AddAudioData(new short[] { 1, 2, 3, 4, 5, 6, 7, 8 });
+        ShinNoteFinderDFT.AddAudioData(new short[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 }, 32);
     }
 
     [TestMethod]
@@ -44,7 +44,7 @@ public class ShinNoteFinderTest
             AudioData[i] = (short)MathF.Round(200 * Sin);
         }
 
-        ShinNoteFinderDFT.AddAudioData(AudioData);
+        ShinNoteFinderDFT.AddAudioData(AudioData, (uint)AudioData.Length);
         ShinNoteFinderDFT.CalculateOutput();
     }
 
@@ -61,7 +61,7 @@ public class ShinNoteFinderTest
         {
             float Sin = MathF.Sin(s * Omega);
             short AudioData = (short)MathF.Round(200 * Sin);
-            ShinNoteFinderDFT.AddAudioData(new short[] { AudioData });
+            ShinNoteFinderDFT.AddAudioData(new short[] { AudioData }, 1);
             ShinNoteFinderDFT.CalculateOutput();
 
             StringBuilder Line = new();
@@ -94,8 +94,8 @@ public class ShinNoteFinderTest
                 short AudioData = (short)MathF.Round(200 * Sin);
                 Samples[t] = AudioData;
             }
-            ShinNoteFinderDFT.AddAudioData(Samples, true);
-            ShinNoteFinderDFT.CalculateOutput(true);
+            ShinNoteFinderDFT.AddAudioData(Samples, (uint)Samples.Length);
+            ShinNoteFinderDFT.CalculateOutput();
 
             StringBuilder Line = new();
             for (int b = 96; b < 120; b++)
@@ -126,19 +126,18 @@ public class ShinNoteFinderTest
                 float Sin = MathF.Sin(((s * 16) + t) * Omega);
                 short AudioData = (short)MathF.Round(200 * Sin);
                 Samples[t] = AudioData;
-                ShinNoteFinderDFT.AddAudioData(new short[] { AudioData }, false);
+                ShinNoteFinderDFT.AddAudioData(new short[] { AudioData }, 1);
             }
-            ShinNoteFinderDFT.AddAudioData(Samples, true);
-            ShinNoteFinderDFT.CalculateOutput(true);
-            ShinNoteFinderDFT.CalculateOutput(false);
+            ShinNoteFinderDFT.AddAudioData(Samples, (uint)Samples.Length);
+            ShinNoteFinderDFT.CalculateOutput();
 
-            /*StringBuilder Line = new();
+            StringBuilder Line = new();
             for (int b = 96; b < 120; b++)
             {
                 Line.Append(ShinNoteFinderDFT.RawBinMagnitudes[b]);
                 Line.Append(',');
             }
-            Output[s] = Line.ToString();*/
+            Output[s] = Line.ToString();
         }
 
         File.WriteAllLines("ProgressiveOutputData256.csv", Output);
@@ -157,9 +156,9 @@ public class ShinNoteFinderTest
             AudioData[i] = (short)MathF.Round(short.MaxValue * Sin);
         }
 
-        ShinNoteFinderDFT.AddAudioData(AudioData);
+        ShinNoteFinderDFT.AddAudioData(AudioData, (uint)AudioData.Length);
         ShinNoteFinderDFT.CalculateOutput();
-        ShinNoteFinderDFT.AddAudioData(new short[8192]);
+        ShinNoteFinderDFT.AddAudioData(new short[8192], 8192);
         ShinNoteFinderDFT.CalculateOutput();
     }
 
@@ -169,9 +168,9 @@ public class ShinNoteFinderTest
         const short DC_VALUE = 500;
         short[] AudioData = new short[4096];
         for (int i = 0; i < AudioData.Length; i++) { AudioData[i] = DC_VALUE; }
-        ShinNoteFinderDFT.AddAudioData(AudioData);
+        ShinNoteFinderDFT.AddAudioData(AudioData, (uint)AudioData.Length);
         ShinNoteFinderDFT.CalculateOutput();
-        ShinNoteFinderDFT.AddAudioData(new short[8192]);
+        ShinNoteFinderDFT.AddAudioData(new short[8192], 8192);
         ShinNoteFinderDFT.CalculateOutput();
     }
 
@@ -197,7 +196,7 @@ public class ShinNoteFinderTest
                 AudioData[s] = (short)MathF.Round(1000 * Sin);
             }
 
-            ShinNoteFinderDFT.AddAudioData(AudioData);
+            ShinNoteFinderDFT.AddAudioData(AudioData, (uint)AudioData.Length);
             ShinNoteFinderDFT.CalculateOutput();
             StringBuilder ThisLine = new();
             ThisLine.Append(FreqHere);
@@ -286,5 +285,4 @@ public class ShinNoteFinderTest
             Console.WriteLine($"Finished checking offset {h} ({BUFFER_LEN - h} from back + {16 - (BUFFER_LEN - h)} from front)");
         }
     }
-
 }

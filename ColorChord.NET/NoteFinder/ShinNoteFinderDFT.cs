@@ -221,7 +221,7 @@ public static class ShinNoteFinderDFT
         TEMP_CycleCount++;
 
         uint Index = 0;
-        if (Avx2.IsSupported && ENABLE_SIMD)
+        if (Avx2.IsSupported && ENABLE_SIMD && dataLength >= 16)
         {
             uint EndIndex = dataLength - 16;
             while (Index <= EndIndex)
