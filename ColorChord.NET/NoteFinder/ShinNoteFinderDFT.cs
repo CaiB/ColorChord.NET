@@ -101,6 +101,13 @@ public static class ShinNoteFinderDFT
     private static float SmoothedAmplitude = 0F;
     private static double[] SmoothedSinOutputs, SmoothedCosOutputs;
 
+    /// <summary> The current calculated, scaled value for all DFT bins are stored. </summary>
+    /// <remarks> Note that this is length <see cref="BinCount"/> + 2, as there's a padding value on both ends to make some operations nicer. </remarks>
+    internal static float[] AllBinValues;
+
+    /// <summary> The current scaled values of the DFT bins, with all octaves folded together. </summary>
+    internal static float[] OctaveBinValues;
+
     [ConfigFloat("LoudnessCorrection", 0F, 1F, 0.33F)]
     private static float LoudnessCorrectionAmount = 0.33F;
 
@@ -134,6 +141,7 @@ public static class ShinNoteFinderDFT
         nameof(SinTableStepSize), nameof(SinTableLocationAdd), nameof(SinTableLocationSub),
         nameof(SinProductAccumulators), nameof(CosProductAccumulators), nameof(ProductAccumulators),
         nameof(SmoothingFactors), nameof(SmoothedSinOutputs), nameof(SmoothedCosOutputs),
+        nameof(AllBinValues), nameof(OctaveBinValues),
         nameof(LoudnessCorrectionFactors),
         nameof(RawBinMagnitudes),
         nameof(RawBinFrequencies)
@@ -151,6 +159,8 @@ public static class ShinNoteFinderDFT
         SmoothingFactors = new float[BinCount];
         SmoothedSinOutputs = new double[BinCount];
         SmoothedCosOutputs = new double[BinCount];
+        AllBinValues = new float[BinCount + 2];
+        OctaveBinValues = new float[BinsPerOctave];
         LoudnessCorrectionFactors = new float[BinCount];
         RawBinMagnitudes = new float[BinCount];
         RawBinFrequencies = new float[BinCount];
@@ -541,7 +551,7 @@ public static class ShinNoteFinderDFT
     public static void CalculateOutput()
     {
         int BinCount = ShinNoteFinderDFT.BinCount;
-        for (int Bin = 0; Bin < BINS_PER_OCTAVE; Bin++) { ShinNoteFinder.OctaveBinValues[Bin] = 0; } // TODO: Move out of the DFT
+        for (int Bin = 0; Bin < BINS_PER_OCTAVE; Bin++) { OctaveBinValues[Bin] = 0; } // TODO: Move out of the DFT
 
         //CalculateBins(); // TODO: Is this needed?
 
@@ -578,8 +588,8 @@ public static class ShinNoteFinderDFT
         for (int Bin = 0; Bin < BinCount; Bin++) // TODO: Move out of the DFT
         {
             float OutBinVal = RawBinMagnitudes[Bin] * LoudnessCorrectionFactors[Bin];
-            ShinNoteFinder.OctaveBinValues[Bin % BINS_PER_OCTAVE] += OutBinVal / OctaveCount;
-            ShinNoteFinder.AllBinValues[Bin] = MathF.Max(0, OutBinVal - 0.08F);
+            OctaveBinValues[Bin % BINS_PER_OCTAVE] += OutBinVal / OctaveCount;
+            AllBinValues[Bin + 1] = MathF.Max(0, OutBinVal - 0.08F);
         }
     }
 

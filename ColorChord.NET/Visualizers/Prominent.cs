@@ -126,8 +126,8 @@ public class Prominent : IVisualizer, IDiscrete1D, IControllableAttr
         // Find strongest note
         for (int Bin = 0; Bin < this.NoteCount; Bin++)
         {
-            float ThisNote = NoteFinderCommon.Notes[Bin].Position / this.BinsPerOctave;
-            float ThisAmplitude = NoteFinderCommon.Notes[Bin].AmplitudeFiltered * this.SaturationAmplifier;
+            float ThisNote = ColorChord.NoteFinder.Notes[Bin].Position / this.BinsPerOctave;
+            float ThisAmplitude = ColorChord.NoteFinder.Notes[Bin].AmplitudeFiltered * this.SaturationAmplifier;
             if (ThisAmplitude > OutAmplitude)
             {
                 OutAmplitude = ThisAmplitude;

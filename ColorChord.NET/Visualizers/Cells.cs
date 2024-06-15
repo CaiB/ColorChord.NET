@@ -177,9 +177,9 @@ public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
             float TotalDesiredCount = 0; // How many LEDs we'd want on, taking into account the quantity for each colour
             for (int i = 0; i < NoteCount; i++)
             {
-                BinColours[i] = NoteFinderCommon.Notes[i].Position / this.BinsPerOctave;
-                BinValuesSlow[i] = MathF.Pow(NoteFinderCommon.Notes[i].AmplitudeFiltered, this.LightSiding);
-                BinValues[i] = MathF.Pow(NoteFinderCommon.Notes[i].Amplitude, this.LightSiding);
+                BinColours[i] = ColorChord.NoteFinder.Notes[i].Position / this.BinsPerOctave;
+                BinValuesSlow[i] = MathF.Pow(ColorChord.NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
+                BinValues[i] = MathF.Pow(ColorChord.NoteFinder.Notes[i].Amplitude, this.LightSiding);
                 BinValuesSum += BinValuesSlow[i];
 
                 float DesiredCount = BinValuesSlow[i] * this.QtyAmp; // How many LEDs we'd like on for this colour

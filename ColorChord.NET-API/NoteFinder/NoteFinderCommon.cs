@@ -12,18 +12,18 @@ public abstract class NoteFinderCommon : IConfigurableAttr
     public static uint ShortestPeriod { get; protected set; } = 100;
 
     /// <summary> The frequency spectrum data, before folding into a single octave. </summary>
-    public static float[]? AllBinValues { get; protected set; }
+    public abstract ReadOnlySpan<float> AllBinValues { get; }
 
     /// <summary> The frequency spectrum data, folded to overlap into a single octave length. </summary>
-    public static float[]? OctaveBinValues { get; protected set; }
+    public abstract ReadOnlySpan<float> OctaveBinValues { get; }
 
     /// <summary> The notes we have detected in the current cycle. </summary>
-    public static Note[] Notes { get; protected set; } = Array.Empty<Note>();
+    public abstract ReadOnlySpan<Note> Notes { get; }
 
     /// <summary> Used to keep track of locations of notes that stay between frames in <see cref="Notes"/>, as that array's order may change. </summary>
-    public static int[] PersistentNoteIDs = Array.Empty<int>();
+    public abstract ReadOnlySpan<int> PersistentNoteIDs { get; }
 
-    public static AutoResetEvent InputDataEvent = new(false);
+    public static AutoResetEvent InputDataEvent { get; protected set; } = new(false);
 
     /// <summary>How many note slots there are. Usually not all are in use.</summary>
     public abstract int NoteCount { get; } // TODO: Finish docs

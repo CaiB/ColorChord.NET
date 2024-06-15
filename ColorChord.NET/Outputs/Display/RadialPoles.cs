@@ -40,6 +40,7 @@ public class RadialPoles : IDisplayMode, IConfigurableAttr
     private int TextureHandle, VertexBufferHandle, VertexArrayHandle;
     private int LocationResolution, LocationPoleCount, LocationScaleFactor, LocationExponent, LocationIsConnected, LocationAdvance, LocationCenterBlank, LocationWidthOverride;
 
+    private float[] RawDataIn;
     private int LastPoleCount;
 
     /// <summary> The current window and framebuffer resolution. (Width, Height) </summary>
@@ -52,11 +53,12 @@ public class RadialPoles : IDisplayMode, IConfigurableAttr
     {
         this.HostWindow = parent;
         Configurer.Configure(this, config);
+        this.RawDataIn = new float[ColorChord.NoteFinder.OctaveBinValues.Length];
     }
 
     public bool SupportsFormat(IVisualizerFormat format) => true;
 
-    public int PoleCount => BaseNoteFinder.OctaveBinValues.Length;
+    public int PoleCount => ColorChord.NoteFinder?.OctaveBinValues.Length ?? 0;
 
     public void Load()
     {
@@ -122,10 +124,11 @@ public class RadialPoles : IDisplayMode, IConfigurableAttr
 
         // TODO: Set uniforms
 
-        float[] NoteData = NoteFinderCommon.OctaveBinValues;
-        if (this.LastPoleCount != NoteData.Length) { GL.Uniform1(this.LocationPoleCount, NoteData.Length); }
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, NoteData.Length, 1, 0, PixelFormat.Red, PixelType.Float, NoteData);
-        this.LastPoleCount = NoteData.Length;
+        if (this.RawDataIn.Length != ColorChord.NoteFinder.OctaveBinValues.Length) { this.RawDataIn = new float[ColorChord.NoteFinder.OctaveBinValues.Length]; }
+        ColorChord.NoteFinder.OctaveBinValues.CopyTo(this.RawDataIn);
+        if (this.LastPoleCount != this.RawDataIn.Length) { GL.Uniform1(this.LocationPoleCount, this.RawDataIn.Length); }
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, this.RawDataIn.Length, 1, 0, PixelFormat.Red, PixelType.Float, this.RawDataIn);
+        this.LastPoleCount = this.RawDataIn.Length;
 
         GL.BindVertexArray(this.VertexArrayHandle);
         GL.DrawArrays(PrimitiveType.Triangles, 0, Geometry.Length / 2);

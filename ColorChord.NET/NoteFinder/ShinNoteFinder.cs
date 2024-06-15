@@ -6,6 +6,7 @@ using ColorChord.NET.Outputs;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.Intrinsics;
 using System.Threading;
 
 namespace ColorChord.NET.NoteFinder;
@@ -13,6 +14,15 @@ namespace ColorChord.NET.NoteFinder;
 public class ShinNoteFinder : NoteFinderCommon, ITimingSource
 {
     private const int NOTE_QTY = 12;
+
+    public override ReadOnlySpan<float> AllBinValues => ShinNoteFinderDFT.AllBinValues.AsSpan(1, ShinNoteFinderDFT.AllBinValues.Length - 2);
+    public override ReadOnlySpan<float> OctaveBinValues => ShinNoteFinderDFT.OctaveBinValues;
+
+    private Note[] P_Notes;
+    public override ReadOnlySpan<Note> Notes => this.P_Notes;
+
+    private int[] P_PersistentNoteIDs;
+    public override ReadOnlySpan<int> PersistentNoteIDs => this.P_PersistentNoteIDs;
 
     private static Thread? ProcessThread;
     private static bool KeepGoing = true;
@@ -28,10 +38,8 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
     {
         Configurer.Configure(typeof(ShinNoteFinderDFT), config, false);
         Configurer.Configure(this, config);
-        Notes = new Note[NOTE_QTY];
-        PersistentNoteIDs = new int[NOTE_QTY];
-        OctaveBinValues = new float[ShinNoteFinderDFT.BinsPerOctave];
-        AllBinValues = new float[ShinNoteFinderDFT.BinsPerOctave * ShinNoteFinderDFT.OctaveCount];
+        P_Notes = new Note[NOTE_QTY];
+        P_PersistentNoteIDs = new int[NOTE_QTY];
         SetupBuffers();
         ShinNoteFinderDFT.Reconfigure();
     }
@@ -86,6 +94,10 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
     public override void UpdateOutputs()
     {
         ShinNoteFinderDFT.CalculateOutput();
+        for (int i = 0; i < AllBinValues.Length; i++)
+        {
+            //Vector256<float> 
+        }
     }
 
     public override void Stop()

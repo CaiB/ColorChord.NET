@@ -198,9 +198,9 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
             // Populate data from the NoteFinder.
             for (int i = 0; i < this.NoteCount; i++)
             {
-                Notes[i].Position = NoteFinderCommon.Notes[i].Position / this.BinsPerOctave;
-                Notes[i].AmplitudeSmooth = MathF.Pow(NoteFinderCommon.Notes[i].AmplitudeFiltered, this.LightSiding);
-                Notes[i].AmplitudeFast = MathF.Pow(NoteFinderCommon.Notes[i].Amplitude, this.LightSiding);
+                Notes[i].Position = ColorChord.NoteFinder.Notes[i].Position / this.BinsPerOctave;
+                Notes[i].AmplitudeSmooth = MathF.Pow(ColorChord.NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
+                Notes[i].AmplitudeFast = MathF.Pow(ColorChord.NoteFinder.Notes[i].Amplitude, this.LightSiding);
                 AmplitudeSum += Notes[i].AmplitudeSmooth;
             }
 

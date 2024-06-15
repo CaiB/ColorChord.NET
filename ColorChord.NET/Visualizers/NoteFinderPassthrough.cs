@@ -28,7 +28,7 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
     {
         this.Name = name;
         Configurer.Configure(this, config);
-        this.Data = new uint[NoteFinderCommon.AllBinValues.Length];
+        this.Data = new uint[ColorChord.NoteFinder.AllBinValues.Length];
     }
 
     public void Start()
@@ -38,7 +38,7 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
 
     public void GetData()
     {
-        float[] RawData = NoteFinderCommon.AllBinValues!;
+        ReadOnlySpan<float> RawData = ColorChord.NoteFinder.AllBinValues;
         if (this.Data.Length != RawData.Length) { this.Data = new uint[RawData.Length]; }
         for (int i = 0; i < RawData.Length; i++) { this.Data[i] = VisualizerTools.CCToRGB((i % 24) / 24F, 1F, MathF.Pow(RawData[i] * 2.5F, 3F)); }
         foreach(IOutput Out in this.Outputs) { Out.Dispatch(); }

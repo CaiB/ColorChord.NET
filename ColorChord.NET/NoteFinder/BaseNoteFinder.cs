@@ -163,14 +163,26 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     public override int NoteCount { get => NOTE_QTY; }
     public override int BinsPerOctave { get => BINS_PER_OCTAVE; } // TODO: This is only really necessary because we don't scale the note output values. Consider doing that.
 
+    private static Note[] P_Notes;
+    public override ReadOnlySpan<Note> Notes => P_Notes;
+
+    private static int[] P_PersistentNoteIDs;
+    public override ReadOnlySpan<int> PersistentNoteIDs => P_PersistentNoteIDs;
+
+    private static float[] P_OctaveBinValues;
+    public override ReadOnlySpan<float> OctaveBinValues => P_OctaveBinValues;
+
+    private static float[] P_AllBinValues;
+    public override ReadOnlySpan<float> AllBinValues => P_AllBinValues;
+
     public BaseNoteFinder(string name, Dictionary<string, object> config)
     {
         Configurer.Configure(this, config);
         SetSampleRate(SampleRate); // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
-        Notes = new Note[NOTE_QTY];
-        PersistentNoteIDs = new int[NOTE_QTY];
-        OctaveBinValues = new float[BINS_PER_OCTAVE];
-        AllBinValues = new float[TOTAL_DFT_BINS];
+        P_Notes = new Note[NOTE_QTY];
+        P_PersistentNoteIDs = new int[NOTE_QTY];
+        P_OctaveBinValues = new float[BINS_PER_OCTAVE];
+        P_AllBinValues = new float[TOTAL_DFT_BINS];
         SetupBuffers();
     }
 
@@ -274,7 +286,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
             NewData *= DFTDataAmplifier; // Amplify incoming data by a constant
             NewData *= (1 + (DFTSensitivitySlope * RawBinIndex)); // Apply a frequency-dependent amplifier to increase sensitivity at higher frequencies.
 
-            AllBinValues[RawBinIndex] = (AllBinValues[RawBinIndex] * DFTIIRMultiplier) + // Keep data from last frame, but reduce by a factor.
+            P_AllBinValues[RawBinIndex] = (P_AllBinValues[RawBinIndex] * DFTIIRMultiplier) + // Keep data from last frame, but reduce by a factor.
                                          (NewData * (1 - DFTIIRMultiplier)); // Add new data
         }
 
@@ -282,20 +294,20 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
         // This is to prevent frequency content at the edges of our bin set from creating discontinuities in the folded bins.
         for (int OctaveBinIndex = 0; OctaveBinIndex < BINS_PER_OCTAVE; OctaveBinIndex++)
         {
-            AllBinValues[OctaveBinIndex] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the first octave
-            AllBinValues[TOTAL_DFT_BINS - OctaveBinIndex - 1] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the last octave
+            P_AllBinValues[OctaveBinIndex] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the first octave
+            P_AllBinValues[TOTAL_DFT_BINS - OctaveBinIndex - 1] *= (OctaveBinIndex + 1F) / BINS_PER_OCTAVE; // Taper the last octave
         }
 
         // Fold the bins to make one single octave-length array, where all like notes (e.g. C2, C3, C4) are combined, regardless of their original octave.
         for (int BinIndex = 0; BinIndex < BINS_PER_OCTAVE; BinIndex++)
         {
             float Amplitude = 0;
-            for (int Octave = 0; Octave < OCTAVES; Octave++) { Amplitude += AllBinValues[(Octave * BINS_PER_OCTAVE) + BinIndex]; }
-            OctaveBinValues[BinIndex] = Amplitude;
+            for (int Octave = 0; Octave < OCTAVES; Octave++) { Amplitude += P_AllBinValues[(Octave * BINS_PER_OCTAVE) + BinIndex]; }
+            P_OctaveBinValues[BinIndex] = Amplitude;
         }
 
         LastBinSum = 0;
-        for (int i = 0; i < OctaveBinValues.Length; i++) { LastBinSum += OctaveBinValues[i]; }
+        for (int i = 0; i < P_OctaveBinValues.Length; i++) { LastBinSum += P_OctaveBinValues[i]; }
 
         // Do some filtering on the now-folded bins to remove meaningless peaks.
         // Averages out each bin a little bit with adjacent bins.
@@ -303,7 +315,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
         float[] OctaveBinValuesPre = new float[BINS_PER_OCTAVE];
         for (int Iteration = 0; Iteration < OctaveFilterIterations; Iteration++)
         {
-            Array.Copy(OctaveBinValues, OctaveBinValuesPre, BINS_PER_OCTAVE); // COpy the octave data into our temporary array.
+            Array.Copy(P_OctaveBinValues, OctaveBinValuesPre, BINS_PER_OCTAVE); // COpy the octave data into our temporary array.
             for (int BinIndex = 0; BinIndex < BINS_PER_OCTAVE; BinIndex++)
             {
                 int IndexRight = (BinIndex + BINS_PER_OCTAVE + 1) % BINS_PER_OCTAVE; // The next bin to the right (wrapping around if needed).
@@ -311,10 +323,10 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
                 float ValueRight = OctaveBinValuesPre[IndexRight];
                 float ValueLeft = OctaveBinValuesPre[IndexLeft];
 
-                float NewValue = OctaveBinValues[BinIndex] * (1F - OctaveFilterStrength); // Some of the current value in the bin
+                float NewValue = P_OctaveBinValues[BinIndex] * (1F - OctaveFilterStrength); // Some of the current value in the bin
                 NewValue += ((ValueLeft + ValueRight) / 2) * OctaveFilterStrength; // Add the average of the adjacent bins, scaled by the filter strength
 
-                OctaveBinValues[BinIndex] = NewValue;
+                P_OctaveBinValues[BinIndex] = NewValue;
             }
         }
 
@@ -331,9 +343,9 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
         {
             int IndexLeft = (BinIndex - 1 + BINS_PER_OCTAVE) % BINS_PER_OCTAVE;
             int IndexRight = (BinIndex + 1) % BINS_PER_OCTAVE;
-            float ValueLeft = OctaveBinValues[IndexLeft];
-            float ValueHere = OctaveBinValues[BinIndex];
-            float ValueRight = OctaveBinValues[IndexRight];
+            float ValueLeft = P_OctaveBinValues[IndexLeft];
+            float ValueHere = P_OctaveBinValues[BinIndex];
+            float ValueRight = P_OctaveBinValues[IndexRight];
 
             if (ValueLeft >= ValueHere || ValueRight > ValueHere) { continue; } // Adjacent bins are higher, this is not a peak.
             if (ValueLeft == ValueHere && ValueRight == ValueHere) { continue; } // Adjacent bins are both equal, this is a plateau (e.g. all 0).
@@ -391,20 +403,20 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
             {
                 if (!NoteDistributions[DistrIndex].HasNote && // If this distribution is not already influencing another note.
                     !NotesAssociated[PeakIndex] && // If this note is not already being influenced by another distribution
-                    LoopDistance(Notes[PeakIndex].Position, NoteDistributions[DistrIndex].Mean, BINS_PER_OCTAVE) < MinNoteInfluenceDistance && // The locations are close enough to merge
+                    LoopDistance(P_Notes[PeakIndex].Position, NoteDistributions[DistrIndex].Mean, BINS_PER_OCTAVE) < MinNoteInfluenceDistance && // The locations are close enough to merge
                     NoteDistributions[DistrIndex].Amplitude > 0.00001F) // The new data is significant
                 {
                     // note_peaks_to_dists_mapping can be implemented here if needed.
                     // TODO: I'm honestly a little bit lost as to what happens in here...
                     NoteDistributions[DistrIndex].HasNote = true; // Don't let this distribution affect other notes.
-                    if (PersistentNoteIDs[PeakIndex] == 0) { PersistentNoteIDs[PeakIndex] = CurrentNoteID++; }
+                    if (P_PersistentNoteIDs[PeakIndex] == 0) { P_PersistentNoteIDs[PeakIndex] = CurrentNoteID++; }
                     NotesAssociated[PeakIndex] = true; // This note has been influenced by a distribution, so is still active.
-                    Notes[PeakIndex].Position = LoopAverageWeighted(Notes[PeakIndex].Position, (1F - NoteAttachFrequencyIIRMultiplier), NoteDistributions[DistrIndex].Mean, NoteAttachFrequencyIIRMultiplier, BINS_PER_OCTAVE);
+                    P_Notes[PeakIndex].Position = LoopAverageWeighted(P_Notes[PeakIndex].Position, (1F - NoteAttachFrequencyIIRMultiplier), NoteDistributions[DistrIndex].Mean, NoteAttachFrequencyIIRMultiplier, BINS_PER_OCTAVE);
 
-                    float NewAmplitude = Notes[PeakIndex].Amplitude;
+                    float NewAmplitude = P_Notes[PeakIndex].Amplitude;
                     NewAmplitude *= (1F - NoteAttachAmplitudeIIRMultiplier);
                     NewAmplitude += (NoteDistributions[DistrIndex].Amplitude * NoteAttachAmplitudeIIRMultiplier);
-                    Notes[PeakIndex].Amplitude = NewAmplitude;
+                    P_Notes[PeakIndex].Amplitude = NewAmplitude;
                 }
             }
         }
@@ -416,24 +428,24 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
             {
                 if (NoteIndex1 == NoteIndex2) { continue; } // Don't try to compare a note with itself.
 
-                if (LoopDistance(Notes[NoteIndex1].Position, Notes[NoteIndex2].Position, BINS_PER_OCTAVE) < MinNoteCombineDistance && // The two notes are close enough
-                    Notes[NoteIndex1].Amplitude > 0 && // v
-                    Notes[NoteIndex2].Amplitude > 0) // Both notes need to be significant to be combined.
+                if (LoopDistance(P_Notes[NoteIndex1].Position, P_Notes[NoteIndex2].Position, BINS_PER_OCTAVE) < MinNoteCombineDistance && // The two notes are close enough
+                    P_Notes[NoteIndex1].Amplitude > 0 && // v
+                    P_Notes[NoteIndex2].Amplitude > 0) // Both notes need to be significant to be combined.
                 {
-                    bool Is1Bigger = Notes[NoteIndex1].Amplitude > Notes[NoteIndex2].Amplitude;
+                    bool Is1Bigger = P_Notes[NoteIndex1].Amplitude > P_Notes[NoteIndex2].Amplitude;
                     int IndexPrimary = Is1Bigger ? NoteIndex1 : NoteIndex2; // The index of the larger note.
                     int IndexSecondary = Is1Bigger ? NoteIndex2 : NoteIndex1; // The index of the smaller note.
 
-                    float NewPosition = LoopAverageWeighted(Notes[IndexPrimary].Position, Notes[IndexPrimary].Amplitude, Notes[IndexSecondary].Position, Notes[IndexSecondary].Amplitude, BINS_PER_OCTAVE);
+                    float NewPosition = LoopAverageWeighted(P_Notes[IndexPrimary].Position, P_Notes[IndexPrimary].Amplitude, P_Notes[IndexSecondary].Position, P_Notes[IndexSecondary].Amplitude, BINS_PER_OCTAVE);
 
                     // Merge secondary into primary at new position
-                    Notes[IndexPrimary].Amplitude += Notes[IndexSecondary].Amplitude;
-                    Notes[IndexPrimary].Position = NewPosition;
+                    P_Notes[IndexPrimary].Amplitude += P_Notes[IndexSecondary].Amplitude;
+                    P_Notes[IndexPrimary].Position = NewPosition;
 
                     // Delete secondary note
-                    Notes[IndexSecondary].Amplitude = 0;
-                    Notes[IndexSecondary].Position = -100;
-                    PersistentNoteIDs[IndexSecondary] = 0;
+                    P_Notes[IndexSecondary].Amplitude = 0;
+                    P_Notes[IndexSecondary].Position = -100;
+                    P_PersistentNoteIDs[IndexSecondary] = 0;
                 }
             }
         }
@@ -441,9 +453,9 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
         // Note slots that are empty should be assigned to not yet used distributions, if there are any.
         for (int NoteIndex = 0; NoteIndex < NOTE_QTY; NoteIndex++)
         {
-            if (Notes[NoteIndex].Amplitude < MIN_NOTE_SURVIVAL_AMPLITUDE)
+            if (P_Notes[NoteIndex].Amplitude < MIN_NOTE_SURVIVAL_AMPLITUDE)
             {
-                PersistentNoteIDs[NoteIndex] = 0;
+                P_PersistentNoteIDs[NoteIndex] = 0;
 
                 // Find a new peak for this note.
                 for (int DistrIndex = 0; DistrIndex < DistributionsFound; DistrIndex++)
@@ -452,10 +464,10 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
                         NoteDistributions[DistrIndex].Amplitude > MIN_NOTE_CREATION_AMPLITUDE) // The distribution is large enough to be worth turning into a new note.
                     {
                         // Create a new note with information from this distribution.
-                        PersistentNoteIDs[NoteIndex] = CurrentNoteID++;
+                        P_PersistentNoteIDs[NoteIndex] = CurrentNoteID++;
                         NoteDistributions[DistrIndex].HasNote = true; // Don't let this create/affect other notes this cycle.
-                        Notes[NoteIndex].Amplitude = NoteDistributions[DistrIndex].Amplitude;
-                        Notes[NoteIndex].Position = NoteDistributions[DistrIndex].Mean;
+                        P_Notes[NoteIndex].Amplitude = NoteDistributions[DistrIndex].Amplitude;
+                        P_Notes[NoteIndex].Position = NoteDistributions[DistrIndex].Mean;
                         NotesAssociated[NoteIndex] = true; // This note was just created, so it is active this cycle.
                     }
                 }
@@ -466,25 +478,25 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
         for (int NoteIndex = 0; NoteIndex < NOTE_QTY; NoteIndex++)
         {
             // Any notes that do not have a corresponding distribution this cycle should be decayed.
-            if (!NotesAssociated[NoteIndex]) { Notes[NoteIndex].Amplitude *= (1F - NoteAttachAmplitudeIIRMultiplier); }
+            if (!NotesAssociated[NoteIndex]) { P_Notes[NoteIndex].Amplitude *= (1F - NoteAttachAmplitudeIIRMultiplier); }
 
-            float NewFiltered = Notes[NoteIndex].AmplitudeFiltered;
+            float NewFiltered = P_Notes[NoteIndex].AmplitudeFiltered;
             NewFiltered *= (1F - NoteAttachAmplitudeIIRMultiplier2);
-            NewFiltered += Notes[NoteIndex].Amplitude * NoteAttachAmplitudeIIRMultiplier2;
-            Notes[NoteIndex].AmplitudeFiltered = NewFiltered; // A combination of the previous filtered value, pushed towards the current value.
+            NewFiltered += P_Notes[NoteIndex].Amplitude * NoteAttachAmplitudeIIRMultiplier2;
+            P_Notes[NoteIndex].AmplitudeFiltered = NewFiltered; // A combination of the previous filtered value, pushed towards the current value.
 
-            if (Notes[NoteIndex].AmplitudeFiltered < MIN_NOTE_SURVIVAL_AMPLITUDE) // The amplitude is very small, just cut it to avoid noise.
+            if (P_Notes[NoteIndex].AmplitudeFiltered < MIN_NOTE_SURVIVAL_AMPLITUDE) // The amplitude is very small, just cut it to avoid noise.
             {
-                Notes[NoteIndex].Amplitude = 0;
-                Notes[NoteIndex].AmplitudeFiltered = 0;
+                P_Notes[NoteIndex].Amplitude = 0;
+                P_Notes[NoteIndex].AmplitudeFiltered = 0;
             }
         }
 
         // Nudge down amplitude of all notes, zeroing out ones that don't make the cut.
         for (int NoteIndex = 0; NoteIndex < NOTE_QTY; NoteIndex++)
         {
-            Notes[NoteIndex].AmplitudeFinal = Notes[NoteIndex].Amplitude - NoteOutputChop; // Reduce all notes by a small amount.
-            if (Notes[NoteIndex].AmplitudeFinal < 0) { Notes[NoteIndex].AmplitudeFinal = 0; } // If this note is too small, zero it.
+            P_Notes[NoteIndex].AmplitudeFinal = P_Notes[NoteIndex].Amplitude - NoteOutputChop; // Reduce all notes by a small amount.
+            if (P_Notes[NoteIndex].AmplitudeFinal < 0) { P_Notes[NoteIndex].AmplitudeFinal = 0; } // If this note is too small, zero it.
         }
     }
 
