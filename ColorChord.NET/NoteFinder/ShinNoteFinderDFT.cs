@@ -666,9 +666,9 @@ public static class ShinNoteFinderDFT
     }
 
     // Everyone loves magic numbers :)
-    // These were determined through simulations and regressions, which can be found in the Simulations folder in the root of the ColorChord.NET repository.
-    private static float BinWidthAtWindowSize(float windowSize, float sampleRate) => sampleRate * 1.046304014F / (windowSize + 11.483904495504245F);
-    private static float WindowSizeForBinWidth(float binWidth, float sampleRate) => (sampleRate * 1.046304014F / binWidth) - 11.483904495504245F; // TODO: The sample rate scaling doesn't seem quite correct here
+    // These were determined through simulations and regressions, which can be found in the Simulations folder in the root of the ColorChord.NET repository. See Simulations/WindowSizeVsBinWidthWithSampleRate.m.
+    private static float BinWidthAtWindowSize(float windowSize, float sampleRate) => ((sampleRate * 1.0414032F) + 592.49176F) / (windowSize + ((sampleRate * 0.00022935479F) + 1.5730453F));
+    private static float WindowSizeForBinWidth(float binWidth, float sampleRate) => (((sampleRate * 1.0414032F) + 592.49176F) / binWidth) - ((sampleRate * 0.00022935479F) + 1.5730453F);
 
     private static uint RoundedWindowSizeForBinWidth(float binWidth, float frequency, float sampleRate)
     {
