@@ -91,7 +91,7 @@ public static class ShinNoteFinderDFT
     /// <remarks> Used instead of <see cref="ProductAccumulators"/> on non-AVX2 systems. Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
     private static DualI64[] SinProductAccumulators, CosProductAccumulators;
 
-    /// <summary> Stores the current value of the sin*sample and cos*sample product sums, for each bin. </summary>
+    /// <summary> Stores the current value of the sin*sample and cos*sample product sums, for each bin. Layout is [SinL, SinR, CosL, CosR]. </summary>
     /// <remarks> Used instead of (<see cref="SinProductAccumulators"/>, <see cref="CosProductAccumulators"/>) on AVX2-enabled systems. Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
     private static Vector256<long>[] ProductAccumulators;
 
@@ -123,7 +123,7 @@ public static class ShinNoteFinderDFT
 
     private static int TEMP_CycleCount = 0;
 
-    private static float IIR_CONST = 0.55F; // TODO: Scale dynamically, higher => more older data //higher => more emphasis on new data
+    private static float IIR_CONST = 0.25F; // TODO: Scale dynamically, lower => more older data
 
     static ShinNoteFinderDFT()
     {
@@ -494,7 +494,7 @@ public static class ShinNoteFinderDFT
                 RotatedValues[SubIndex] = Sin;
                 RotatedValues[SubIndex + 4] = Cos; // RotatedValues = {Sin[BinIndex:BinIndex+3], Cos[BinIndex:BinIndex+3]}
 
-                (double Sin, double Cos) RotatedL;
+                /*(double Sin, double Cos) RotatedL;
                 (double Sin, double Cos) RotatedR;
                 DualU16 CurrentSineLocations = SinTableLocationAdd[InnerIndex];
                 float AngleL = CurrentSineLocations.NCLeft * MathF.Tau / USHORT_RANGE;
@@ -514,7 +514,7 @@ public static class ShinNoteFinderDFT
 
                     SmoothedSinOutputs[InnerIndex] = PreviousSinVal + Sin;
                     SmoothedCosOutputs[InnerIndex] = PreviousCosVal + Cos;
-                }
+                }*/
             }
 
             if (Avx2.IsSupported && ENABLE_SIMD)
@@ -550,12 +550,13 @@ public static class ShinNoteFinderDFT
 
     public static void CalculateOutput()
     {
+    if (SmoothedAmplitude == 0) { return; }
         int BinCount = ShinNoteFinderDFT.BinCount;
         for (int Bin = 0; Bin < BINS_PER_OCTAVE; Bin++) { OctaveBinValues[Bin] = 0; } // TODO: Move out of the DFT
 
         //CalculateBins(); // TODO: Is this needed?
 
-        Vector256<double> AmplitudeScale = Vector256.Create((double)MathF.Max(1F, SmoothedAmplitude));
+        Vector256<double> AmplitudeScale = Vector256.Create((double)SmoothedAmplitude);
 
         int BinIndex = 0;
         while (BinIndex < BinCount)

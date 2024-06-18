@@ -20,6 +20,9 @@ public class ImageFile : IOutput
     [ConfigInt("ImageWidth", 128, 64000, 16384)]
     public int ImageWidth = 16384;
 
+    [ConfigBool("Enabled", true)]
+    public bool Enabled { get; set; } = true;
+
     /// <summary> Pixel buffers to store data for the current image, as well as the next one. </summary>
     /// <remarks> These are swapped in between, to avoid allocating more buffers during runtime. </remarks>
     private Rgba32[] DataA, DataB;
@@ -52,6 +55,7 @@ public class ImageFile : IOutput
 
     public void Dispatch()
     {
+        if (!this.Enabled) { return; }
         uint[] NewData = this.Source.GetDataDiscrete();
         Rgba32[] CurrentData = this.WritingToA ? this.DataA : this.DataB;
         for (int y = 0; y < this.Height; y++)
@@ -74,6 +78,7 @@ public class ImageFile : IOutput
 
     public void Stop()
     {
+        if (this.WriteHead == 0) { return; }
         Rgba32[] Source = this.WritingToA ? this.DataA : this.DataB;
         Image<Rgba32> OutputImage = new(this.WriteHead, this.Height);
         OutputImage.ProcessPixelRows(ImageContent =>
