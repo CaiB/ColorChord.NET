@@ -10,7 +10,13 @@ using System.Text;
 
 namespace ColorChord.NET.NoteFinder;
 
-/// <summary> My own note finder implementation. </summary>
+/// <summary> A carefully optimized DFT implementation that creates clean and responsive data. </summary>
+/// This implementation contains many quite particular choices, optimizations, and implementation details I worked on for years to fine-tune.
+/// Data is provided through the standard mechanism in <see cref="ShinNoteFinder.Cycle"/>. This data is processed in <see cref="AddAudioData(short[], uint)"/>,
+/// which will periodically call <see cref="CalculateBins(uint)"/> to snapshot the state of the raw bins. It will also trigger any timing receivers that have
+/// subscribed to periodic events. Then, when a visualizer or other output mechanism wants to use the data, it will call <see cref="ShinNoteFinder.UpdateOutputs"/>
+/// which in turn will call <see cref="CalculateOutput"/>. This will merge together all of the data that has been received since the last output cycle,
+/// apply loudness correction, and format it into <see cref="AllBinValues"/> and <see cref="OctaveBinValues"/> for feature extraction in <see cref="ShinNoteFinder.UpdateOutputs"/>.
 public static class ShinNoteFinderDFT
 {
     private const bool ENABLE_SIMD = true;
@@ -38,16 +44,17 @@ public static class ShinNoteFinderDFT
 
     /// <summary> The number of octaves to analyze. </summary>
     [ConfigInt("Octaves", 1, 20, 6)]
-    public static uint OctaveCount = 6;
+    public static uint OctaveCount { get; set; } = 6;
 
     /// <summary> How long our sample window is. </summary>
-    public static uint MaxPresentWindowSize = 8192;
+    public static uint MaxPresentWindowSize { get; private set; } = 8192;
 
     /// <summary> The sample rate of the incoming audio signal, and our reference waveforms. </summary>
-    public static uint SampleRate = 48000;
+    /// <remarks> Use <see cref="UpdateSampleRate(uint)"/> to change this and trigger all needed internal changes. </remarks>
+    public static uint SampleRate { get; private set; } = 48000;
 
     [ConfigFloat("StartFreq", 0F, 20000F, 55F)]
-    public static float StartFrequency = 55F;
+    public static float StartFrequency { get; private set; } = 55F;
 
     /// <summary> The number of DFT bins per octave. </summary>
     public static uint BinsPerOctave => BINS_PER_OCTAVE;
@@ -98,8 +105,9 @@ public static class ShinNoteFinderDFT
     private static uint DataAddedSinceLastBinCalc = 0;
 
     private static float[] SmoothingFactors;
-    private static float SmoothedAmplitude = 0F;
-    private static double[] SmoothedSinOutputs, SmoothedCosOutputs;
+    private static float MergedDataAmplitude = 0F;
+    private static double[] MergedSinOutputs, MergedCosOutputs;
+    private static readonly object MergedDataLockObj = new();
 
     /// <summary> The current calculated, scaled value for all DFT bins are stored. </summary>
     /// <remarks> Note that this is length <see cref="BinCount"/> + 2, as there's a padding value on both ends to make some operations nicer. </remarks>
@@ -109,17 +117,17 @@ public static class ShinNoteFinderDFT
     internal static float[] OctaveBinValues;
 
     [ConfigFloat("LoudnessCorrection", 0F, 1F, 0.33F)]
-    private static float LoudnessCorrectionAmount = 0.33F;
+    public static float LoudnessCorrectionAmount { get; private set; } = 0.33F;
 
     private static float[] LoudnessCorrectionFactors;
 
     /// <summary> Stores the magnitude output of each bin before any filtering is done. </summary>
     /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
-    public static float[] RawBinMagnitudes;
+    public static float[] RawBinMagnitudes { get; private set; }
 
     /// <summary> The frequency in Hz of each raw bin. </summary>
     /// <remarks> This isn't used in the main algorithm, only for pre-calculation of some data, and to present to the user. </remarks>
-    public static float[] RawBinFrequencies;
+    public static float[] RawBinFrequencies { get; private set; }
 
     private static int TEMP_CycleCount = 0;
 
@@ -129,7 +137,9 @@ public static class ShinNoteFinderDFT
     {
         Log.Info($"Starting {nameof(ShinNoteFinderDFT)} module");
         Reconfigure();
+#pragma warning disable CS0162 // Unreachable code detected
         if (!ENABLE_SIMD) { Log.Warn("SIMD has been compile-time disabled in this build. Expect significantly decreased efficiency."); }
+#pragma warning restore CS0162 // Unreachable code detected
         if (!Avx2.IsSupported) { Log.Warn("Your CPU does not appear to support AVX2, this may lead to poor performance."); }
     }
 
@@ -140,7 +150,7 @@ public static class ShinNoteFinderDFT
         nameof(AudioBufferSubHeads),
         nameof(SinTableStepSize), nameof(SinTableLocationAdd), nameof(SinTableLocationSub),
         nameof(SinProductAccumulators), nameof(CosProductAccumulators), nameof(ProductAccumulators),
-        nameof(SmoothingFactors), nameof(SmoothedSinOutputs), nameof(SmoothedCosOutputs),
+        nameof(SmoothingFactors), nameof(MergedSinOutputs), nameof(MergedCosOutputs),
         nameof(AllBinValues), nameof(OctaveBinValues),
         nameof(LoudnessCorrectionFactors),
         nameof(RawBinMagnitudes),
@@ -157,8 +167,8 @@ public static class ShinNoteFinderDFT
         CosProductAccumulators = new DualI64[BinCount];
         ProductAccumulators = new Vector256<long>[BinCount];
         SmoothingFactors = new float[BinCount];
-        SmoothedSinOutputs = new double[BinCount];
-        SmoothedCosOutputs = new double[BinCount];
+        MergedSinOutputs = new double[BinCount];
+        MergedCosOutputs = new double[BinCount];
         AllBinValues = new float[BinCount + 2];
         OctaveBinValues = new float[BinsPerOctave];
         LoudnessCorrectionFactors = new float[BinCount];
@@ -218,6 +228,8 @@ public static class ShinNoteFinderDFT
         }
     }
 
+    /// <summary> Call whenever the sample rate of the input audio changes. Reconfigures the DFT to correctly run at the new sample rate. </summary>
+    /// <param name="newSampleRate"> The new sample rate in Hz. If the sample rate is the same as the one already in use, nothing is done. </param>
     public static void UpdateSampleRate(uint newSampleRate)
     {
         if (newSampleRate == SampleRate) { return; }
@@ -225,6 +237,10 @@ public static class ShinNoteFinderDFT
         Reconfigure();
     }
 
+    /// <summary> Processes the given array of new audio data. </summary>
+    /// <remarks> Automatically uses SIMD-accelerated code if applicable. </remarks>
+    /// <param name="newData"> The array containing data to process </param>
+    /// <param name="dataLength"> The number of items that should be read from the array </param>
     public static void AddAudioData(short[] newData, uint dataLength)
     {
         const int CALC_BIN_INTERVAL = 64;
@@ -249,8 +265,10 @@ public static class ShinNoteFinderDFT
             if (DataAddedSinceLastBinCalc >= CALC_BIN_INTERVAL) { CalculateBins(DataAddedSinceLastBinCalc); }
         }
 
+#if false
         const int CHECK_BIN = 96;
-        //if (TEMP_CycleCount % 50 == 0) { Console.WriteLine($"Bin magnitude {CHECK_BIN} ({RawBinFrequencies[CHECK_BIN]}Hz) is at {RawBinMagnitudes[CHECK_BIN]}."); }
+        if (TEMP_CycleCount % 50 == 0) { Console.WriteLine($"Bin magnitude {CHECK_BIN} ({RawBinFrequencies[CHECK_BIN]}Hz) is at {RawBinMagnitudes[CHECK_BIN]}."); }
+#endif
     }
 
     /// <summary> Shifts in 16 samples of audio data, updating the sin and cos accumulators with their new values. </summary>
@@ -466,12 +484,16 @@ public static class ShinNoteFinderDFT
         }
     }
 
-    private static void CalculateBins(uint samplesAdded = 0)
+    /// <summary> Called from within the sample data processing code to periodically capture the DFT bin state and push it into <see cref="MergedSinOutputs"/> and <see cref="MergedCosOutputs"/>. Also triggers timing receivers if needed. </summary>
+    /// <param name="samplesAdded"> The number of audio samples that have been processed since <see cref="CalculateBins(uint)"/> was last called. Used to trigger timing receivers if applicable. </param>
+    private static void CalculateBins(uint samplesAdded)
     {
         int BinCount = ShinNoteFinderDFT.BinCount;
         Span<double> RotatedValues = stackalloc double[4 * 2];
 
         Debug.Assert(BinCount % 4 == 0, "BinCount needs to be a multiple of 4.");
+        lock (MergedDataLockObj)
+        {
         int BinIndex = 0;
         while (BinIndex < BinCount)
         {
@@ -494,77 +516,62 @@ public static class ShinNoteFinderDFT
                 RotatedValues[SubIndex] = Sin;
                 RotatedValues[SubIndex + 4] = Cos; // RotatedValues = {Sin[BinIndex:BinIndex+3], Cos[BinIndex:BinIndex+3]}
 
-                /*(double Sin, double Cos) RotatedL;
-                (double Sin, double Cos) RotatedR;
-                DualU16 CurrentSineLocations = SinTableLocationAdd[InnerIndex];
-                float AngleL = CurrentSineLocations.NCLeft * MathF.Tau / USHORT_RANGE;
-                float AngleR = CurrentSineLocations.NCRight * MathF.Tau / USHORT_RANGE;
-
-                RotatedL = RotatePoint(ProductAccumulators[InnerIndex][0], ProductAccumulators[InnerIndex][2], AngleL);
-                RotatedR = RotatePoint(ProductAccumulators[InnerIndex][1], ProductAccumulators[InnerIndex][3], AngleR);
-
-                double SinI = RotatedL.Sin * RotatedR.Sin;
-                double CosI = RotatedL.Cos * RotatedR.Cos;
-
                 if (!(Avx2.IsSupported && ENABLE_SIMD))
                 {
-                    double PreviousSinVal = SmoothedSinOutputs[InnerIndex];
-                    double PreviousCosVal = SmoothedCosOutputs[InnerIndex];
-                    // TODO: Implement IIRs if re-enabled in SIMD
-
-                    SmoothedSinOutputs[InnerIndex] = PreviousSinVal + Sin;
-                    SmoothedCosOutputs[InnerIndex] = PreviousCosVal + Cos;
-                }*/
+                        MergedSinOutputs[InnerIndex] = MergedSinOutputs[InnerIndex] + Sin;
+                        MergedCosOutputs[InnerIndex] = MergedCosOutputs[InnerIndex] + Cos;
             }
+                }
 
             if (Avx2.IsSupported && ENABLE_SIMD)
             {
-                Vector256<double> PreviousSinVals = Vector256.LoadUnsafe(ref SmoothedSinOutputs[BinIndex]);
-                Vector256<double> PreviousCosVals = Vector256.LoadUnsafe(ref SmoothedCosOutputs[BinIndex]);
+                    Vector256<double> PreviousSinVals = Vector256.LoadUnsafe(ref MergedSinOutputs[BinIndex]);
+                    Vector256<double> PreviousCosVals = Vector256.LoadUnsafe(ref MergedCosOutputs[BinIndex]);
                 //Vector128<float> IIRa32 = Vector128.LoadUnsafe(ref SmoothingFactors[BinIndex]);
                 //Vector256<double> IIRa = Avx.ConvertToVector256Double(IIRa32);
                 //Vector256<double> IIRb = Avx.ConvertToVector256Double(Sse.Subtract(Vector128.Create(1F), IIRa32));
 
                 Vector256<double> NewSinVals = Vector256.LoadUnsafe(ref RotatedValues[0]);
-                //Vector256<double> SmoothedSinVals = Avx.Add(Avx.Multiply(PreviousSinVals, IIRb), Avx.Multiply(NewSinVals, IIRa));
+                    //Vector256<double> MergedSinVals = Avx.Add(Avx.Multiply(PreviousSinVals, IIRb), Avx.Multiply(NewSinVals, IIRa));
                 Vector256<double> SmoothedSinVals = Avx.Add(PreviousSinVals, NewSinVals);// Avx.Multiply(NewSinVals, IIRa));
                 Vector256<double> NewCosVals = Vector256.LoadUnsafe(ref RotatedValues[4]);
-                //Vector256<double> SmoothedCosVals = Avx.Add(Avx.Multiply(PreviousCosVals, IIRb), Avx.Multiply(NewCosVals, IIRa));
+                    //Vector256<double> MergedCosVals = Avx.Add(Avx.Multiply(PreviousCosVals, IIRb), Avx.Multiply(NewCosVals, IIRa));
                 Vector256<double> SmoothedCosVals = Avx.Add(PreviousCosVals, NewCosVals);// Avx.Multiply(NewCosVals, IIRa));
 
-                SmoothedSinVals.StoreUnsafe(ref SmoothedSinOutputs[BinIndex]);
-                SmoothedCosVals.StoreUnsafe(ref SmoothedCosOutputs[BinIndex]);
+                    SmoothedSinVals.StoreUnsafe(ref MergedSinOutputs[BinIndex]);
+                    SmoothedCosVals.StoreUnsafe(ref MergedCosOutputs[BinIndex]);
             }
 
             BinIndex += 4;
         }
-        SmoothedAmplitude += 1F;
-        //Debug.Assert(DataAddedSinceLastBinCalc == samplesAdded);
+            MergedDataAmplitude += 1F;
+        }
 
-        if (samplesAdded > 0)
-        {
             ShinNoteFinder.RunTimingReceivers(samplesAdded);
             DataAddedSinceLastBinCalc = 0;
         }
-    }
 
     public static void CalculateOutput()
     {
-    if (SmoothedAmplitude == 0) { return; }
+        // TODO: Having this be called asynchronously from the data input code means that the responsiveness of any IIR we apply here depends on the frequency at which this is called.
+        // Not sure if this is a real concern. Need to think a bit more about it.
+        if (MergedDataAmplitude == 0) { return; }
         int BinCount = ShinNoteFinderDFT.BinCount;
-        for (int Bin = 0; Bin < BINS_PER_OCTAVE; Bin++) { OctaveBinValues[Bin] = 0; } // TODO: Move out of the DFT
+        for (int Bin = 0; Bin < BINS_PER_OCTAVE; Bin++) { OctaveBinValues[Bin] = 0; }
 
-        //CalculateBins(); // TODO: Is this needed?
-
-        Vector256<double> AmplitudeScale = Vector256.Create((double)SmoothedAmplitude);
-
+        Debug.Assert(BinCount % 4 == 0, "BinCount needs to be a multiple of 4.");
+        lock (MergedDataLockObj)
+        {
         int BinIndex = 0;
+            if (Avx2.IsSupported && ENABLE_SIMD)
+            {
+                Vector256<double> AmplitudeScale = Vector256.Create((double)MergedDataAmplitude);
         while (BinIndex < BinCount)
         {
-            Vector256<double> SmoothedSinVals = Avx.Divide(Vector256.LoadUnsafe(ref SmoothedSinOutputs[BinIndex]), AmplitudeScale);
-            Vector256<double> SmoothedCosVals = Avx.Divide(Vector256.LoadUnsafe(ref SmoothedCosOutputs[BinIndex]), AmplitudeScale);
+                    Vector256<double> MergedSinVals = Avx.Divide(Vector256.LoadUnsafe(ref MergedSinOutputs[BinIndex]), AmplitudeScale);
+                    Vector256<double> MergedCosVals = Avx.Divide(Vector256.LoadUnsafe(ref MergedCosOutputs[BinIndex]), AmplitudeScale);
 
-            Vector256<double> SinCosSums = Vector256.Add(SmoothedSinVals, SmoothedCosVals);
+                    Vector256<double> SinCosSums = Vector256.Add(MergedSinVals, MergedCosVals);
             Vector256<double> SinCosSumsNegated = Avx2.Xor(SinCosSums.AsUInt64(), Vector256.Create(0x8000_0000_0000_0000UL)).AsDouble();
             Vector256<double> Magnitudes = Avx.Sqrt(Avx.Max(Vector256<double>.Zero, SinCosSumsNegated));
 
@@ -574,33 +581,41 @@ public static class ShinNoteFinderDFT
             //ScaledMagnitudes.StoreUnsafe(ref RawBinMagnitudes[BinIndex]);
             NewMagnitudes.StoreUnsafe(ref RawBinMagnitudes[BinIndex]);
 
-            //Avx.Multiply(SmoothedSinVals, Vector256.Create((double)IIR_CONST)).StoreUnsafe(ref SmoothedSinOutputs[BinIndex]);
-            //Avx.Multiply(SmoothedCosVals, Vector256.Create((double)IIR_CONST)).StoreUnsafe(ref SmoothedCosOutputs[BinIndex]);
+                    //Avx.Multiply(MergedSinVals, Vector256.Create((double)IIR_CONST)).StoreUnsafe(ref MergedSinOutputs[BinIndex]);
+                    //Avx.Multiply(MergedCosVals, Vector256.Create((double)IIR_CONST)).StoreUnsafe(ref MergedCosOutputs[BinIndex]);
 
 
 
-            Vector256<double>.Zero.StoreUnsafe(ref SmoothedSinOutputs[BinIndex]);
-            Vector256<double>.Zero.StoreUnsafe(ref SmoothedCosOutputs[BinIndex]);
+                    Vector256<double>.Zero.StoreUnsafe(ref MergedSinOutputs[BinIndex]);
+                    Vector256<double>.Zero.StoreUnsafe(ref MergedCosOutputs[BinIndex]);
 
             BinIndex += 4;
         }
-        SmoothedAmplitude = 0F; //*= IIR_CONST;
+            }
+            else
+            {
+                while (BinIndex < BinCount)
+                {
+                    double MergedSin = MergedSinOutputs[BinIndex] / MergedDataAmplitude;
+                    double MergedCos = MergedCosOutputs[BinIndex] / MergedDataAmplitude;
+                    double Magnitude = Math.Sqrt(Math.Max(0, -MergedSin - MergedCos));
+                    uint WindowSize = AudioBufferSizes[BinIndex];
+                    float ScaledMagnitude = (float)(Math.Sqrt(Magnitude / WindowSize) / 3.0D);
+                    RawBinMagnitudes[BinIndex] = (RawBinMagnitudes[BinIndex] * (1F - IIR_CONST)) + (ScaledMagnitude * IIR_CONST);
+                    MergedSinOutputs[BinIndex] = 0;
+                    MergedCosOutputs[BinIndex] = 0;
+                    BinIndex++;
+                }
+            }
+            MergedDataAmplitude = 0F;
+        }
 
-        for (int Bin = 0; Bin < BinCount; Bin++) // TODO: Move out of the DFT
+        for (int Bin = 0; Bin < BinCount; Bin++)
         {
             float OutBinVal = RawBinMagnitudes[Bin] * LoudnessCorrectionFactors[Bin];
             OctaveBinValues[Bin % BINS_PER_OCTAVE] += OutBinVal / OctaveCount;
             AllBinValues[Bin + 1] = MathF.Max(0, OutBinVal - 0.08F);
         }
-    }
-
-    private static ValueTuple<double, double> RotatePoint(double x, double y, double angle)
-    {
-        double AngleSin = Math.Sin(angle);
-        double AngleCos = Math.Cos(angle);
-        double NewX = (x * AngleCos) - (y * AngleSin);
-        double NewY = (x * AngleSin) + (y * AngleCos);
-        return new(NewX, NewY);
     }
 
     /// <summary> Calculates the sine value of 2 positions </summary>
@@ -689,8 +704,7 @@ public static class ShinNoteFinderDFT
         float MaxWindowSizePeriods = MathF.Ceiling(MAX_WINDOW_SIZE * (sampleRate / 48000F) / PeriodInSamples);
         float MinWindowSizePeriods = MathF.Floor(MIN_WINDOW_SIZE * (sampleRate / 48000F) / PeriodInSamples);
 
-        //Console.WriteLine($"Period is {PeriodInSamples}, want {PeriodsInWindow}x");
-        return (uint)Math.Min(ABSOLUTE_MAX_WINDOW_SIZE, MathF.Round(MathF.Max(MinWindowSizePeriods, MathF.Min(MaxWindowSizePeriods, MathF.Round(PeriodsInWindow))) * PeriodInSamples + (PeriodInSamples * 0.5F)));
+        return (uint)Math.Min(ABSOLUTE_MAX_WINDOW_SIZE, MathF.Round((MathF.Max(MinWindowSizePeriods, MathF.Min(MaxWindowSizePeriods, MathF.Round(PeriodsInWindow))) * PeriodInSamples) + (PeriodInSamples * 0.5F)));
     }
 
     private static float CalculateNoteFrequency(float octaveStart, uint binsPerOctave, uint binIndex) => octaveStart * GetNoteFrequencyMultiplier(binsPerOctave, binIndex);
@@ -704,10 +718,10 @@ public static class ShinNoteFinderDFT
     private static float GetLoudnessCorrection(float frequency, float correctionAmount)
     {
         const float LOUDNESS = 50F; // in phon
-        ReadOnlySpan<float> Frequencies = new float[] { 20F, 25F, 31.5F, 40F, 50F, 63F, 80F, 100F, 125F, 160F, 200F, 250F, 315F, 400F, 500F, 630F, 800F, 1000F, 1250F, 1600F, 2000F, 2500F, 3150F, 4000F, 5000F, 6300F, 8000F, 10000F, 12500F };
-        ReadOnlySpan<float> af = new float[] { 0.635F, 0.602F, 0.569F, 0.537F, 0.509F, 0.482F, 0.456F, 0.433F, 0.412F, 0.391F, 0.373F, 0.357F, 0.343F, 0.33F, 0.32F, 0.311F, 0.303F, 0.3F, 0.295F, 0.292F, 0.29F, 0.29F, 0.289F, 0.289F, 0.289F, 0.293F, 0.303F, 0.323F, 0.354F };
-        ReadOnlySpan<float> LU = new float[] { -31.5F, -27.2F, -23.1F, -19.3F, -16.1F, -13.1F, -10.4F, -8.2F, -6.3F, -4.6F, -3.2F, -2.1F, -1.2F, -0.5F, 0F, 0.4F, 0.5F, 0F, -2.7F, -4.2F, -1.2F, 1.4F, 2.3F, 1F, -2.3F, -7.2F, -11.2F, -10.9F, -3.5F };
-        ReadOnlySpan<float> Tf = new float[] { 78.1F, 68.7F, 59.5F, 51.1F, 44F, 37.5F, 31.5F, 26.5F, 22.1F, 17.9F, 14.4F, 11.4F, 8.6F, 6.2F, 4.4F, 3F, 2.2F, 2.4F, 3.5F, 1.7F, -1.3F, -4.2F, -6F, -5.4F, -1.5F, 6F, 12.6F, 13.9F, 12.3F };
+        ReadOnlySpan<float> Frequencies = new float[] { 20F,    25F,    31.5F,  40F,    50F,    63F,    80F,    100F,   125F,   160F,   200F,   250F,   315F,   400F,  500F,  630F,   800F,   1000F, 1250F,  1600F,  2000F, 2500F, 3150F,  4000F,  5000F,  6300F,  8000F,  10000F, 12500F };
+        ReadOnlySpan<float> af = new float[]          { 0.635F, 0.602F, 0.569F, 0.537F, 0.509F, 0.482F, 0.456F, 0.433F, 0.412F, 0.391F, 0.373F, 0.357F, 0.343F, 0.33F, 0.32F, 0.311F, 0.303F, 0.3F,  0.295F, 0.292F, 0.29F, 0.29F, 0.289F, 0.289F, 0.289F, 0.293F, 0.303F, 0.323F, 0.354F };
+        ReadOnlySpan<float> LU = new float[]          { -31.5F, -27.2F, -23.1F, -19.3F, -16.1F, -13.1F, -10.4F, -8.2F,  -6.3F,  -4.6F,  -3.2F,  -2.1F,  -1.2F,  -0.5F, 0F,    0.4F,   0.5F,   0F,    -2.7F,  -4.2F,  -1.2F, 1.4F,  2.3F,   1F,     -2.3F,  -7.2F,  -11.2F, -10.9F, -3.5F };
+        ReadOnlySpan<float> Tf = new float[]          { 78.1F,  68.7F,  59.5F,  51.1F,  44F,    37.5F,  31.5F,  26.5F,  22.1F,  17.9F,  14.4F,  11.4F,  8.6F,   6.2F,  4.4F,  3F,     2.2F,   2.4F,  3.5F,   1.7F,   -1.3F, -4.2F, -6F,    -5.4F,  -1.5F,  6F,     12.6F,  13.9F,  12.3F };
 
         int IndexLower = 0, IndexUpper = 0;
         if (frequency < Frequencies[^1])
