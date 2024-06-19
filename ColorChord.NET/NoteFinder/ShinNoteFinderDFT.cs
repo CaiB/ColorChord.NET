@@ -557,11 +557,12 @@ public static class ShinNoteFinderDFT
         // Not sure if this is a real concern. Need to think a bit more about it.
         if (MergedDataAmplitude == 0) { return; }
         int BinCount = ShinNoteFinderDFT.BinCount;
-        for (int Bin = 0; Bin < BINS_PER_OCTAVE; Bin++) { OctaveBinValues[Bin] = 0; }
-
         Debug.Assert(BinCount % 4 == 0, "BinCount needs to be a multiple of 4.");
         lock (MergedDataLockObj)
         {
+            if (MergedDataAmplitude == 0) { return; } // This may have (and actually often does) happen if multiple outputs are present and operating on different threads.
+            for (int Bin = 0; Bin < BINS_PER_OCTAVE; Bin++) { OctaveBinValues[Bin] = 0; }
+
         int BinIndex = 0;
             if (Avx2.IsSupported && ENABLE_SIMD)
             {
@@ -583,8 +584,6 @@ public static class ShinNoteFinderDFT
 
                     //Avx.Multiply(MergedSinVals, Vector256.Create((double)IIR_CONST)).StoreUnsafe(ref MergedSinOutputs[BinIndex]);
                     //Avx.Multiply(MergedCosVals, Vector256.Create((double)IIR_CONST)).StoreUnsafe(ref MergedCosOutputs[BinIndex]);
-
-
 
                     Vector256<double>.Zero.StoreUnsafe(ref MergedSinOutputs[BinIndex]);
                     Vector256<double>.Zero.StoreUnsafe(ref MergedCosOutputs[BinIndex]);
