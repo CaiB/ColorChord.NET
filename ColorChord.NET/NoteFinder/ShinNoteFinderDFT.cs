@@ -131,7 +131,7 @@ public static class ShinNoteFinderDFT
 
     private static int TEMP_CycleCount = 0;
 
-    private static float IIR_CONST = 0.25F; // TODO: Scale dynamically, lower => more older data
+    private static float IIR_CONST = 0.85F; // TODO: Scale dynamically, lower => more older data
 
     static ShinNoteFinderDFT()
     {
@@ -158,22 +158,24 @@ public static class ShinNoteFinderDFT
     )]
     public static void Reconfigure()
     {
-        AudioBufferSizes = new uint[BinCount];
-        AudioBufferSubHeads = new ushort[BinCount];
-        SinTableStepSize = new DualU16[BinCount];
-        SinTableLocationAdd = new DualU16[BinCount];
-        SinTableLocationSub = new DualU16[BinCount];
-        SinProductAccumulators = new DualI64[BinCount];
-        CosProductAccumulators = new DualI64[BinCount];
-        ProductAccumulators = new Vector256<long>[BinCount];
-        SmoothingFactors = new float[BinCount];
-        MergedSinOutputs = new double[BinCount];
-        MergedCosOutputs = new double[BinCount];
-        AllBinValues = new float[BinCount + 2];
-        OctaveBinValues = new float[BinsPerOctave];
-        LoudnessCorrectionFactors = new float[BinCount];
-        RawBinMagnitudes = new float[BinCount];
-        RawBinFrequencies = new float[BinCount];
+        static T[] CheckArray<T>(T[]? array, int expectedLength) => (array == null || array.Length != expectedLength) ? new T[expectedLength] : array;
+
+        AudioBufferSizes = CheckArray(AudioBufferSizes, BinCount);
+        AudioBufferSubHeads = CheckArray(AudioBufferSubHeads, BinCount);
+        SinTableStepSize = CheckArray(SinTableStepSize, BinCount);
+        SinTableLocationAdd = CheckArray(SinTableLocationAdd, BinCount);
+        SinTableLocationSub = CheckArray(SinTableLocationSub, BinCount);
+        SinProductAccumulators = CheckArray(SinProductAccumulators, BinCount);
+        CosProductAccumulators = CheckArray(CosProductAccumulators, BinCount);
+        ProductAccumulators = CheckArray(ProductAccumulators, BinCount);
+        SmoothingFactors = CheckArray(SmoothingFactors, BinCount);
+        MergedSinOutputs = CheckArray(MergedSinOutputs, BinCount);
+        MergedCosOutputs = CheckArray(MergedCosOutputs, BinCount);
+        AllBinValues = CheckArray(AllBinValues, BinCount + 2);
+        OctaveBinValues = CheckArray(OctaveBinValues, (int)BinsPerOctave);
+        LoudnessCorrectionFactors = CheckArray(LoudnessCorrectionFactors, BinCount);
+        RawBinMagnitudes = CheckArray(RawBinMagnitudes, BinCount);
+        RawBinFrequencies = CheckArray(RawBinFrequencies, BinCount);
 
         uint MaxAudioBufferSize = 0;
         for (uint Bin = 0; Bin < BinCount; Bin++)
@@ -527,19 +529,12 @@ public static class ShinNoteFinderDFT
             {
                     Vector256<double> PreviousSinVals = Vector256.LoadUnsafe(ref MergedSinOutputs[BinIndex]);
                     Vector256<double> PreviousCosVals = Vector256.LoadUnsafe(ref MergedCosOutputs[BinIndex]);
-                //Vector128<float> IIRa32 = Vector128.LoadUnsafe(ref SmoothingFactors[BinIndex]);
-                //Vector256<double> IIRa = Avx.ConvertToVector256Double(IIRa32);
-                //Vector256<double> IIRb = Avx.ConvertToVector256Double(Sse.Subtract(Vector128.Create(1F), IIRa32));
-
                 Vector256<double> NewSinVals = Vector256.LoadUnsafe(ref RotatedValues[0]);
-                    //Vector256<double> MergedSinVals = Avx.Add(Avx.Multiply(PreviousSinVals, IIRb), Avx.Multiply(NewSinVals, IIRa));
-                Vector256<double> SmoothedSinVals = Avx.Add(PreviousSinVals, NewSinVals);// Avx.Multiply(NewSinVals, IIRa));
                 Vector256<double> NewCosVals = Vector256.LoadUnsafe(ref RotatedValues[4]);
-                    //Vector256<double> MergedCosVals = Avx.Add(Avx.Multiply(PreviousCosVals, IIRb), Avx.Multiply(NewCosVals, IIRa));
-                Vector256<double> SmoothedCosVals = Avx.Add(PreviousCosVals, NewCosVals);// Avx.Multiply(NewCosVals, IIRa));
-
-                    SmoothedSinVals.StoreUnsafe(ref MergedSinOutputs[BinIndex]);
-                    SmoothedCosVals.StoreUnsafe(ref MergedCosOutputs[BinIndex]);
+                    Vector256<double> AddedSinVals = Avx.Add(PreviousSinVals, NewSinVals);
+                    Vector256<double> AddedCosVals = Avx.Add(PreviousCosVals, NewCosVals);
+                    AddedSinVals.StoreUnsafe(ref MergedSinOutputs[BinIndex]);
+                    AddedCosVals.StoreUnsafe(ref MergedCosOutputs[BinIndex]);
             }
 
             BinIndex += 4;
@@ -555,6 +550,7 @@ public static class ShinNoteFinderDFT
     {
         // TODO: Having this be called asynchronously from the data input code means that the responsiveness of any IIR we apply here depends on the frequency at which this is called.
         // Not sure if this is a real concern. Need to think a bit more about it.
+        // This could be avoided by using MergedDataAmplitude to scale the IIR, but that's extra calculations
         if (MergedDataAmplitude == 0) { return; }
         int BinCount = ShinNoteFinderDFT.BinCount;
         Debug.Assert(BinCount % 4 == 0, "BinCount needs to be a multiple of 4.");
@@ -578,12 +574,13 @@ public static class ShinNoteFinderDFT
 
             Vector256<double> WindowSizes = Avx.ConvertToVector256Double(Vector128.LoadUnsafe(ref AudioBufferSizes[BinIndex]).AsInt32());
             Vector128<float> ScaledMagnitudes = Avx.ConvertToVector128Single(Avx.Divide(Avx.Sqrt(Avx.Divide(Magnitudes, WindowSizes)), Vector256.Create(3.0D))); // Scales such that a 0dB signal is approximately 1.0 // TODO: Check if this is still true
-            Vector128<float> NewMagnitudes = Sse.Add(Sse.Multiply(Vector128.LoadUnsafe(ref RawBinMagnitudes[BinIndex]), Vector128.Create(1F - IIR_CONST)), Sse.Multiply(ScaledMagnitudes, Vector128.Create(IIR_CONST)));
+
+                    Vector128<float> IIRa = Vector128.LoadUnsafe(ref SmoothingFactors[BinIndex]);
+                    Vector128<float> IIRb = Sse.Subtract(Vector128.Create(1F), IIRa);
+
+                    Vector128<float> NewMagnitudes = Sse.Add(Sse.Multiply(Vector128.LoadUnsafe(ref RawBinMagnitudes[BinIndex]), IIRb), Sse.Multiply(ScaledMagnitudes, IIRa));
             //ScaledMagnitudes.StoreUnsafe(ref RawBinMagnitudes[BinIndex]);
             NewMagnitudes.StoreUnsafe(ref RawBinMagnitudes[BinIndex]);
-
-                    //Avx.Multiply(MergedSinVals, Vector256.Create((double)IIR_CONST)).StoreUnsafe(ref MergedSinOutputs[BinIndex]);
-                    //Avx.Multiply(MergedCosVals, Vector256.Create((double)IIR_CONST)).StoreUnsafe(ref MergedCosOutputs[BinIndex]);
 
                     Vector256<double>.Zero.StoreUnsafe(ref MergedSinOutputs[BinIndex]);
                     Vector256<double>.Zero.StoreUnsafe(ref MergedCosOutputs[BinIndex]);

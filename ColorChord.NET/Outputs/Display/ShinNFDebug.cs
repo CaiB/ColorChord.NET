@@ -27,7 +27,7 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         -1,  1, 0,  1  // Top-Left
     };
 
-    private int VertexBufferHandle, VertexArrayHandle, TextureHandle;
+    private int VertexBufferHandle, VertexArrayHandle, TextureHandleRawBins, TextureHandlePeakBits, TextureHandleWidebandBits;
     private int LocationBinCount, LocationScaleFactor, LocationExponent;
 
     private float[] RawDataIn;
@@ -63,12 +63,29 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         this.VertexBufferHandle = GL.GenBuffer();
         this.VertexArrayHandle = GL.GenVertexArray();
 
-        this.TextureHandle = GL.GenTexture();
-        GL.Uniform1(this.Shader.GetUniformLocation("Texture"), 0);
+        this.TextureHandleRawBins = GL.GenTexture();
+        GL.Uniform1(this.Shader.GetUniformLocation("TextureRawBins"), 0);
         GL.ActiveTexture(TextureUnit.Texture0);
-        GL.BindTexture(TextureTarget.Texture2D, this.TextureHandle);
-
+        GL.BindTexture(TextureTarget.Texture2D, this.TextureHandleRawBins);
         GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, ColorChord.NoteFinder.AllBinValues.Length, 1, 0, PixelFormat.Red, PixelType.Float, new float[ColorChord.NoteFinder.AllBinValues.Length]);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToBorder);
+
+        this.TextureHandlePeakBits = GL.GenTexture();
+        GL.Uniform1(this.Shader.GetUniformLocation("TexturePeakBits"), 1);
+        GL.ActiveTexture(TextureUnit.Texture1);
+        GL.BindTexture(TextureTarget.Texture2D, this.TextureHandlePeakBits);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToBorder);
+
+        this.TextureHandleWidebandBits = GL.GenTexture();
+        GL.Uniform1(this.Shader.GetUniformLocation("TextureWidebandBits"), 2);
+        GL.ActiveTexture(TextureUnit.Texture2);
+        GL.BindTexture(TextureTarget.Texture2D, this.TextureHandleWidebandBits);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
@@ -100,7 +117,12 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
 
         if (this.RawDataIn.Length != ColorChord.NoteFinder.AllBinValues.Length) { this.RawDataIn = new float[ColorChord.NoteFinder.AllBinValues.Length]; }
         ColorChord.NoteFinder.AllBinValues.CopyTo(this.RawDataIn);
+        GL.ActiveTexture(TextureUnit.Texture0);
         GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, ColorChord.NoteFinder!.AllBinValues.Length, 1, 0, PixelFormat.Red, PixelType.Float, this.RawDataIn);
+        GL.ActiveTexture(TextureUnit.Texture1);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R8ui, ColorChord.NoteFinder!.AllBinValues.Length / 8, 1, 0, PixelFormat.RedInteger, PixelType.UnsignedByte, ((ShinNoteFinder)ColorChord.NoteFinder).PeakBits);
+        GL.ActiveTexture(TextureUnit.Texture2);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R8ui, ColorChord.NoteFinder!.AllBinValues.Length / 8, 1, 0, PixelFormat.RedInteger, PixelType.UnsignedByte, ((ShinNoteFinder)ColorChord.NoteFinder).WidebandBits);
         GL.BindVertexArray(this.VertexArrayHandle);
         GL.DrawArrays(PrimitiveType.Triangles, 0, Geometry.Length / 2);
     }

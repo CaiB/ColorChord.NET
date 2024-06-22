@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using System.Threading;
 
 namespace ColorChord.NET.NoteFinder;
@@ -23,6 +24,8 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
 
     private int[] P_PersistentNoteIDs;
     public override ReadOnlySpan<int> PersistentNoteIDs => this.P_PersistentNoteIDs;
+
+    public byte[] PeakBits, WidebandBits;
 
     private static Thread? ProcessThread;
     private static bool KeepGoing = true;
@@ -42,6 +45,8 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
         P_PersistentNoteIDs = new int[NOTE_QTY];
         SetupBuffers();
         ShinNoteFinderDFT.Reconfigure();
+        PeakBits = new byte[ShinNoteFinderDFT.BinCount / 8]; // TODO: Assumes BinsPerOctave is divisible by 8, not true for 12
+        WidebandBits = new byte[ShinNoteFinderDFT.BinCount / 8];
     }
 
     public override int NoteCount => NOTE_QTY;
@@ -94,9 +99,77 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
     public override void UpdateOutputs()
     {
         ShinNoteFinderDFT.CalculateOutput();
-        for (int i = 0; i < AllBinValues.Length; i++)
+
+        float[] RawBinValuesPadded = ShinNoteFinderDFT.AllBinValues;
+
+        Debug.Assert(RawBinValuesPadded[0] == 0F, "AllBinValues left boundary value was changed, it should always be 0.");
+        Debug.Assert(RawBinValuesPadded[^1] == 0F, "AllBinValues right boundary value was changed, it should always be 0.");
+
+        byte[] PeakBitsPacked = this.PeakBits;
+        byte[] WidebandBitsPacked = this.WidebandBits;
+
+        for (int i = 0; i < WidebandBitsPacked.Length; i++) { WidebandBitsPacked[i] = 0; }
+
+        for (int Step = 0; Step <= RawBinValuesPadded.Length - 10; Step += 8)
         {
-            //Vector256<float> 
+            Vector256<float> LeftValues = Vector256.LoadUnsafe(ref RawBinValuesPadded[Step]); // TODO: Is there a better way to do this?
+            Vector256<float> MiddleValues = Vector256.LoadUnsafe(ref RawBinValuesPadded[Step + 1]);
+            Vector256<float> RightValues = Vector256.LoadUnsafe(ref RawBinValuesPadded[Step + 2]);
+
+            Vector256<float> DiffLeft = Avx.Subtract(MiddleValues, LeftValues);
+            Vector256<float> DiffRight = Avx.Subtract(MiddleValues, RightValues);
+            Vector256<float> DifferenceSum = Avx.Add(DiffLeft, DiffRight);
+            Vector256<float> Significant = Avx.Subtract(MiddleValues, Vector256.Create(0.2F)); // Avx.Subtract(Avx.Divide(DifferenceSum, MiddleValues), Vector256.Create(0.9F));//
+            //Vector256<float> ScaledDiffLeft = Avx.Divide(DiffLeft, DifferenceSum);
+            //Vector256<float> ScaledDiffRight = Avx.Divide(DiffRight, DifferenceSum);
+
+            Vector256<float> PeakDetect = Avx.And(Avx.And(Avx.CompareGreaterThanOrEqual(DiffLeft, Vector256<float>.Zero), Avx.CompareGreaterThan(DiffRight, Vector256<float>.Zero)), Avx.CompareGreaterThanOrEqual(Significant, Vector256<float>.Zero));
+            byte PeakBitsHere = (byte)Avx.MoveMask(PeakDetect);
+
+            PeakBitsPacked[Step / 8] = PeakBitsHere;
+        }
+
+        for (int Outer = 0; Outer < PeakBitsPacked.Length; Outer++)
+        {
+            if (PeakBitsPacked[Outer] == 0) { continue; }
+            for (int Inner = 0; Inner < 8; Inner++)
+            {
+                if (((PeakBitsPacked[Outer] >> Inner) & 1) != 0) // Can optimize this by changing the loop var to be shifted and just anding here
+                {
+                    int Index = (Outer * 8) + Inner + 1; // Offset by 1 for front padding
+                    int SideBinsWithContent = 0;
+                    int LeftmostSideBin = Index - 1;
+                    int RightmostSideBin = Index + 1;
+                    float TotalContent = RawBinValuesPadded[Index];
+                    float Threshold = 0.1F; // MUST be greater than 0
+                    while (RawBinValuesPadded[LeftmostSideBin] > Threshold) // This is guaranteed to stop at or before 0, given that RawBinValuesPadded[0] == 0 (padding intact)
+                    {
+                        SideBinsWithContent++;
+                        TotalContent += RawBinValuesPadded[LeftmostSideBin];
+                        LeftmostSideBin--;
+                    }
+                    while (RawBinValuesPadded[RightmostSideBin] > Threshold) // Same but at the upper end
+                    {
+                        SideBinsWithContent++;
+                        TotalContent += RawBinValuesPadded[RightmostSideBin];
+                        RightmostSideBin++;
+                    }
+
+                    // Offset these over to the left, since we need the non-padded index
+                    LeftmostSideBin--;
+                    RightmostSideBin--;
+
+                    if (SideBinsWithContent > 4)
+                    {
+                        for (int i = LeftmostSideBin; i < RightmostSideBin; i++) { WidebandBitsPacked[i / 8] |= (byte)(1 << (i % 8)); }
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < PeakBitsPacked.Length; i++)
+        {
+            PeakBitsPacked[i] = (byte)(PeakBitsPacked[i] & ~WidebandBitsPacked[i]);
         }
     }
 
