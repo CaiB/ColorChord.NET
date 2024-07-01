@@ -1,4 +1,5 @@
 ﻿using ColorChord.NET.API;
+using ColorChord.NET.API.Config;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Sources;
 using ColorChord.NET.Config;
@@ -6,6 +7,7 @@ using ColorChord.NET.Outputs;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Threading;
@@ -16,8 +18,21 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
 {
     private const int NOTE_QTY = 12;
 
-    public override ReadOnlySpan<float> AllBinValues => ShinNoteFinderDFT.AllBinValues.AsSpan(1, ShinNoteFinderDFT.AllBinValues.Length - 2);
-    public override ReadOnlySpan<float> OctaveBinValues => ShinNoteFinderDFT.OctaveBinValues;
+    private Gen2NoteFinderDFT DFT;
+
+    [ConfigInt("Octaves", 1, 20, 6)]
+    public uint OctaveCount { get; private set; }
+
+    [ConfigFloat("StartFreq", 0F, 20000F, 55F)]
+    public float StartFrequency { get; private set; } = 55F;
+
+    [ConfigFloat("LoudnessCorrection", 0F, 1F, 0.33F)]
+    public float LoudnessCorrectionAmount { get; private set; } = 0.33F;
+
+    public uint SampleRate { get; private set; }
+
+    public override ReadOnlySpan<float> AllBinValues => this.DFT.AllBinValues.AsSpan(1, this.DFT.AllBinValues.Length - 2);
+    public override ReadOnlySpan<float> OctaveBinValues => this.DFT.OctaveBinValues;
 
     private Note[] P_Notes;
     public override ReadOnlySpan<Note> Notes => this.P_Notes;
@@ -25,39 +40,71 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
     private int[] P_PersistentNoteIDs;
     public override ReadOnlySpan<int> PersistentNoteIDs => this.P_PersistentNoteIDs;
 
+    /// <summary> The frequencies (in Hz) of each of the raw bins in <see cref="AllBinValues"/>. </summary>
+    public ReadOnlySpan<float> BinFrequencies => this.DFT.RawBinFrequencies;
+
     public byte[] PeakBits, WidebandBits;
+    private byte[] AllowedBinWidths;
 
-    private static Thread? ProcessThread;
-    private static bool KeepGoing = true;
+    private const float RECENT_BIN_CHANGE_IIR = 0.65F;
+    private float[] PreviousBinValues;
+    public float[] RecentBinChanges;
 
-    private static Stopwatch CycleTimer = new();
-    private static float CycleTimeTicks;
-    private static uint CycleCount = 0;
+    private Thread? ProcessThread;
+    private bool KeepGoing = true;
 
-    private static bool IsTimingSource = false;
-    private static TimingReceiverData[] TimingReceivers = Array.Empty<TimingReceiverData>();
+    private Stopwatch CycleTimer = new();
+    private float CycleTimeTicks;
+    private uint CycleCount = 0;
+
+    private bool IsTimingSource = false;
+    private TimingReceiverData[] TimingReceivers = Array.Empty<TimingReceiverData>();
 
     public ShinNoteFinder(string name, Dictionary<string, object> config)
     {
-        Configurer.Configure(typeof(ShinNoteFinderDFT), config, false);
         Configurer.Configure(this, config);
         P_Notes = new Note[NOTE_QTY];
         P_PersistentNoteIDs = new int[NOTE_QTY];
         SetupBuffers();
-        ShinNoteFinderDFT.Reconfigure();
-        PeakBits = new byte[ShinNoteFinderDFT.BinCount / 8]; // TODO: Assumes BinsPerOctave is divisible by 8, not true for 12
-        WidebandBits = new byte[ShinNoteFinderDFT.BinCount / 8];
+        this.SampleRate = 48000; // TODO: Temporary until source is connected ahead of time
+        this.DFT = new(this.OctaveCount, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, RunTimingReceivers);
+        Reconfigure();
+    }
+
+    [MemberNotNull(nameof(PeakBits), nameof(WidebandBits), nameof(AllowedBinWidths), nameof(PreviousBinValues), nameof(RecentBinChanges))]
+    private void Reconfigure()
+    {
+        int BinCount = this.DFT.BinCount;
+        PeakBits = new byte[(BinCount + 7) / 8]; // + 7 is to ensure there's always enough space, even in the odd case where number of bins isn't evenly divisible by 8
+        WidebandBits = new byte[(BinCount + 7) / 8];
+        AllowedBinWidths = new byte[BinCount];
+        PreviousBinValues = new float[BinCount];
+        RecentBinChanges = new float[BinCount];
+
+        for (int i = 0; i < AllowedBinWidths.Length; i++) { AllowedBinWidths[i] = (byte)MathF.Max(4F, 1.5F * MathF.Ceiling(this.DFT.RawBinWidths[i])); }
     }
 
     public override int NoteCount => NOTE_QTY;
-    public override int BinsPerOctave => (int)ShinNoteFinderDFT.BinsPerOctave;
+    public override int BinsPerOctave => (int)this.DFT.BinsPerOctave;
 
     public override void AdjustOutputSpeed(uint period)
     {
         if (period < ShortestPeriod) { ShortestPeriod = period; }
     }
 
-    public override void SetSampleRate(int sampleRate) => ShinNoteFinderDFT.UpdateSampleRate((uint)sampleRate);
+    public override void SetSampleRate(int sampleRate)
+    {
+        this.SampleRate = (uint)sampleRate;
+        this.DFT = new(this.OctaveCount, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, RunTimingReceivers);
+        Reconfigure();
+        Log.Debug($"There are {TimingReceivers.Length} timing receivers");
+        for (int i = 0; i < TimingReceivers.Length; i++)
+        {
+            float OriginalPeriod = TimingReceivers[i].OriginalPeriod;
+            TimingReceivers[i].Period = (OriginalPeriod <= 0) ? (uint)MathF.Round(-OriginalPeriod) : (uint)MathF.Round(OriginalPeriod * this.SampleRate);
+            Log.Debug($"{nameof(ShinNoteFinder)} timing receiver [{i}] now has period {TimingReceivers[i].Period} (requested {OriginalPeriod}).");
+        }
+    }
 
     public override void Start()
     {
@@ -66,16 +113,16 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
         ProcessThread.Start();
     }
 
-    private static void DoProcessing()
+    private void DoProcessing()
     {
-        while (KeepGoing)
+        while (this.KeepGoing)
         {
             InputDataEvent.WaitOne();
             Cycle();
         }
     }
 
-    private static void Cycle()
+    private void Cycle()
     {
         bool MoreBuffers;
         do
@@ -84,7 +131,7 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
             if (Buffer == null) { break; }
 
             CycleTimer.Restart();
-            ShinNoteFinderDFT.AddAudioData(Buffer, BufferSize);
+            this.DFT.AddAudioData(Buffer.AsSpan(0, (int)BufferSize));
             CycleTimer.Stop();
 
             FinishBufferRead(NFBufferRef);
@@ -98,18 +145,20 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
 
     public override void UpdateOutputs()
     {
-        ShinNoteFinderDFT.CalculateOutput();
+        this.DFT.CalculateOutput();
 
-        float[] RawBinValuesPadded = ShinNoteFinderDFT.AllBinValues;
+        float[] RawBinValuesPadded = this.DFT.AllBinValues;
 
-        Debug.Assert(RawBinValuesPadded[0] == 0F, "AllBinValues left boundary value was changed, it should always be 0.");
-        Debug.Assert(RawBinValuesPadded[^1] == 0F, "AllBinValues right boundary value was changed, it should always be 0.");
+        Debug.Assert(RawBinValuesPadded[0] == 0F, $"{nameof(Gen2NoteFinderDFT.AllBinValues)} left boundary value was changed, it should always be 0.");
+        Debug.Assert(RawBinValuesPadded[^1] == 0F, $"{nameof(Gen2NoteFinderDFT.AllBinValues)} right boundary value was changed, it should always be 0.");
 
         byte[] PeakBitsPacked = this.PeakBits;
         byte[] WidebandBitsPacked = this.WidebandBits;
+        float RecentBinChangeIIRb = 1F - RECENT_BIN_CHANGE_IIR;
 
         for (int i = 0; i < WidebandBitsPacked.Length; i++) { WidebandBitsPacked[i] = 0; }
 
+        Debug.Assert(((RawBinValuesPadded.Length - 2) % 8) == 0, "Bin count must be a multiple of 8"); // TODO: Add non-SIMD version to avoid this
         for (int Step = 0; Step <= RawBinValuesPadded.Length - 10; Step += 8)
         {
             Vector256<float> LeftValues = Vector256.LoadUnsafe(ref RawBinValuesPadded[Step]); // TODO: Is there a better way to do this?
@@ -127,6 +176,14 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
             byte PeakBitsHere = (byte)Avx.MoveMask(PeakDetect);
 
             PeakBitsPacked[Step / 8] = PeakBitsHere;
+
+            Vector256<float> PreviousValues = Vector256.LoadUnsafe(ref PreviousBinValues[Step]);
+            Vector256<float> AbsDiffFromPrev = Avx.AndNot(Vector256.Create(-0.0F), Avx.Subtract(Avx.Multiply(PreviousValues, PreviousValues), Avx.Multiply(MiddleValues, MiddleValues)));
+            //AbsDiffFromPrev = Avx.Multiply(AbsDiffFromPrev, AbsDiffFromPrev);
+            Vector256<float> OldRecentChange = Vector256.LoadUnsafe(ref RecentBinChanges[Step]);
+            Vector256<float> NewRecentChange = Avx.Add(Avx.Multiply(Vector256.Create(RECENT_BIN_CHANGE_IIR), OldRecentChange), Avx.Multiply(Vector256.Create(RecentBinChangeIIRb), AbsDiffFromPrev));
+            NewRecentChange.StoreUnsafe(ref RecentBinChanges[Step]);
+            MiddleValues.StoreUnsafe(ref PreviousBinValues[Step]);
         }
 
         for (int Outer = 0; Outer < PeakBitsPacked.Length; Outer++)
@@ -159,7 +216,7 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
                     LeftmostSideBin--;
                     RightmostSideBin--;
 
-                    if (SideBinsWithContent > 4)
+                    if (SideBinsWithContent > AllowedBinWidths[Index - 1])
                     {
                         for (int i = LeftmostSideBin; i < RightmostSideBin; i++) { WidebandBitsPacked[i / 8] |= (byte)(1 << (i % 8)); }
                     }
@@ -191,7 +248,7 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
             {
                 Receiver = receiver,
                 OriginalPeriod = period,
-                Period = (period <= 0) ? (uint)MathF.Round(-period) : (uint)MathF.Round(period * ShinNoteFinderDFT.SampleRate)
+                Period = (period <= 0) ? (uint)MathF.Round(-period) : (uint)MathF.Round(period * this.SampleRate)
             };
 
             TimingReceivers = NewData;
@@ -222,19 +279,19 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
         }
     }
 
-    internal static void RunTimingReceivers(uint samplesProcessed)
+    internal void RunTimingReceivers(uint samplesProcessed)
     {
-        if (!IsTimingSource) { return; }
+        if (!this.IsTimingSource) { return; }
         bool CalculatedOutput = false;
-        lock (TimingReceivers)
+        lock (this.TimingReceivers)
         {
-            for (int i = 0; i < TimingReceivers.Length; i++)
+            for (int i = 0; i < this.TimingReceivers.Length; i++)
             {
-                ref TimingReceiverData Receiver = ref TimingReceivers[i];
+                ref TimingReceiverData Receiver = ref this.TimingReceivers[i];
                 Receiver.CurrentIncrement += samplesProcessed;
                 if (Receiver.CurrentIncrement >= Receiver.Period)
                 {
-                    if (!CalculatedOutput) { ShinNoteFinderDFT.CalculateOutput(); CalculatedOutput = true; }
+                    if (!CalculatedOutput) { this.DFT.CalculateOutput(); CalculatedOutput = true; }
                     Receiver.Receiver.Invoke();
                     Receiver.CurrentIncrement -= Receiver.Period;
                     if (Receiver.Period != 0 && Receiver.CurrentIncrement > Receiver.Period * 16)
