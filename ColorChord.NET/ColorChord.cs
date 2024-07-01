@@ -312,7 +312,7 @@ namespace ColorChord.NET
             else
             {
                 Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry), provideControllerInterface);
-                if (Instance is IVisualizer Vis) { Vis.Start(); }
+                if (Instance is IVisualizer Vis) { Vis.Start(); } // TODO: Starting these here creates a rare crash where visualizers have an output added in the middle of iterating through them to dispatch data.
                 else if (Instance is IOutput Outp) { Outp.Start(); }
                 else if (Instance is Controller Ctrl) { Ctrl.Start(); }
             }

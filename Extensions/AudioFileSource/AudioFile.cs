@@ -69,6 +69,7 @@ public class AudioFile : IAudioSource
 
             AudioFileReader InputStream = new(NewFile);
             int Channels = InputStream.WaveFormat.Channels;
+            // TODO: Set sample rate
             float[] FloatBuffer = Array.Empty<float>();
             while (this.KeepGoing && InputStream.HasData(sizeof(float)))
             {
