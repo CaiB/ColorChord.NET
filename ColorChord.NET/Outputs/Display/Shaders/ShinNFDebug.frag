@@ -32,11 +32,13 @@ vec3 AngleToRGB(float angle, float sat, float val)
 void main()
 {
     int SectionHere = int(floor(TexCoord.x * BinCount));
-    float HeightHere = pow(texture(TextureRawBins, vec2((SectionHere + 0.5) / BinCount, 0.5)).r, Exponent) * ScaleFactor;
+    float HeightHere = pow(texture(TextureRawBins, vec2((SectionHere + 0.5) / BinCount, 0.25)).r, Exponent) * ScaleFactor;
+    float ChangeHere = texture(TextureRawBins, vec2((SectionHere + 0.5) / BinCount, 0.75)).r * 10.0;
     uint PeakHere = (texture(TexturePeakBits, vec2(((SectionHere / 8) + 0.5) / textureSize(TexturePeakBits, 0).x, 0.5)).r >> (SectionHere % 8)) & 1u;
     uint WidebandHere = (texture(TextureWidebandBits, vec2(((SectionHere / 8) + 0.5) / textureSize(TextureWidebandBits, 0).x, 0.5)).r >> (SectionHere % 8)) & 1u;
     vec3 Colour = AngleToRGB(mod(float(SectionHere) / BINS_PER_OCATVE, 1.0), 1.0 - (0.6 * WidebandHere), 1.0 - (0.8 * WidebandHere));
     float IsBar = step(abs(TexCoord.y), HeightHere);
+    //float IsBar = (step(0.0, TexCoord.y) * step(TexCoord.y, HeightHere)) + ((step(0.0, -TexCoord.y) * step(-TexCoord.y, ChangeHere)));
     FragColor = vec4((IsBar * Colour) + ((1.0 - IsBar) * vec3(0.2) * PeakHere * Colour), 1.0);
     //FragColor = vec4(vec3(0.8), 1.0);
 }

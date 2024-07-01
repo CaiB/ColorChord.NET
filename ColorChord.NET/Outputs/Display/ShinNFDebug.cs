@@ -45,7 +45,7 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
     {
         this.HostWindow = parent;
         Configurer.Configure(this, config);
-        this.RawDataIn = new float[ColorChord.NoteFinder.AllBinValues.Length];
+        this.RawDataIn = new float[ColorChord.NoteFinder.AllBinValues.Length * 2];
     }
 
     public bool SupportsFormat(IVisualizerFormat format) => true;
@@ -115,10 +115,11 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         if (!this.SetupDone) { return; }
         this.Shader!.Use();
 
-        if (this.RawDataIn.Length != ColorChord.NoteFinder.AllBinValues.Length) { this.RawDataIn = new float[ColorChord.NoteFinder.AllBinValues.Length]; }
+        if (this.RawDataIn.Length != ColorChord.NoteFinder.AllBinValues.Length * 2) { this.RawDataIn = new float[ColorChord.NoteFinder.AllBinValues.Length * 2]; }
         ColorChord.NoteFinder.AllBinValues.CopyTo(this.RawDataIn);
+        ((ShinNoteFinder)ColorChord.NoteFinder).RecentBinChanges.CopyTo(this.RawDataIn, ColorChord.NoteFinder.AllBinValues.Length);
         GL.ActiveTexture(TextureUnit.Texture0);
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, ColorChord.NoteFinder!.AllBinValues.Length, 1, 0, PixelFormat.Red, PixelType.Float, this.RawDataIn);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, ColorChord.NoteFinder!.AllBinValues.Length, 2, 0, PixelFormat.Red, PixelType.Float, this.RawDataIn);
         GL.ActiveTexture(TextureUnit.Texture1);
         GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R8ui, ColorChord.NoteFinder!.AllBinValues.Length / 8, 1, 0, PixelFormat.RedInteger, PixelType.UnsignedByte, ((ShinNoteFinder)ColorChord.NoteFinder).PeakBits);
         GL.ActiveTexture(TextureUnit.Texture2);
