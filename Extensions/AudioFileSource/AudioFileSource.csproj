@@ -31,7 +31,7 @@
     <Exec Command="@(ILRepackPackage->'%(fullpath)') /out:$(TargetPath) /wildcards /target:library /lib:$(OutputPath) $(TargetPath) $(OutputPath)/NAudio*.dll" />
   </Target>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(BuildingInsideVisualStudio)' == 'true'">
     <Exec Command="echo &quot;Copying to $(SolutionDir)ColorChord.NET\bin\$(Configuration)\net7.0\Extensions\$(TargetName).dll&quot;&#xD;&#xA;copy /Y &quot;$(TargetDir)$(TargetName).dll&quot; &quot;$(SolutionDir)ColorChord.NET\bin\$(Configuration)\net7.0\Extensions\$(TargetName).dll&quot;" />
   </Target>
 
