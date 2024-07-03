@@ -298,6 +298,7 @@ internal sealed class Gen2NoteFinderDFT
     /// <summary> Shifts in 16 samples of audio data, updating the sin and cos accumulators with their new values. </summary>
     /// <remarks> This assumes AVX2 support. Use <see cref="AddAudioData(short)"/> on systems that do not have AVX2 support, or for batches smaller than 16 samples. </remarks>
     /// <param name="newData"> The data to process </param>
+    [MethodImpl(MethodImplOptions.NoInlining)] // I won't pretend to understand why, but ever since I made this a sealed non-static class (was static), this started getting inlined, and this results in about a 20% drop in performance.
     private void AddAudioData256(Vector256<short> newData)
     {
         Vector256<ushort> IncrementingFrom0 = Vector256.Create((ushort)0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
