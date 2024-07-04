@@ -14,6 +14,8 @@ namespace ColorChord.NET.Outputs.Display;
 public class ShinNFDebug : IDisplayMode, IConfigurableAttr
 {
     private readonly DisplayOpenGL HostWindow;
+    private readonly NoteFinderCommon NoteFinder;
+    private readonly Gen2NoteFinder? G2NoteFinder;
 
     private Shader? Shader;
 
@@ -45,7 +47,9 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
     {
         this.HostWindow = parent;
         Configurer.Configure(this, config);
-        this.RawDataIn = new float[ColorChord.NoteFinder.AllBinValues.Length * 2];
+        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(ShinNFDebug)} under \"{this.HostWindow.Name}\" could not find the NoteFinder to attach to.");
+        this.G2NoteFinder = this.NoteFinder as Gen2NoteFinder;
+        this.RawDataIn = new float[this.NoteFinder.AllBinValues.Length * 2];
     }
 
     public bool SupportsFormat(IVisualizerFormat format) => true;
@@ -67,7 +71,7 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         GL.Uniform1(this.Shader.GetUniformLocation("TextureRawBins"), 0);
         GL.ActiveTexture(TextureUnit.Texture0);
         GL.BindTexture(TextureTarget.Texture2D, this.TextureHandleRawBins);
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, ColorChord.NoteFinder.AllBinValues.Length, 1, 0, PixelFormat.Red, PixelType.Float, new float[ColorChord.NoteFinder.AllBinValues.Length]);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, this.NoteFinder.AllBinValues.Length, 1, 0, PixelFormat.Red, PixelType.Float, new float[this.NoteFinder.AllBinValues.Length]);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder);
@@ -92,7 +96,7 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToBorder);
 
         this.LocationBinCount = this.Shader.GetUniformLocation("BinCount");
-        GL.Uniform1(this.LocationBinCount, ColorChord.NoteFinder.AllBinValues.Length);
+        GL.Uniform1(this.LocationBinCount, this.NoteFinder.AllBinValues.Length);
         this.LocationScaleFactor = this.Shader.GetUniformLocation("ScaleFactor");
         GL.Uniform1(this.LocationScaleFactor, this.ScaleFactor);
         this.LocationExponent = this.Shader.GetUniformLocation("Exponent");
@@ -115,15 +119,18 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         if (!this.SetupDone) { return; }
         this.Shader!.Use();
 
-        if (this.RawDataIn.Length != ColorChord.NoteFinder.AllBinValues.Length * 2) { this.RawDataIn = new float[ColorChord.NoteFinder.AllBinValues.Length * 2]; }
-        ColorChord.NoteFinder.AllBinValues.CopyTo(this.RawDataIn);
-        ((ShinNoteFinder)ColorChord.NoteFinder).RecentBinChanges.CopyTo(this.RawDataIn, ColorChord.NoteFinder.AllBinValues.Length);
+        if (this.RawDataIn.Length != this.NoteFinder.AllBinValues.Length * 2) { this.RawDataIn = new float[this.NoteFinder.AllBinValues.Length * 2]; }
+        this.NoteFinder.AllBinValues.CopyTo(this.RawDataIn);
+        if (this.G2NoteFinder != null)
+        {
+            this.G2NoteFinder.RecentBinChanges.CopyTo(this.RawDataIn, this.NoteFinder.AllBinValues.Length);
+            GL.ActiveTexture(TextureUnit.Texture1);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R8ui, this.NoteFinder.AllBinValues.Length / 8, 1, 0, PixelFormat.RedInteger, PixelType.UnsignedByte, this.G2NoteFinder.PeakBits);
+            GL.ActiveTexture(TextureUnit.Texture2);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R8ui, this.NoteFinder.AllBinValues.Length / 8, 1, 0, PixelFormat.RedInteger, PixelType.UnsignedByte, this.G2NoteFinder.WidebandBits);
+        }
         GL.ActiveTexture(TextureUnit.Texture0);
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, ColorChord.NoteFinder!.AllBinValues.Length, 2, 0, PixelFormat.Red, PixelType.Float, this.RawDataIn);
-        GL.ActiveTexture(TextureUnit.Texture1);
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R8ui, ColorChord.NoteFinder!.AllBinValues.Length / 8, 1, 0, PixelFormat.RedInteger, PixelType.UnsignedByte, ((ShinNoteFinder)ColorChord.NoteFinder).PeakBits);
-        GL.ActiveTexture(TextureUnit.Texture2);
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R8ui, ColorChord.NoteFinder!.AllBinValues.Length / 8, 1, 0, PixelFormat.RedInteger, PixelType.UnsignedByte, ((ShinNoteFinder)ColorChord.NoteFinder).WidebandBits);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, this.NoteFinder.AllBinValues.Length, 2, 0, PixelFormat.Red, PixelType.Float, this.RawDataIn);
         GL.BindVertexArray(this.VertexArrayHandle);
         GL.DrawArrays(PrimitiveType.Triangles, 0, Geometry.Length / 2);
     }

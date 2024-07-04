@@ -53,12 +53,12 @@ public class RadialPoles : IDisplayMode, IConfigurableAttr
     {
         this.HostWindow = parent;
         Configurer.Configure(this, config);
-        this.RawDataIn = new float[ColorChord.NoteFinder.OctaveBinValues.Length];
+        this.RawDataIn = new float[this.HostWindow.NoteFinder.OctaveBinValues.Length];
     }
 
     public bool SupportsFormat(IVisualizerFormat format) => true;
 
-    public int PoleCount => ColorChord.NoteFinder?.OctaveBinValues.Length ?? 0;
+    public int PoleCount => this.HostWindow.NoteFinder.OctaveBinValues.Length;
 
     public void Load()
     {
@@ -124,8 +124,8 @@ public class RadialPoles : IDisplayMode, IConfigurableAttr
 
         // TODO: Set uniforms
 
-        if (this.RawDataIn.Length != ColorChord.NoteFinder.OctaveBinValues.Length) { this.RawDataIn = new float[ColorChord.NoteFinder.OctaveBinValues.Length]; }
-        ColorChord.NoteFinder.OctaveBinValues.CopyTo(this.RawDataIn);
+        if (this.RawDataIn.Length != this.HostWindow.NoteFinder.OctaveBinValues.Length) { this.RawDataIn = new float[this.HostWindow.NoteFinder.OctaveBinValues.Length]; }
+        this.HostWindow.NoteFinder.OctaveBinValues.CopyTo(this.RawDataIn);
         if (this.LastPoleCount != this.RawDataIn.Length) { GL.Uniform1(this.LocationPoleCount, this.RawDataIn.Length); }
         GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, this.RawDataIn.Length, 1, 0, PixelFormat.Red, PixelType.Float, this.RawDataIn);
         this.LastPoleCount = this.RawDataIn.Length;

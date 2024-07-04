@@ -14,11 +14,14 @@ using System.Threading;
 
 namespace ColorChord.NET.NoteFinder;
 
-public class ShinNoteFinder : NoteFinderCommon, ITimingSource
+public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
 {
     private const int NOTE_QTY = 12;
 
     private Gen2NoteFinderDFT DFT;
+    private readonly IAudioSource AudioSource;
+
+    public override string Name { get; protected init; }
 
     [ConfigInt("Octaves", 1, 20, 6)]
     public uint OctaveCount { get; private set; }
@@ -60,11 +63,15 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
     private bool IsTimingSource = false;
     private TimingReceiverData[] TimingReceivers = Array.Empty<TimingReceiverData>();
 
-    public ShinNoteFinder(string name, Dictionary<string, object> config)
+    public Gen2NoteFinder(string name, Dictionary<string, object> config)
     {
-        Configurer.Configure(this, config);
         P_Notes = new Note[NOTE_QTY];
         P_PersistentNoteIDs = new int[NOTE_QTY];
+        this.Name = name;
+        Configurer.Configure(this, config);
+        this.AudioSource = Configurer.FindSource(config) ?? throw new Exception($"{nameof(Gen2NoteFinder)} \"{name}\" could not find the audio source to get data from.");
+        this.AudioSource.AttachNoteFinder(this);
+
         SetupBuffers();
         this.SampleRate = 48000; // TODO: Temporary until source is connected ahead of time
         this.DFT = new(this.OctaveCount, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, RunTimingReceivers);
@@ -102,14 +109,14 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
         {
             float OriginalPeriod = TimingReceivers[i].OriginalPeriod;
             TimingReceivers[i].Period = (OriginalPeriod <= 0) ? (uint)MathF.Round(-OriginalPeriod) : (uint)MathF.Round(OriginalPeriod * this.SampleRate);
-            Log.Debug($"{nameof(ShinNoteFinder)} timing receiver [{i}] now has period {TimingReceivers[i].Period} (requested {OriginalPeriod}).");
+            Log.Debug($"{nameof(Gen2NoteFinder)} timing receiver [{i}] now has period {TimingReceivers[i].Period} (requested {OriginalPeriod}).");
         }
     }
 
     public override void Start()
     {
         KeepGoing = true;
-        ProcessThread = new Thread(DoProcessing) { Name = nameof(ShinNoteFinder) };
+        ProcessThread = new Thread(DoProcessing) { Name = nameof(Gen2NoteFinder) };
         ProcessThread.Start();
     }
 
@@ -138,7 +145,7 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
 
             const float TIMER_IIR = 0.97F;
             if (BufferSize > 32) { CycleTimeTicks = (CycleTimeTicks * TIMER_IIR) + ((float)CycleTimer.ElapsedTicks / BufferSize * (1F - TIMER_IIR)); }
-            if (++CycleCount % 500 == 0) { Log.Debug($"{nameof(ShinNoteFinder)} DFT is taking {CycleTimeTicks * 0.1F:F3}us per sample."); }
+            if (++CycleCount % 500 == 0) { Log.Debug($"{nameof(Gen2NoteFinder)} DFT is taking {CycleTimeTicks * 0.1F:F3}us per sample."); }
 
         } while (MoreBuffers);
     }
@@ -296,7 +303,7 @@ public class ShinNoteFinder : NoteFinderCommon, ITimingSource
                     Receiver.CurrentIncrement -= Receiver.Period;
                     if (Receiver.Period != 0 && Receiver.CurrentIncrement > Receiver.Period * 16)
                     {
-                        Log.Warn($"{nameof(ShinNoteFinder)} has timing receiver that is falling behind, the receiver {Receiver.Receiver} has a period of {Receiver.Period} samples which is too short to effectively call.");
+                        Log.Warn($"{nameof(Gen2NoteFinder)} has timing receiver that is falling behind, the receiver {Receiver.Receiver} has a period of {Receiver.Period} samples which is too short to effectively call.");
                     }
                 }
             }

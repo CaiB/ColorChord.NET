@@ -25,6 +25,9 @@ public class WASAPILoopback : IAudioSource
     private const int FriendlyNamePKEY_PID = 14;
     private const bool FORCE_DEFAULT_FORMAT = false;
 
+    public string Name { get; private init; }
+    private NoteFinderCommon? NoteFinder;
+
     [ConfigString("Device", "default")]
     private readonly string DesiredDevice = "default";
 
@@ -46,9 +49,15 @@ public class WASAPILoopback : IAudioSource
     private WaveFormatExtensible MixFormat;
     private bool FormatIsPCM;
     private readonly AutoResetEvent AudioEvent = new(false);
-    private static GCHandle AudioEventHandle;
+    private GCHandle AudioEventHandle;
 
-    public WASAPILoopback(string name, Dictionary<string, object> config) { Configurer.Configure(this, config); }
+    public WASAPILoopback(string name, Dictionary<string, object> config)
+    {
+        this.Name = name;
+        Configurer.Configure(this, config);
+    }
+
+    public void AttachNoteFinder(NoteFinderCommon noteFinder) => this.NoteFinder = noteFinder;
 
     public void Start()
     {
@@ -174,7 +183,7 @@ public class WASAPILoopback : IAudioSource
         Log.Info($"Default transaction period is {DefaultInterval} ticks, minimum is {MinimumInterval} ticks. Current mode is {FramesPerBatch} frames per dispatch.");
         this.BytesPerFrame = this.MixFormat.ChannelCount * (this.MixFormat.BitsPerSample / 8);
 
-        ColorChord.NoteFinder?.SetSampleRate((int)this.MixFormat.SampleRate);
+        this.NoteFinder?.SetSampleRate((int)this.MixFormat.SampleRate);
 
         // Set up the stream
         uint StreamFlags;
@@ -185,7 +194,7 @@ public class WASAPILoopback : IAudioSource
         ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, MinimumInterval, MinimumInterval, IsRequestSupported ? RequestedFormatPtr : MixFormatPtr);
         if (IsErrorAndOut(ErrorCode, "Could not init audio client.")) { return; }
 
-        AudioEventHandle = GCHandle.Alloc(this.AudioEvent);
+        this.AudioEventHandle = GCHandle.Alloc(this.AudioEvent);
 
         ErrorCode = this.Client.SetEventHandle(this.AudioEvent.SafeWaitHandle.DangerousGetHandle()); // DANGEROUS, OH NO
 
@@ -205,7 +214,7 @@ public class WASAPILoopback : IAudioSource
         this.StreamReady = true;
 
         this.KeepGoing = true;
-        this.ProcessThread = new Thread(ProcessEventAudio) { Name = "WASAPILoopbackEVT" };
+        this.ProcessThread = new Thread(ProcessEventAudio) { Name = $"WASAPILoopback {this.Name}" };
         this.ProcessThread.Start();
     }
 
@@ -266,6 +275,8 @@ public class WASAPILoopback : IAudioSource
         }
     }
 
+    public uint GetSampleRate() => this.MixFormat.SampleRate;
+
     public void Stop()
     {
         this.KeepGoing = false;
@@ -275,7 +286,6 @@ public class WASAPILoopback : IAudioSource
         AudioEventHandle.Free();
     }
 
-
     private unsafe void ProcessEventAudio()
     {
         int ErrorCode;
@@ -284,6 +294,7 @@ public class WASAPILoopback : IAudioSource
             this.AudioEvent.WaitOne();
             if (!this.KeepGoing) { break; } // Early exit for when an event was used to break this loop
             if (this.CaptureClient == null) { Log.Warn("Capture client was not ready when an audio event was received."); continue; }
+            if (this.NoteFinder == null) { Log.Warn("NoteFinder was not attached when an audio event was received."); continue; }
 
             ErrorCode = this.CaptureClient.GetNextPacketSize(out uint PacketLength);
             if (IsErrorAndOut(ErrorCode, "Failed to get audio packet size.")) { continue; }
@@ -301,7 +312,7 @@ public class WASAPILoopback : IAudioSource
                 int ChannelCount = this.MixFormat.ChannelCount;
                 bool IsPCM = this.FormatIsPCM;
 
-                short[]? ProcessedData = NoteFinderCommon.GetBufferToWrite(out int NFBufferRef);
+                short[]? ProcessedData = this.NoteFinder.GetBufferToWrite(out int NFBufferRef);
                 if (ProcessedData == null) { goto SkipBuffer; }
                 Debug.Assert(FramesAvailable <= ProcessedData.Length); // TODO: Handle this properly (if needed?)
 
@@ -315,9 +326,8 @@ public class WASAPILoopback : IAudioSource
                 }
                 else { throw new InvalidDataException($"{nameof(WASAPILoopback)} cannot handle the current audio format: Channels={ChannelCount} BytesPerSample={BytesPerSample} IsPCM={IsPCM}"); }
 
-                NoteFinderCommon.FinishBufferWrite(NFBufferRef, FramesAvailable);
-                NoteFinderCommon.LastDataAdd = DateTime.UtcNow;
-                NoteFinderCommon.InputDataEvent.Set();
+                this.NoteFinder.FinishBufferWrite(NFBufferRef, FramesAvailable);
+                this.NoteFinder.InputDataEvent.Set();
             }
 
             SkipBuffer:
@@ -339,5 +349,4 @@ public class WASAPILoopback : IAudioSource
         if (Error) { Log.Error(output + " HRESULT: 0x" + hresult.ToString("X8")); }
         return Error;
     }
-
 }

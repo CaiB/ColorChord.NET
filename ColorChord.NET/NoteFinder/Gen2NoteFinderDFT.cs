@@ -12,11 +12,11 @@ namespace ColorChord.NET.NoteFinder;
 
 /// <summary> A carefully optimized DFT implementation that creates clean and responsive data. </summary>
 /// This implementation contains many quite particular choices, optimizations, and implementation details I worked on for years to fine-tune.
-/// Data is provided through the standard mechanism in <see cref="ShinNoteFinder.Cycle"/>. This data is processed in <see cref="AddAudioData(short[], uint)"/>,
+/// Data is provided through the standard mechanism in <see cref="Gen2NoteFinder.Cycle"/>. This data is processed in <see cref="AddAudioData(short[], uint)"/>,
 /// which will periodically call <see cref="CalculateBins(uint)"/> to snapshot the state of the raw bins. It will also trigger any timing receivers that have
-/// subscribed to periodic events. Then, when a visualizer or other output mechanism wants to use the data, it will call <see cref="ShinNoteFinder.UpdateOutputs"/>
+/// subscribed to periodic events. Then, when a visualizer or other output mechanism wants to use the data, it will call <see cref="Gen2NoteFinder.UpdateOutputs"/>
 /// which in turn will call <see cref="CalculateOutput"/>. This will merge together all of the data that has been received since the last output cycle,
-/// apply loudness correction, and format it into <see cref="AllBinValues"/> and <see cref="OctaveBinValues"/> for feature extraction in <see cref="ShinNoteFinder.UpdateOutputs"/>.
+/// apply loudness correction, and format it into <see cref="AllBinValues"/> and <see cref="OctaveBinValues"/> for feature extraction in <see cref="Gen2NoteFinder.UpdateOutputs"/>.
 internal sealed class Gen2NoteFinderDFT
 {
     private const bool ENABLE_SIMD = true;
@@ -172,15 +172,15 @@ internal sealed class Gen2NoteFinderDFT
         {
             float BinFrequency;
             uint ThisBufferSize;
-            if (Bin == 0)
-            {
+            //if (Bin == 0)
+            //{
                 //BinFrequency = 1.5F + (2F * ((float)Bin / BINS_PER_OCTAVE));
                 //ThisBufferSize = (uint)MathF.Round(WindowSizeForBinWidth(0.5F, SampleRate));
                 //ThisBufferSize = Math.Min(ABSOLUTE_MAX_WINDOW_SIZE, ThisBufferSize);
-                BinFrequency = 75F;
-                ThisBufferSize = RoundedWindowSizeForBinWidth(110F, BinFrequency, SampleRate);
-            }
-            else
+            //    BinFrequency = 75F;
+            //    ThisBufferSize = RoundedWindowSizeForBinWidth(110F, BinFrequency, SampleRate);
+            //}
+            //else
             {
                 float ThisOctaveStart = StartFrequency * MathF.Pow(2, Bin / BINS_PER_OCTAVE);
                 BinFrequency = CalculateNoteFrequency(StartFrequency, BINS_PER_OCTAVE, Bin);
@@ -201,16 +201,16 @@ internal sealed class Gen2NoteFinderDFT
             SinTableStepSize[Bin].NCLeft = (ushort)Math.Round(StepSizeNCL);
             SinTableStepSize[Bin].NCRight = (ushort)Math.Round(StepSizeNCR);
 
-            if (Bin > 0)
+            //if (Bin > 0)
             {
                 LoudnessCorrectionFactors[Bin] = GetLoudnessCorrection(BinFrequency, LoudnessCorrectionAmount);
                 SmoothingFactors[Bin] = MathF.Min(MathF.Max(0.1F, IIR_CONST - ((6000 - (int)ThisBufferSize) * 0.00010F)), IIR_CONST);
             }
-            else
-            {
-                SmoothingFactors[Bin] = 1F;
-                LoudnessCorrectionFactors[Bin] = 0.5F;
-            }
+            //else
+            //{
+            //    SmoothingFactors[Bin] = 1F;
+            //    LoudnessCorrectionFactors[Bin] = 0.5F;
+            //}
         }
         MaxPresentWindowSize = MaxAudioBufferSize;
 
@@ -227,7 +227,7 @@ internal sealed class Gen2NoteFinderDFT
         }
 
 #if !(STANDALONE_DFT_LIB)
-        Log.Debug(nameof(ShinNoteFinder) + " bin window lengths:");
+        Log.Debug(nameof(Gen2NoteFinder) + " bin window lengths:");
         if (Log.EnableDebug)
         {
             for (int Octave = 0; Octave < OctaveCount; Octave++)

@@ -1,5 +1,6 @@
 ﻿using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
+using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
@@ -15,6 +16,8 @@ namespace ColorChord.NET.Outputs
     {
         /// <summary> Instance name, for identification and attaching controllers. </summary>
         public string Name { get; private init; }
+
+        private readonly NoteFinderCommon NoteFinder;
 
         [ConfigString("LEDPattern", "LRGB")]
         private readonly string LEDPatternFromConfig = "LRGB";
@@ -48,9 +51,8 @@ namespace ColorChord.NET.Outputs
         public PacketUDPRLE(string name, Dictionary<string, object> config)
         {
             this.Name = name;
-            IVisualizer? Source = Configurer.FindVisualizer(this, config);
-            if (Source == null) { throw new Exception($"{GetType().Name} \"{name}\" could not find requested visualizer."); }
-            this.Source = Source;
+            this.Source = Configurer.FindVisualizer(config) ?? throw new Exception($"{nameof(PacketUDPRLE)} \"{name}\" could not find requested visualizer.");
+            this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(PacketUDPRLE)} \"{name}\" could not find NoteFinder to attach to.");
             Configurer.Configure(this, config);
 
             if (this.PortFromConfig < 1024) { Log.Warn("It is not recommended to use ports below 1024, as they are reserved. UDP sender is operating on port " + this.PortFromConfig + "."); }
@@ -92,7 +94,7 @@ namespace ColorChord.NET.Outputs
             if (!this.Enabled) { return; }
             if (this.Source is not IDiscrete1D Src) { return; }
 
-            byte[] Output = new byte[ColorChord.NoteFinder!.NoteCount * this.LEDLength];
+            byte[] Output = new byte[this.NoteFinder.NoteCount * this.LEDLength];
             uint[] SourceData = Src.GetDataDiscrete(); // The raw data from the visualizer.
 
             // Data Content

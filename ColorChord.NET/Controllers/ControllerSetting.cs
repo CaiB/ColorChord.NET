@@ -1,9 +1,12 @@
 ﻿using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
+using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
+using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Visualizers;
 using System;
+using System.Linq;
 using System.Reflection;
 using static ColorChord.NET.API.Controllers.ISetting;
 
@@ -138,13 +141,21 @@ public class ControllerSetting : ISetting
     {
         if (componentType == Component.Source)
         {
-            if (ColorChord.Source?.GetType().Name == componentName && ColorChord.Source is IControllableAttr ControllableSource) { return ControllableSource; }
-            else { return null; }
+            IAudioSource? Source;
+            if (ColorChord.SourceInsts.Count == 1) { Source = ColorChord.SourceInsts.First().Value; }
+            else if (!ColorChord.SourceInsts.TryGetValue(componentName, out Source)) { return null; }
+
+            if (Source != null && Source is IControllableAttr ControllableSource) { return ControllableSource; }
+            return null;
         }
         else if (componentType == Component.NoteFinder)
         {
-            if (ColorChord.NoteFinder?.GetType().Name == componentName && ColorChord.NoteFinder is IControllableAttr ControllableNoteFinder) { return ControllableNoteFinder; }
-            else { return null; }
+            NoteFinderCommon? NoteFinder;
+            if (ColorChord.NoteFinderInsts.Count == 1) { NoteFinder = ColorChord.NoteFinderInsts.First().Value; }
+            else if (!ColorChord.NoteFinderInsts.TryGetValue(componentName, out NoteFinder)) { return null; }
+
+            if (NoteFinder != null && NoteFinder is IControllableAttr ControllableNoteFinder) { return ControllableNoteFinder; }
+            return null;
         }
         else if (componentType == Component.Visualizers)
         {

@@ -1,5 +1,6 @@
 ﻿using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
+using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
@@ -19,6 +20,7 @@ namespace ColorChord.NET.Visualizers
     {
         /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
         public string Name { get; private init; }
+        public NoteFinderCommon? NoteFinder => null;
 
         /// <summary> The name of the memory-mapped file to look for. </summary>
         [ConfigString("MapName", "UnconfiguredMapName")]

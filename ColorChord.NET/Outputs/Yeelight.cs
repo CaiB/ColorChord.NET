@@ -56,7 +56,7 @@ namespace ColorChord.NET.Outputs
         public Yeelight(string name, Dictionary<string, object> config)
         {
             this.Name = name;
-            IVisualizer? Source = Configurer.FindVisualizer(this, config);
+            IVisualizer? Source = Configurer.FindVisualizer(config);
             if (Source == null) { throw new Exception($"{GetType().Name} \"{name}\" could not find requested visualizer."); }
             this.Source = Source;
             Configurer.Configure(this, config);

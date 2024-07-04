@@ -17,6 +17,8 @@ public class Voronoi : IVisualizer, IDiscrete2D, IControllableAttr
     /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
     public string Name { get; private init; }
 
+    public NoteFinderCommon NoteFinder { get; private init; }
+
     /// <summary> Whether this visualizer is currently active. </summary>
     [Controllable(ConfigNames.ENABLE)]
     [ConfigBool(ConfigNames.ENABLE, true)]
@@ -93,8 +95,9 @@ public class Voronoi : IVisualizer, IDiscrete2D, IControllableAttr
     {
         this.Name = name;
         Configurer.Configure(this, config);
-        this.NoteCount = ColorChord.NoteFinder!.NoteCount;
-        this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
+        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(Voronoi)} could not find NoteFinder to attach to.");
+        this.NoteCount = this.NoteFinder.NoteCount;
+        this.BinsPerOctave = this.NoteFinder.BinsPerOctave;
         this.OutputDataDiscrete = new uint[this.LEDCountX, this.LEDCountY];
         this.DiscreteNotes = new DiscreteVoronoiNote[this.NoteCount];
         this.OutputData = new VoronoiPoint[this.NoteCount];
@@ -105,7 +108,7 @@ public class Voronoi : IVisualizer, IDiscrete2D, IControllableAttr
         this.KeepGoing = true;
         this.ProcessThread = new Thread(DoProcessing) { Name = "Voronoi " + this.Name };
         this.ProcessThread.Start();
-        ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
+        this.NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
     }
 
     public void Stop()
@@ -128,7 +131,7 @@ public class Voronoi : IVisualizer, IDiscrete2D, IControllableAttr
             this.OutputDataDiscrete = new uint[this.LEDCountX, this.LEDCountY];
             Monitor.Exit(this.SettingUpdateLock);
         }
-        else if (controlID == 2) { ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod); }
+        else if (controlID == 2) { this.NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod); }
     }
 
     private void DoProcessing()
@@ -174,28 +177,28 @@ public class Voronoi : IVisualizer, IDiscrete2D, IControllableAttr
 
             for (byte i = 0; i < this.NoteCount; i++)
             {
-                float Amplitude = MathF.Pow(ColorChord.NoteFinder.Notes[i].AmplitudeFiltered, this.AmplifyPower) - this.NoteCutoff;
+                float Amplitude = MathF.Pow(this.NoteFinder.Notes[i].AmplitudeFiltered, this.AmplifyPower) - this.NoteCutoff;
                 if (Amplitude < 0) { Amplitude = 0F; }
                 this.DiscreteNotes[i].Value = Amplitude;
                 AmplitudeSum += Amplitude;
 
                 if (this.CentersFromSides)
                 {
-                    float Angle = (ColorChord.NoteFinder.Notes[i].Position / this.BinsPerOctave) * MathF.PI * 2;
+                    float Angle = (this.NoteFinder.Notes[i].Position / this.BinsPerOctave) * MathF.PI * 2;
                     float CenterX = this.LEDCountX / 2F;
                     float CenterY = this.LEDCountY / 2F;
                     float NewX = (MathF.Sin(Angle) * CenterX) + CenterX;
                     float NewY = (MathF.Cos(Angle) * CenterY) + CenterY;
-                    bool NotePresent = (ColorChord.NoteFinder.PersistentNoteIDs[i] != 0);
+                    bool NotePresent = (this.NoteFinder.PersistentNoteIDs[i] != 0);
                     this.DiscreteNotes[i].X = NotePresent ? (this.DiscreteNotes[i].X * 0.9F) + (NewX * 0.1F) : CenterX;
                     this.DiscreteNotes[i].Y = NotePresent ? (this.DiscreteNotes[i].Y * 0.9F) + (NewY * 0.1F) : CenterY;
                 }
                 else
                 {
                     // Base colorchord uses a random number generator with the note ID as seed. I didn't see a good way to do that here, so I instead used a simplified hash function from SO.
-                    uint RandX = (((uint)ColorChord.NoteFinder.PersistentNoteIDs[i] >> 16) ^ (uint)ColorChord.NoteFinder.PersistentNoteIDs[i]) * 0x45D9F3B;
+                    uint RandX = (((uint)this.NoteFinder.PersistentNoteIDs[i] >> 16) ^ (uint)this.NoteFinder.PersistentNoteIDs[i]) * 0x45D9F3B;
                     this.DiscreteNotes[i].X = ((RandX >> 16) ^ RandX) % this.LEDCountX;
-                    uint RandY = (((uint)ColorChord.NoteFinder.PersistentNoteIDs[i] >> 16) ^ (uint)ColorChord.NoteFinder.PersistentNoteIDs[i]) * 0x119DE1F3;
+                    uint RandY = (((uint)this.NoteFinder.PersistentNoteIDs[i] >> 16) ^ (uint)this.NoteFinder.PersistentNoteIDs[i]) * 0x119DE1F3;
                     this.DiscreteNotes[i].Y = ((RandY >> 16) ^ RandY) % this.LEDCountY;
                 }
             }
@@ -239,9 +242,9 @@ public class Voronoi : IVisualizer, IDiscrete2D, IControllableAttr
                     uint Colour = 0;
                     if (BestMatch != -1)
                     {
-                        float Saturation = ColorChord.NoteFinder.Notes[BestMatch].AmplitudeFinal * this.SaturationAmplifier;
+                        float Saturation = this.NoteFinder.Notes[BestMatch].AmplitudeFinal * this.SaturationAmplifier;
                         if (Saturation > 1F) { Saturation = 1F; }
-                        float Note = ColorChord.NoteFinder.Notes[BestMatch].Position / this.BinsPerOctave;
+                        float Note = this.NoteFinder.Notes[BestMatch].Position / this.BinsPerOctave;
                         Colour = VisualizerTools.CCToRGB(Note, 1F, MathF.Pow(Saturation, this.OutGamma));
                     }
                     this.OutputDataDiscrete[X, Y] = Colour;

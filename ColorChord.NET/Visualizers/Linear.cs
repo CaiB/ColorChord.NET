@@ -18,6 +18,8 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
     public string Name { get; private init; }
 
+    public NoteFinderCommon NoteFinder { get; private init; }
+
     /// <summary> The number of discrete elements outputted by this visualizer. </summary>
     /// <remarks> If only using continuous mode, set this to 12 or 24. </remarks>
     [Controllable(ConfigNames.LED_COUNT, 1)]
@@ -97,8 +99,9 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     {
         this.Name = name;
         Configurer.Configure(this, config);
-        this.NoteCount = ColorChord.NoteFinder!.NoteCount;
-        this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
+        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(Linear)} \"{name}\" could not find the NoteFinder to attach to.");
+        this.NoteCount = this.NoteFinder.NoteCount;
+        this.BinsPerOctave = this.NoteFinder.BinsPerOctave;
         this.OutputDataContinuous = new ContinuousDataUnit[this.NoteCount];
         this.LastVectorCenters = new float[this.NoteCount];
         for (int i = 0; i < this.OutputDataContinuous.Length; i++) { this.OutputDataContinuous[i] = new ContinuousDataUnit(); }
@@ -119,7 +122,7 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
         this.KeepGoing = true;
         this.ProcessThread = new Thread(DoProcessing) { Name = "Linear " + this.Name };
         this.ProcessThread.Start();
-        ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
+        this.NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
     }
 
     public void Stop()
@@ -155,7 +158,7 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
             UpdateSize();
             Monitor.Exit(this.SettingUpdateLock);
         }
-        else if (controlID == 2) { ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod); }
+        else if (controlID == 2) { this.NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod); }
     }
 
     public int GetCountDiscrete() => this.LEDCount;
@@ -198,9 +201,9 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
             // Populate data from the NoteFinder.
             for (int i = 0; i < this.NoteCount; i++)
             {
-                Notes[i].Position = ColorChord.NoteFinder.Notes[i].Position / this.BinsPerOctave;
-                Notes[i].AmplitudeSmooth = MathF.Pow(ColorChord.NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
-                Notes[i].AmplitudeFast = MathF.Pow(ColorChord.NoteFinder.Notes[i].Amplitude, this.LightSiding);
+                Notes[i].Position = this.NoteFinder.Notes[i].Position / this.BinsPerOctave;
+                Notes[i].AmplitudeSmooth = MathF.Pow(this.NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
+                Notes[i].AmplitudeFast = MathF.Pow(this.NoteFinder.Notes[i].Amplitude, this.LightSiding);
                 AmplitudeSum += Notes[i].AmplitudeSmooth;
             }
 

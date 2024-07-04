@@ -4,17 +4,17 @@ using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Sources;
+using ColorChord.NET.API.Utility;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.Config;
 using ColorChord.NET.Controllers;
 using ColorChord.NET.Extensions;
-using ColorChord.NET.NoteFinder;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Threading;
@@ -26,14 +26,14 @@ namespace ColorChord.NET
     {
         private static string ConfigFile = "config.json";
 
-        public static IAudioSource? Source { get; private set; }
-        public static NoteFinderCommon? NoteFinder { get; private set; }
+        public static readonly Dictionary<string, IAudioSource> SourceInsts = new();
+        public static readonly Dictionary<string, NoteFinderCommon> NoteFinderInsts = new();
         public static readonly Dictionary<string, IVisualizer> VisualizerInsts = new();
         public static readonly Dictionary<string, IOutput> OutputInsts = new();
         public static readonly Dictionary<string, Controller> ControllerInsts = new();
 
         private static readonly List<Thread> InstanceThreads = new();
-        private static ManualResetEventSlim StopSignal = new();
+        private static readonly ManualResetEventSlim StopSignal = new();
 
         public static void Main(string[] args)
         {
@@ -56,13 +56,19 @@ namespace ColorChord.NET
             ExtensionHandler.LoadExtensions();
             ExtensionHandler.InitExtensions();
             ReadConfig();
+
+            foreach (IOutput Output in OutputInsts.Values) { Output.Start(); }
+            foreach (IVisualizer Visualizer in VisualizerInsts.Values) { Visualizer.Start(); }
+            foreach (NoteFinderCommon NoteFinder in NoteFinderInsts.Values) { NoteFinder.Start(); }
+            foreach (IAudioSource Source in SourceInsts.Values) { Source.Start(); }
+            foreach (Controller Controller in ControllerInsts.Values) { Controller.Start(); }
             ExtensionHandler.PostInitExtensions();
 
-            StopSignal.Wait();
+            StopSignal.Wait(); // The main thread will pause here until something requests application termination.
             Log.Info("Exiting...");
             ExtensionHandler.StopExtensions();
-            Source?.Stop();
-            NoteFinder?.Stop();
+            foreach (IAudioSource Source in SourceInsts.Values) { Source.Stop(); }
+            foreach (NoteFinderCommon NoteFinder in NoteFinderInsts.Values) { NoteFinder.Stop(); }
             foreach (IVisualizer Visualizer in VisualizerInsts.Values) { Visualizer.Stop(); }
             foreach (IOutput Output in OutputInsts.Values) { Output.Stop(); }
             foreach (Controller Controller in ControllerInsts.Values) { Controller.Stop(); }
@@ -133,142 +139,58 @@ namespace ColorChord.NET
                 }
             }
 
-            // Note Finder
-            NoteFinderCommon? NoteFinder = ReadAndApplyNoteFinder(JSON);
-            ColorChord.NoteFinder = NoteFinder;
-            ColorChord.NoteFinder?.Start();
-
-            // Audio Source
-            IAudioSource? Source = ReadSource(JSON);
-            if(Source == null)
-            {
-                Log.Error("An error occurred while setting up the audio source. Please see above.");
-                throw new InvalidDataException("Could not create audio source from config values");
-            }
-            ColorChord.Source = Source;
-            ColorChord.Source.Start();
-
-            // Visualizers
-            ReadAndApplyVisualizers(JSON);
-
-            // Outputs
-            ReadAndApplyOutputs(JSON);
-
-            // Controllers
-            ReadAndApplyControllers(JSON);
+            ReadConfigSection(JSON, SECTION_SOURCE, SECTION_SOURCE_ARR, "ColorChord.NET.Sources", SourceInsts, "audio source", "audio sources");
+            ReadConfigSection(JSON, SECTION_NOTE_FINDER, SECTION_NOTE_FINDER_ARR, "ColorChord.NET.NoteFinder", NoteFinderInsts, "NoteFinder", "NoteFinders");
+            ReadConfigSection(JSON, SECTION_VISUALIZER, SECTION_VISUALIZER_ARR, "ColorChord.NET.Visualizers", VisualizerInsts, "visualizer", "visualizers");
+            ReadConfigSection(JSON, SECTION_OUTPUT, SECTION_OUTPUT_ARR, "ColorChord.NET.Outputs", OutputInsts, "output", "outputs");
+            ReadConfigSection(JSON, SECTION_CONTROLLER, SECTION_CONTROLLER_ARR, "ColorChord.NET.Controllers", ControllerInsts, "controller", "controllers");
             Log.Info("Finished processing config file.");
         }
 
         public static void Stop() => StopSignal.Set();
 
-        private static IAudioSource? ReadSource(JObject JSON)
+        /// <summary> Reads a given section from the config, and attempts to load all components defined in it. </summary>
+        /// <typeparam name="T"> The type of component to handle, such as <see cref="IAudioSource"/> </typeparam>
+        /// <param name="JSON"> The JSON object representing the config file. The given section will be searched for as a direct child of this object </param>
+        /// <param name="sectionName"> The config section name for a single component of this type, only that one instance will be loaded </param>
+        /// <param name="sectionNameArr"> The config section name for an array of definitions of these components, all will be loaded. Preferred over the singular section when present </param>
+        /// <param name="defaultNamespace"> If the type name does not start with # to indicate an extension, this namespace will be prepended instead. Exclude the trailing period </param>
+        /// <param name="output"> The dictionary where to store the loaded instances </param>
+        /// <param name="friendlyNameSingular"> Used in user-facing text to describe a singular of this type of component </param>
+        /// <param name="friendlyNamePlural"> Used in user-facing text to describe a plural set of this type of component </param>
+        private static void ReadConfigSection<T>(JObject JSON, string sectionName, string sectionNameArr, string defaultNamespace, Dictionary<string, T> output, string friendlyNameSingular, string friendlyNamePlural) where T : IConfigurableAttr
         {
-            const string SOURCE = "Source";
-            if (!JSON.ContainsKey(SOURCE) || JSON[SOURCE] == null || !JSON[SOURCE]!.HasValues) { Log.Error($"Could not find valid \"{SOURCE}\" definition. ColorChord.NET cannot work without audio."); }
-            else
+            void HandleEntry(JToken entry, string? defaultName = null)
             {
-                JToken SourceToken = JSON[SOURCE]!;
-                string? SourceType = SourceToken.Value<string?>(TYPE);
-                if (SourceType == null) { Log.Error($"{SOURCE} section in config did not contain valid \"{TYPE}\" definition"); return null; }
-                
-                IAudioSource? Source = CreateObject<IAudioSource>(SourceType.StartsWith('#') ? SourceType : "ColorChord.NET.Sources." + SourceType, SourceToken);
-                if (Source == null) { Log.Error($"Failed to create audio source. Check to make sure the type \"{SourceType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); return null; }
-                Log.Info("Created audio source of type \"" + Source.GetType().FullName + "\".");
-                return Source;
+                string? EntryType = entry.Value<string>(TYPE);
+                string? EntryName = entry.Value<string>(NAME) ?? defaultName;
+                if (EntryType == null) { Log.Error($"A {friendlyNameSingular} is missing a \"{TYPE}\" definition, and will therefore not be initialized."); return; }
+                if (EntryName == null) { Log.Error($"A {friendlyNameSingular} is missing a \"{NAME}\" definition, and will therefore not be initialized."); return; }
+
+                T? Inst = CreateObject<T>(EntryType.StartsWith('#') ? EntryType : $"{defaultNamespace}.{EntryType}", entry);
+                if (Inst == null) { Log.Error($"Failed to create {friendlyNameSingular} \"{EntryName}\". Check to make sure the type \"{EntryType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); return; }
+                output.Add(EntryName, Inst);
+                Log.Info($"Created {friendlyNameSingular} of type \"{Inst.GetType().FullName}\".");
             }
-            return null;
-        }
 
-        private static NoteFinderCommon? ReadAndApplyNoteFinder(JObject JSON)
-        {
-            const string NOTEFINDER = "NoteFinder";
-            Type DefaultType = typeof(BaseNoteFinder); // Defined once more below as well.
-            NoteFinderCommon? NoteFinder;
-
-            if (!JSON.ContainsKey(NOTEFINDER) || JSON[NOTEFINDER] == null)
+            if (JSON.TryGetValue(sectionNameArr, out JToken? SectionArray))
             {
-                Log.Warn($"Could not find valid \"{NOTEFINDER}\" definition. All defaults will be used.");
-                NoteFinder = new BaseNoteFinder(NOTEFINDER, new Dictionary<string, object>());
-                Log.Info("Created audio source of type \"" + NoteFinder.GetType().FullName + "\".");
-                return NoteFinder;
+                if (SectionArray == null || !SectionArray.HasValues) { Log.Error($"\"{sectionNameArr}\" definition in the config file is empty/invalid. No {friendlyNamePlural} will load."); return; }
+                if (!typeof(JArray).IsAssignableFrom(SectionArray.GetType())) { Log.Error($"\"{sectionNameArr}\" definition in the config file needs to be an array. If you intended to configure only one, call the section \"{sectionName}\" (non-plural) instead. No {friendlyNamePlural} will load."); return;  }
+                JArray Entries = (JArray)SectionArray;
+                if (Entries.Count == 0) { Log.Warn($"No {friendlyNamePlural} were defined in the config file. Check to make sure the formatting is correct."); return; }
+
+                foreach (JToken Entry in Entries) { HandleEntry(Entry); }
+                return;
             }
-            else
+            if (JSON.TryGetValue(sectionName, out JToken? SectionItem))
             {
-                JToken NFToken = JSON[NOTEFINDER]!;
-                string? NFType = NFToken.Value<string?>(TYPE);
-                if (NFType == null)
-                {
-                    NFType = DefaultType.Name;
-                    Log.Warn($"{NOTEFINDER} {TYPE} was not defined, using the default ({NFType}).");
-                }
-
-                NoteFinder = CreateObject<NoteFinderCommon>(NFType.StartsWith('#') ? NFType : "ColorChord.NET.NoteFinder." + NFType, NFToken);
-                if (NoteFinder == null) { Log.Error($"Failed to create note finder. Check to make sure the type \"{NFType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); return null; }
-                Log.Info("Created audio source of type \"" + NoteFinder.GetType().FullName + "\".");
-                return NoteFinder;
+                if (SectionItem == null || !SectionItem.HasValues) { Log.Error($"\"{sectionName}\" definition in the config file is empty/invalid. No {friendlyNamePlural} will load."); return; }
+                HandleEntry(SectionItem, "unnamed");
+                return;
             }
-        }
 
-        private static void ReadAndApplyVisualizers(JObject JSON)
-        {
-            const string VISUALIZERS = "Visualizers";
-            if (!JSON.ContainsKey(VISUALIZERS) || JSON[VISUALIZERS] == null || !JSON[VISUALIZERS]!.HasValues) { Log.Warn($"Could not find valid \"{VISUALIZERS}\" definition. No visualizers will be configured."); return; }
-            if (!typeof(JArray).IsAssignableFrom(JSON[VISUALIZERS]!.GetType())) { Log.Error($"{VISUALIZERS} definition needs to be an array, but it was not. No visualizers will load."); return; }
-            JArray VisualizerEntries = (JArray)JSON[VISUALIZERS]!;
-            if (VisualizerEntries.Count <= 0) { Log.Warn("No visualizers were defined in the config file. Check to make sure the formatting is correct."); }
-
-            foreach (JToken Entry in VisualizerEntries)
-            {
-                string? VisType = Entry.Value<string>(TYPE);
-                string? VisName = Entry.Value<string>(NAME);
-                if (VisType == null) { Log.Error($"A visualizer is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
-                if (VisName == null) { Log.Error($"A visualizer is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
-
-                IVisualizer? Vis = CreateObject<IVisualizer>(VisType.StartsWith('#') ? VisType : "ColorChord.NET.Visualizers." + VisType, Entry);
-                if (Vis == null) { Log.Error($"Could not create visualizer \"{VisName}\". Check to make sure the type \"{VisType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
-                VisualizerInsts.Add(VisName, Vis);
-            }
-        }
-
-        private static void ReadAndApplyOutputs(JObject JSON)
-        {
-            const string OUTPUTS = "Outputs";
-            if (!JSON.ContainsKey(OUTPUTS) || JSON[OUTPUTS] == null || !JSON[OUTPUTS]!.HasValues) { Log.Warn($"Could not find valid \"{OUTPUTS}\" definition. No outputs will be configured."); return; }
-            if (!typeof(JArray).IsAssignableFrom(JSON[OUTPUTS]!.GetType())) { Log.Error($"{OUTPUTS} definition needs to be an array, but it was not. No outputs will load."); return; }
-            JArray OutputEntries = (JArray)JSON[OUTPUTS]!;
-            if (OutputEntries.Count <= 0) { Log.Warn("No outputs were defined in the config file. Check to make sure the formatting is correct."); }
-
-            foreach (JToken Entry in OutputEntries)
-            {
-                string? OutType = Entry.Value<string>(TYPE);
-                string? OutName = Entry.Value<string>(NAME);
-                if (OutType == null) { Log.Error($"An output is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
-                if (OutName == null) { Log.Error($"An output is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
-
-                IOutput? Out = CreateObject<IOutput>(OutType.StartsWith('#') ? OutType : "ColorChord.NET.Outputs." + OutType, Entry);
-                if (Out == null) { Log.Error($"Could not create output \"{OutName}\". Check to make sure the type \"{OutType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
-                OutputInsts.Add(OutName, Out);
-            }
-        }
-
-        private static void ReadAndApplyControllers(JObject JSON)
-        {
-            const string CONTROLLERS = "Controllers";
-            if (!JSON.ContainsKey(CONTROLLERS) || JSON[CONTROLLERS] == null || !JSON[CONTROLLERS]!.HasValues) { Log.Warn($"Could not find valid \"{CONTROLLERS}\" definition. No controllers will be configured."); return; }
-            if (!typeof(JArray).IsAssignableFrom(JSON[CONTROLLERS]!.GetType())) { Log.Error($"{CONTROLLERS} definition needs to be an array, but it was not. No controllers will load."); return; }
-            JArray ControllerEntries = (JArray)JSON[CONTROLLERS]!;
-            
-            foreach (JToken Entry in ControllerEntries)
-            {
-                string? ControlType = Entry.Value<string>(TYPE);
-                string? ControlName = Entry.Value<string>(NAME);
-                if (ControlType == null) { Log.Error($"A controller is missing a \"{TYPE}\" definition, and will therefore not be initialized."); continue; }
-                if (ControlName == null) { Log.Error($"A controller is missing a \"{NAME}\" definition, and will therefore not be initialized."); continue; }
-
-                Controller? Ctrl = CreateObject<Controller>(ControlType.StartsWith('#') ? ControlType : "ColorChord.NET.Controllers." + ControlType, Entry, true);
-                if (Ctrl == null) { Log.Error($"Could not create controller \"{ControlName}\". Check to make sure the type \"{ControlType}\" is spelled correctly. If it is part of an extension, make sure to start the name with a # character."); continue; }
-                ControllerInsts.Add(ControlName, Ctrl);
-            }
+            Log.Error($"Could not find valid \"{sectionName}\"/\"{sectionNameArr}\" definition in the config file. No {friendlyNamePlural} will load.");
         }
 
         /// <summary> Creates a new instance of the specified type, and checks to make sure it implements the given interface. </summary>
@@ -293,17 +215,15 @@ namespace ColorChord.NET
             if (ObjName == null) { return default; }
 
             object? Instance = null;
-            if (ObjType.GetCustomAttribute<ThreadedInstanceAttribute>() is not null) // Start this on a thread
+            if (typeof(IThreadedInstance).IsAssignableFrom(ObjType)) // Start this on a thread
             {
                 ManualResetEventSlim InstInitialized = new();
                 Thread InstThread = new(() =>
                 {
                     Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry), provideControllerInterface);
                     InstInitialized.Set();
-                    if (Instance is IVisualizer Vis) { Vis.Start(); }
-                    else if (Instance is IOutput Outp) { Outp.Start(); }
-                    else if (Instance is Controller Ctrl) { Ctrl.Start(); }
-                }) { Name = $"{ObjType.Name} {ObjName}" };
+                    ((IThreadedInstance?)Instance)?.InstThreadPostInit();
+                }) { Name = $"{ObjType.Name} {ObjName} (CC.NET-managed)" };
                 InstThread.Start();
                 InstInitialized.Wait(); // Wait for the instance to have its constructor run before retruning, otherwise we might return null too early
                 InstInitialized.Dispose(); // TODO: Check if the above is actually needed?
@@ -312,9 +232,6 @@ namespace ColorChord.NET
             else
             {
                 Instance = CreateInstWithParams(ObjType, ObjName, ToDict(configEntry), provideControllerInterface);
-                if (Instance is IVisualizer Vis) { Vis.Start(); } // TODO: Starting these here creates a rare crash where visualizers have an output added in the middle of iterating through them to dispatch data.
-                else if (Instance is IOutput Outp) { Outp.Start(); }
-                else if (Instance is Controller Ctrl) { Ctrl.Start(); }
             }
             return (BaseType?)Instance;
         }
@@ -367,7 +284,7 @@ namespace ColorChord.NET
         }
 
         /// <summary>Tries to find a currently loaded component based on its role and name.</summary>
-        /// <param name="path">A path in the format "<see cref="Component"/>.Name", except for Source and NoteFinder components, where only the first part is needed, and the rest is ignored if present.</param>
+        /// <param name="path">A path in the format "<see cref="Component"/>.Name", except for Source and NoteFinder components, where only the first part is needed if there is only one instance loaded.</param>
         /// <returns>null if the component couldn't be found, otherwise the instance</returns>
         public static object? GetInstanceFromPath(string path)
         {
@@ -376,14 +293,16 @@ namespace ColorChord.NET
             Component Component = Component.None;
             if (Enum.TryParse(ComponentType, true, out Component ParsedComponent)) { Component = ParsedComponent; }
 
-            if (Component == Component.Source) { return Source; }
-            else if (Component == Component.NoteFinder) { return NoteFinder; }
+            if (Component == Component.Source && SourceInsts.Count == 1) { return SourceInsts.First().Value; }
+            else if (Component == Component.NoteFinder && NoteFinderInsts.Count == 1) { return NoteFinderInsts.First().Value; }
 
             int IndexSep2 = path.IndexOf('.', IndexSep1 + 1);
             if (IndexSep2 < 0) { return null; }
             string ComponentName = path.Substring(IndexSep1 + 1, IndexSep2 - IndexSep1 - 1);
 
-            if (Component == Component.Visualizers) { return VisualizerInsts.TryGetValue(ComponentName, out IVisualizer? Visualizer) ? Visualizer : null; }
+            if (Component == Component.Source) { return SourceInsts.TryGetValue(ComponentName, out IAudioSource? Source) ? Source : null; }
+            else if (Component == Component.NoteFinder) { return NoteFinderInsts.TryGetValue(ComponentName, out NoteFinderCommon? NoteFinder) ? NoteFinder : null; }
+            else if (Component == Component.Visualizers) { return VisualizerInsts.TryGetValue(ComponentName, out IVisualizer? Visualizer) ? Visualizer : null; }
             else if (Component == Component.Outputs) { return OutputInsts.TryGetValue(ComponentName, out IOutput? Output) ? Output : null; }
             else if (Component == Component.Controllers) { return ControllerInsts.TryGetValue(ComponentName, out Controller? Controller) ? Controller : null; }
             return null;

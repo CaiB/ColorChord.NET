@@ -1,11 +1,16 @@
 ﻿using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Controllers;
+using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
+using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
+using static ColorChord.NET.API.Config.ConfigNames;
 
 namespace ColorChord.NET.Config;
 
@@ -14,8 +19,12 @@ public sealed class ConfigurerInst : IConfigurer
     public static ConfigurerInst Inst { get; private set; } = new();
 
     public bool Configure(object targetObj, Dictionary<string, object> config, bool warnAboutRemainder = true) => Configurer.Configure(targetObj, config, warnAboutRemainder);
-    public IVisualizer? FindVisualizer(IOutput target, Dictionary<string, object> config) => Configurer.FindVisualizer(target, config);
+    public IAudioSource? FindSource(Dictionary<string, object> config) => Configurer.FindSource(config);
+    public NoteFinderCommon? FindNoteFinder(Dictionary<string, object> config) => Configurer.FindNoteFinder(config);
+    public IVisualizer? FindVisualizer(Dictionary<string, object> config) => Configurer.FindVisualizer(config);
     public IVisualizer? FindVisualizer(IOutput target, Dictionary<string, object> config, Type acceptableFormat) => Configurer.FindVisualizer(target, config, acceptableFormat);
+    public IOutput? FindOutput(Dictionary<string, object> config) => Configurer.FindOutput(config);
+    public Controller? FindController(Dictionary<string, object> config) => Configurer.FindController(config);
 }
 
 public static class Configurer
@@ -184,32 +193,73 @@ public static class Configurer
         return true;
     }
 
-    /// <summary>Used by outputs. Reads the config, and finds the visualizer instance that this output should attach to.</summary>
-    /// <param name="target">The output that will attach to the visualizer.</param>
-    /// <param name="config">The config entries which will be used in finding the appropriate visualizer.</param>
-    /// <returns>The visualizer that this output should attach to.</returns>
-    public static IVisualizer? FindVisualizer(IOutput target, Dictionary<string, object> config)
+    /// <summary>Reads the given config and finds the corresponding loaded <see cref="IAudioSource"/> instance.</summary>
+    /// <remarks>Intended to be used by <see cref="NoteFinderCommon"/> instances to find their audio source to attach to.</remarks>
+    /// <param name="config">The config section of a component which needs to find an audio source, the <see cref="SOURCE_NAME"/> key will be used to find it by name. If the key is missing and there is only one audio source present, it is returned.</param>
+    /// <returns>The audio source instance if it was found, null otherwise.</returns>
+    public static IAudioSource? FindSource(Dictionary<string, object> config)
     {
-        const string VIZ_NAME = "VisualizerName";
-        if (!config.ContainsKey(VIZ_NAME) || !ColorChord.VisualizerInsts.ContainsKey((string)config[VIZ_NAME]))
+        if (config.TryGetValue(SOURCE_NAME, out object? SourceNameObj))
         {
-            Log.Error("Tried to create " + target.GetType()?.Name + " with missing or invalid visualizer.");
-            return null;
+            return (ColorChord.SourceInsts.TryGetValue((string)SourceNameObj, out IAudioSource? Source)) ? Source : null;
         }
-        return ColorChord.VisualizerInsts[(string)config[VIZ_NAME]];
+        else if (ColorChord.SourceInsts.Count == 1) { return ColorChord.SourceInsts.First().Value; }
+        return null;
+    }
+
+    /// <summary>Reads the given config and finds the corresponding loaded <see cref="NoteFinderCommon"/> instance.</summary>
+    /// <remarks>Intended to be used by <see cref="IVisualizer"/> instances to find their NoteFinder to attach to.</remarks>
+    /// <param name="config">The config section of a component which needs to find a NoteFinder, the <see cref="NOTE_FINDER_NAME"/> key will be used to find it by name. If the key is missing and there is only one NoteFinder present, it is returned.</param>
+    /// <returns>The NoteFinder instance if it was found, null otherwise.</returns>
+    public static NoteFinderCommon? FindNoteFinder(Dictionary<string, object> config)
+    {
+        if (config.TryGetValue(NOTE_FINDER_NAME, out object? NoteFinderNameObj))
+        {
+            return (ColorChord.NoteFinderInsts.TryGetValue((string)NoteFinderNameObj, out NoteFinderCommon? NoteFinder)) ? NoteFinder : null;
+        }
+        else if (ColorChord.NoteFinderInsts.Count == 1) { return ColorChord.NoteFinderInsts.First().Value; }
+        return null;
+    }
+
+    /// <summary>Reads the given config and finds the corresponding loaded <see cref="IVisualizer"/> instance.</summary>
+    /// <remarks>Intended to be used by <see cref="IOutput"/> instances to find their visualizer to attach to.</remarks>
+    /// <param name="config">The config section of a component which needs to find a visualizer, the <see cref="VIZ_NAME"/> key will be used to find it by name.</param>
+    /// <returns>The visualizer instance if it was found, null otherwise.</returns>
+    public static IVisualizer? FindVisualizer(Dictionary<string, object> config)
+    {
+        if (!config.TryGetValue(VIZ_NAME, out object? VisualizerNameObj) || !ColorChord.VisualizerInsts.TryGetValue((string)VisualizerNameObj, out IVisualizer? Visualizer)) { return null; }
+        return Visualizer;
     }
 
     /// <summary>Used by outputs. Reads the config, and finds the visualizer instance that this output should attach to.</summary>
     /// <param name="target">The output that will attach to the visualizer.</param>
     /// <param name="config">The config entries which will be used in finding the appropriate visualizer.</param>
     /// <param name="acceptableFormat">The <see cref="IVisualizerFormat"/> type that is accepted by this output.</param>
-    /// <returns>The visualizer that this output should attach to.</returns>
+    /// <returns>The visualizer that this output should attach to if it was found, null otherwise.</returns>
     public static IVisualizer? FindVisualizer(IOutput target, Dictionary<string, object> config, Type acceptableFormat)
     {
-        IVisualizer? Visualizer = FindVisualizer(target, config);
+        IVisualizer? Visualizer = FindVisualizer(config);
         if (Visualizer == null) { return null; }
         if (!acceptableFormat.IsAssignableFrom(Visualizer.GetType())) { Log.Error($"{target.GetType()?.Name} only supports {acceptableFormat.Name} visualizers, cannot use {Visualizer.GetType()?.Name}"); }
         return Visualizer;
+    }
+
+    /// <summary>Reads the given config and finds the corresponding loaded <see cref="IOutput"/> instance.</summary>
+    /// <param name="config">The config section of a component which needs to find an output, the <see cref="OUTPUT_NAME"/> key will be used to find it by name.</param>
+    /// <returns>The output instance if it was found, null otherwise.</returns>
+    public static IOutput? FindOutput(Dictionary<string, object> config)
+    {
+        if (!config.TryGetValue(OUTPUT_NAME, out object? OutputNameObj) || !ColorChord.OutputInsts.TryGetValue((string)OutputNameObj, out IOutput? Output)) { return null; }
+        return Output;
+    }
+
+    /// <summary>Reads the given config and finds the corresponding loaded <see cref="Controller"/> instance.</summary>
+    /// <param name="config">The config section of a component which needs to find a controller, the <see cref="CONTROLLER_NAME"/> key will be used to find it by name.</param>
+    /// <returns>The controller instance if it was found, null otherwise.</returns>
+    public static Controller? FindController(Dictionary<string, object> config)
+    {
+        if (!config.TryGetValue(CONTROLLER_NAME, out object? ControllerNameObj) || !ColorChord.ControllerInsts.TryGetValue((string)ControllerNameObj, out Controller? Controller)) { return null; }
+        return Controller;
     }
 
     /// <summary>Checks the config to see if a reasonable value is provided, otherwise uses the default and outputs a warning.</summary>

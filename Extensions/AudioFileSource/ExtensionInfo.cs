@@ -10,6 +10,6 @@ public class ExtensionInfo : IExtension
     public uint APIVersion => ColorChordAPI.APIVersion;
 
     public void Initialize() { }
-    public void PostInitialize() { AudioFile.Instance?.StartReading(); }
+    public void PostInitialize() { }
     public void Shutdown() { }
 }

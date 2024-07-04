@@ -16,6 +16,7 @@ namespace ColorChord.NET.Visualizers;
 public class PalletizedProminent : IVisualizer, IDiscrete1D
 {
     public string Name { get; private init; }
+    public NoteFinderCommon NoteFinder { get; private init; }
 
     [ConfigStringList("Palette")]
     private List<string> PaletteHexCodes { get; set; } = new();
@@ -41,6 +42,7 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
     {
         this.Name = name;
         Configurer.Configure(this, config);
+        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(PalletizedProminent)} could not find NoteFinder to attach to.");
         ParsePalette();
     }
 
@@ -108,16 +110,15 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
 
     public void Update()
     {
-        if (ColorChord.NoteFinder.OctaveBinValues == null) { return; }
-        if (this.IsOwnTimeSource) { ColorChord.NoteFinder?.UpdateOutputs(); }
+        if (this.IsOwnTimeSource) { this.NoteFinder.UpdateOutputs(); }
 
         float MaxValue = 0F;
         int MaxIndex = 0;
-        for (int i = 0; i < ColorChord.NoteFinder.OctaveBinValues.Length; i++)
+        for (int i = 0; i < this.NoteFinder.OctaveBinValues.Length; i++)
         {
-            if (MaxValue < ColorChord.NoteFinder.OctaveBinValues[i])
+            if (MaxValue < this.NoteFinder.OctaveBinValues[i])
             {
-                MaxValue = ColorChord.NoteFinder.OctaveBinValues[i];
+                MaxValue = this.NoteFinder.OctaveBinValues[i];
                 MaxIndex = i;
             }
         }
@@ -125,7 +126,7 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
         if (MaxValue == 0F || this.PaletteHSV.Count == 0) { this.Data[0] = 0; }
         else
         {
-            float NoteHue = VisualizerTools.CCToHue((float)MaxIndex / ColorChord.NoteFinder.OctaveBinValues.Length);
+            float NoteHue = VisualizerTools.CCToHue((float)MaxIndex / this.NoteFinder.OctaveBinValues.Length);
             int UpperColour = -1;
             for (int i = 0; i < this.PaletteHSV.Count; i++) // TODO: Maybe replace with binary search
             {

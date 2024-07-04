@@ -1,5 +1,6 @@
 ﻿using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
+using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Sources;
 using ColorChord.NET.Config;
 using System;
@@ -10,6 +11,7 @@ namespace ColorChord.NET.Sources
 {
     public class WindowsMIDI : IAudioSource
     {
+        public string Name { get; private init; }
         private readonly MIDIInProc Callback;
         private readonly GCHandle CallbackHandle;
         private IntPtr DeviceHandle;
@@ -22,6 +24,7 @@ namespace ColorChord.NET.Sources
 
         public WindowsMIDI(string name, Dictionary<string, object> config)
         {
+            this.Name = name;
             this.Callback = MIDICallback;
             this.CallbackHandle = GCHandle.Alloc(Callback);
             Configurer.Configure(this, config);
@@ -62,6 +65,10 @@ namespace ColorChord.NET.Sources
             bool Started = StartReceiver(this.DeviceHandle);
             Log.Info(Started ? "Started MIDI receiver." : "Failed to start MIDI receiver.");
         }
+
+        public uint GetSampleRate() => 0;
+
+        public void AttachNoteFinder(NoteFinderCommon noteFinder) { }
 
         public void Stop()
         {

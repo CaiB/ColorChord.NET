@@ -18,6 +18,8 @@ public class Prominent : IVisualizer, IDiscrete1D, IControllableAttr
     /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
     public string Name { get; private init; }
 
+    public NoteFinderCommon NoteFinder { get; private init; }
+
     /// <summary> The number of discrete points to be output. Usually equals the number of LEDs on a physical system. </summary>
     /// <remarks> All LEDs are assigned the same colour in this visualizer, so 1 works just fine. </remarks>
     [Controllable(ConfigNames.LED_COUNT, 1)]
@@ -65,8 +67,9 @@ public class Prominent : IVisualizer, IDiscrete1D, IControllableAttr
     {
         this.Name = name;
         Configurer.Configure(this, config);
-        this.NoteCount = ColorChord.NoteFinder!.NoteCount;
-        this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
+        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(Prominent)} could not find NoteFinder to attach to.");
+        this.NoteCount = this.NoteFinder.NoteCount;
+        this.BinsPerOctave = this.NoteFinder.BinsPerOctave;
         this.OutputDataDiscrete = new uint[this.LEDCount];
     }
 
@@ -76,7 +79,7 @@ public class Prominent : IVisualizer, IDiscrete1D, IControllableAttr
         this.KeepGoing = true;
         this.ProcessThread = new Thread(DoProcessing) { Name = "Prominent " + this.Name };
         this.ProcessThread.Start();
-        ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
+        this.NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
     }
 
     public void Stop()
@@ -115,7 +118,7 @@ public class Prominent : IVisualizer, IDiscrete1D, IControllableAttr
             this.OutputDataDiscrete = new uint[this.LEDCount];
             Monitor.Exit(this.SettingUpdateLock);
         }
-        else if (controlID == 2) { ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod); }
+        else if (controlID == 2) { this.NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod); }
     }
 
     private void Update()
@@ -126,8 +129,8 @@ public class Prominent : IVisualizer, IDiscrete1D, IControllableAttr
         // Find strongest note
         for (int Bin = 0; Bin < this.NoteCount; Bin++)
         {
-            float ThisNote = ColorChord.NoteFinder.Notes[Bin].Position / this.BinsPerOctave;
-            float ThisAmplitude = ColorChord.NoteFinder.Notes[Bin].AmplitudeFiltered * this.SaturationAmplifier;
+            float ThisNote = this.NoteFinder.Notes[Bin].Position / this.BinsPerOctave;
+            float ThisAmplitude = this.NoteFinder.Notes[Bin].AmplitudeFiltered * this.SaturationAmplifier;
             if (ThisAmplitude > OutAmplitude)
             {
                 OutAmplitude = ThisAmplitude;

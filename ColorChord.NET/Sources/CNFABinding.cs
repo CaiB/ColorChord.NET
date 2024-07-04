@@ -11,6 +11,9 @@ namespace ColorChord.NET.Sources
 {
     public class CNFABinding : IAudioSource
     {
+        public string Name { get; private init; }
+        private NoteFinderCommon? NoteFinder;
+
         private CNFAConfig Driver;
         private IntPtr DriverPtr;
 
@@ -37,6 +40,7 @@ namespace ColorChord.NET.Sources
 
         public CNFABinding(string name, Dictionary<string, object> config)
         {
+            this.Name = name;
             Configurer.Configure(this, config);
             this.Callback = SoundCallback;
             this.CallbackHandle = GCHandle.Alloc(this.Callback);
@@ -46,8 +50,12 @@ namespace ColorChord.NET.Sources
         {
             this.DriverPtr = Initialize(this.DriverMode.ToUpper() == "AUTO" ? null : this.DriverMode.ToUpper(), "ColorChord.NET", Marshal.GetFunctionPointerForDelegate(this.Callback), this.SuggestedSampleRate, this.SuggestedSampleRate, this.SuggestedChannelCount, this.SuggestedChannelCount, this.SuggestedBufferSize, this.DevicePlay, this.DeviceRecord, IntPtr.Zero);
             this.Driver = Marshal.PtrToStructure<CNFAConfig>(this.DriverPtr);
-            ColorChord.NoteFinder?.SetSampleRate(this.Driver.SampleRateRecord);
+            this.NoteFinder?.SetSampleRate(this.Driver.SampleRateRecord);
         }
+
+        public uint GetSampleRate() => (uint)this.Driver.SampleRateRecord;
+
+        public void AttachNoteFinder(NoteFinderCommon noteFinder) => this.NoteFinder = noteFinder;
 
         public void Stop()
         {
@@ -63,10 +71,11 @@ namespace ColorChord.NET.Sources
         /// <param name="framesOut"> How many frames of space are available for output data. </param>
         private unsafe void SoundCallback(IntPtr driver, IntPtr input, IntPtr output, int framesIn, int framesOut)
         {
+            if (this.NoteFinder == null) { return; }
             if (input == IntPtr.Zero) { return; } // Needed for ALSA?
             //Console.WriteLine("CALLBACK with " + framesIn + " frames of input, and " + framesOut + " frames of space for output.");
 
-            short[]? ProcessedData = NoteFinderCommon.GetBufferToWrite(out int NFBufferRef);
+            short[]? ProcessedData = this.NoteFinder.GetBufferToWrite(out int NFBufferRef);
             if (ProcessedData == null) { return; }
             Debug.Assert(framesIn <= ProcessedData.Length); // TODO: Handle this properly (if needed?)
 
@@ -78,9 +87,8 @@ namespace ColorChord.NET.Sources
                 ProcessedData[Frame] = (short)Sample;
             }
 
-            NoteFinderCommon.FinishBufferWrite(NFBufferRef, (uint)framesIn);
-            NoteFinderCommon.LastDataAdd = DateTime.UtcNow;
-            NoteFinderCommon.InputDataEvent.Set();
+            this.NoteFinder.FinishBufferWrite(NFBufferRef, (uint)framesIn);
+            this.NoteFinder.InputDataEvent.Set();
         }
 
         [StructLayout(LayoutKind.Sequential)]

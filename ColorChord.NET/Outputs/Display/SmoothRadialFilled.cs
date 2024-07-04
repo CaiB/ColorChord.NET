@@ -8,12 +8,15 @@ using System;
 using System.Collections.Generic;
 using OpenTK.Graphics.ES30;
 using OpenTK.Mathematics;
+using ColorChord.NET.API.NoteFinder;
+using ColorChord.NET.Visualizers;
 
 namespace ColorChord.NET.Outputs.Display
 {
     public class SmoothRadialFilled : IDisplayMode, IConfigurableAttr
     {
         private readonly DisplayOpenGL HostWindow;
+        private readonly BaseNoteFinder BaseNF; // TODO: Generalize this
 
         private Shader? Shader;
 
@@ -61,7 +64,8 @@ namespace ColorChord.NET.Outputs.Display
         public SmoothRadialFilled(DisplayOpenGL parent, IVisualizer visualizer, Dictionary<string, object> config)
         {
             this.HostWindow = parent;
-            if (ColorChord.NoteFinder is not BaseNoteFinder) { throw new Exception("SmoothRadialFilled currently only works with the BaseNoteFinder."); }
+            if (parent.NoteFinder is not BaseNoteFinder NoteFinderInst) { throw new Exception($"{nameof(SmoothRadialFilled)} currently only works with the {nameof(BaseNoteFinder)}."); }
+            this.BaseNF = NoteFinderInst;
             Configurer.Configure(this, config);
         }
 
@@ -78,8 +82,8 @@ namespace ColorChord.NET.Outputs.Display
 
             for (int i = 0; i < 12; i++)
             {
-                Means[i] = BaseNoteFinder.NoteDistributions[i].Mean / 2; // TODO: This seems like a bad idea. Refer to the data properly.
-                Ampls[i] = BaseNoteFinder.NoteDistributions[i].Amplitude * this.Amplify;
+                Means[i] = this.BaseNF.NoteDistributions[i].Mean / 2; // TODO: This seems like a bad idea. Refer to the data properly.
+                Ampls[i] = this.BaseNF.NoteDistributions[i].Amplitude * this.Amplify;
             }
 
             GL.Uniform1(this.LocationAmplitudes, 12, Ampls);

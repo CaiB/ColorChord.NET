@@ -7,15 +7,14 @@ using ColorChord.NET.Config;
 using ColorChord.NET.NoteFinder;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ColorChord.NET.Visualizers;
 
 public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
 {
     public string Name { get; private init; }
+
+    public NoteFinderCommon NoteFinder { get; private init; }
 
     [ConfigFloat("TimePeriod", -1000000, 1000000, 100)]
     private float TimePeriod = 100F;
@@ -28,20 +27,21 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
     {
         this.Name = name;
         Configurer.Configure(this, config);
-        this.Data = new uint[ColorChord.NoteFinder.AllBinValues.Length];
+        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(NoteFinderPassthrough)} could not find NoteFinder to attach to.");
+        this.Data = new uint[this.NoteFinder.AllBinValues.Length];
     }
 
     public void Start()
     {
-        ((ShinNoteFinder)ColorChord.NoteFinder).AddTimingReceiver(GetData, this.TimePeriod);
+        (this.NoteFinder as Gen2NoteFinder)?.AddTimingReceiver(GetData, this.TimePeriod); // TODO: Generalize
     }
 
     public void GetData()
     {
-        ReadOnlySpan<float> RawData = ColorChord.NoteFinder.AllBinValues;
+        ReadOnlySpan<float> RawData = this.NoteFinder.AllBinValues;
         if (this.Data.Length != RawData.Length) { this.Data = new uint[RawData.Length]; }
-        for (int i = 0; i < RawData.Length; i++) { this.Data[i] = VisualizerTools.CCToRGB((i % 24) / 24F, 1F, MathF.Pow(RawData[i] * 2.5F, 3F)); }
-        foreach(IOutput Out in this.Outputs) { Out.Dispatch(); }
+        for (int i = 0; i < RawData.Length; i++) { this.Data[i] = VisualizerTools.CCToRGB((i % 24) / 24F, 1F, MathF.Pow(RawData[i] * 4.5F, 2F)); }
+        foreach (IOutput Out in this.Outputs) { Out.Dispatch(); }
     }
 
     public void AttachOutput(IOutput output) => this.Outputs.Add(output);

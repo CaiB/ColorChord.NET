@@ -31,6 +31,8 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> Where we are getting the colour data from. </summary>
         private IDiscrete1D DataSource;
 
+        private readonly BaseNoteFinder BaseNF; // TODO: Generalize this
+
         /// <summary> Shader for rending the tube. </summary>
         private Shader? TubeShader;
 
@@ -87,7 +89,8 @@ namespace ColorChord.NET.Outputs.Display
                 Log.Error("Tube cannot use the provided visualizer, as it does not output 1D discrete data.");
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IDiscrete1D.");
             }
-            if (ColorChord.NoteFinder is not BaseNoteFinder) { throw new Exception("Tube currently only supports BaseNoteFinder."); }
+            if (parent.NoteFinder is not BaseNoteFinder BaseNoteFinderInst) { throw new Exception($"{nameof(Tube)} currently only supports {nameof(BaseNoteFinder)}."); }
+            this.BaseNF = BaseNoteFinderInst;
             this.HostWindow = parent;
             this.DataSource = (IDiscrete1D)visualizer;
             this.TubeResolution = this.DataSource.GetCountDiscrete(); // TODO: Handle this changing
@@ -111,9 +114,9 @@ namespace ColorChord.NET.Outputs.Display
             if (this.NewLines == TUBE_LENGTH) { return; }
 
             // Get newest low-frequency data, and reset the accumulator.
-            float LowFreqData = BaseNoteFinder.LastLowFreqSum / (1 + BaseNoteFinder.LastLowFreqCount);
-            BaseNoteFinder.LastLowFreqSum = 0;
-            BaseNoteFinder.LastLowFreqCount = 0;
+            float LowFreqData = this.BaseNF.LastLowFreqSum / (1 + this.BaseNF.LastLowFreqCount);
+            this.BaseNF.LastLowFreqSum = 0;
+            this.BaseNF.LastLowFreqCount = 0;
 
             // Strong IIR for keeping an average of the low-frequency content to compare against for finding the beats
             const float IIR_HIST = 0.9F;

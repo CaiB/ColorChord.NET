@@ -35,6 +35,8 @@ namespace ColorChord.NET.Outputs.Display
         /// <summary> The window we are running in. </summary>
         private readonly DisplayOpenGL HostWindow;
 
+        private readonly BaseNoteFinder BaseNF; // TODO: Generalize this
+
         /// <summary> Where we are getting the colour data from. </summary>
         private readonly IDiscrete1D DataSource;
 
@@ -79,7 +81,8 @@ namespace ColorChord.NET.Outputs.Display
                 Log.Error("Radar cannot use the provided visualizer, as it does not output 1D discrete data.");
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IDiscrete1D.");
             }
-            if (ColorChord.NoteFinder is not BaseNoteFinder) { throw new Exception("Radar currently only supports BaseNoteFinder."); }
+            if (parent.NoteFinder is not BaseNoteFinder BaseNoteFinderInst) { throw new Exception($"{nameof(Radar)} currently only supports {nameof(BaseNoteFinder)}."); }
+            this.BaseNF = BaseNoteFinderInst;
             Configurer.Configure(this, config);
             this.HostWindow = parent;
             this.DataSource = (IDiscrete1D)visualizer;
@@ -197,9 +200,9 @@ namespace ColorChord.NET.Outputs.Display
             // TODO: MOVE THIS OUT INTO COMMON-USE OBJECT (Visualizer?)
 
             // Get newest low-frequency data, and reset the accumulator.
-            float LowFreqData = BaseNoteFinder.LastLowFreqSum / (1 + BaseNoteFinder.LastLowFreqCount);
-            BaseNoteFinder.LastLowFreqSum = 0;
-            BaseNoteFinder.LastLowFreqCount = 0;
+            float LowFreqData = this.BaseNF.LastLowFreqSum / (1 + this.BaseNF.LastLowFreqCount);
+            this.BaseNF.LastLowFreqSum = 0;
+            this.BaseNF.LastLowFreqCount = 0;
 
             // Strong IIR for keeping an average of the low-frequency content to compare against for finding the beats
             const float IIR_HIST = 0.9F;

@@ -11,7 +11,9 @@ namespace ColorChord.NET.Extensions.AudioFileSource;
 /// <remarks> Uses NAudio for reading, see their documentation for supported file formats. </remarks>
 public class AudioFile : IAudioSource
 {
-    internal static AudioFile? Instance { get; private set; }
+    private NoteFinderCommon? NoteFinder;
+
+    public string Name { get; private init; }
 
     /// <summary> The queue of audio files which remain to be read. Use <see cref="AddToQueue(string, bool)"/> to add items to the queue. </summary>
     /// <remarks> Items are removed just before they begin being read. </remarks>
@@ -23,22 +25,27 @@ public class AudioFile : IAudioSource
     /// <summary> Called synchronously just before reading of an audio file begins. </summary>
     public event EventHandler<string>? FileChanged;
 
+    private uint SampleRate;
+
     private Thread? ReadingThread;
     private bool KeepGoing = false;
 
     public AudioFile(string name, Dictionary<string, object> config)
     {
+        this.Name = name;
         const string CFG_FILE_NAME = "InputFiles";
         if (!config.TryGetValue(CFG_FILE_NAME, out object? FileNameObj)) { throw new Exception($"{CFG_FILE_NAME} is required for {nameof(AudioFile)}"); }
 
         if (FileNameObj is string[] FileNameArr) { this.FilesToRead = new(FileNameArr); }
         else if (FileNameObj is string FileName) { this.FilesToRead = new(1) { FileName }; }
         else { throw new Exception($"{CFG_FILE_NAME} is not valid, must be a string or string array of file names to read."); }
-
-        Instance = this;
     }
 
-    public void Start() { }
+    public void AttachNoteFinder(NoteFinderCommon noteFinder) => this.NoteFinder = noteFinder;
+
+    public void Start() => StartReading();
+
+    public uint GetSampleRate() => this.SampleRate;
 
     public void StartReading()
     {
@@ -59,7 +66,7 @@ public class AudioFile : IAudioSource
 
     private void ReadOnThread()
     {
-        while (this.KeepGoing && this.FilesToRead.Any())
+        while (this.NoteFinder != null && this.KeepGoing && this.FilesToRead.Any())
         {
             string NewFile = this.FilesToRead[0];
             this.FilesToRead.RemoveAt(0);
@@ -69,12 +76,13 @@ public class AudioFile : IAudioSource
 
             AudioFileReader InputStream = new(NewFile);
             int Channels = InputStream.WaveFormat.Channels;
-            // TODO: Set sample rate
+            this.SampleRate = (uint)InputStream.WaveFormat.SampleRate;
+            this.NoteFinder.SetSampleRate(InputStream.WaveFormat.SampleRate);
             float[] FloatBuffer = Array.Empty<float>();
             while (this.KeepGoing && InputStream.HasData(sizeof(float)))
             {
-                if (!NoteFinderCommon.IsBufferAvailableToWrite()) { Thread.Sleep(10); continue; }
-                short[]? Buffer = NoteFinderCommon.GetBufferToWrite(out int NFBufferID);
+                if (!this.NoteFinder.IsBufferAvailableToWrite()) { Thread.Sleep(10); continue; }
+                short[]? Buffer = this.NoteFinder.GetBufferToWrite(out int NFBufferID);
                 if (Buffer == null) { Thread.Sleep(10); continue; }
                 if (Buffer.Length * Channels > FloatBuffer.Length) { FloatBuffer = new float[Buffer.Length * Channels]; }
 
@@ -83,9 +91,8 @@ public class AudioFile : IAudioSource
                 uint Frames = (uint)(SamplesRead / Channels);
                 SampleConverter.FloatToShortMixdown(Channels, Frames, FloatBuffer, Buffer);
 
-                NoteFinderCommon.FinishBufferWrite(NFBufferID, Frames);
-                NoteFinderCommon.LastDataAdd = DateTime.UtcNow;
-                NoteFinderCommon.InputDataEvent.Set();
+                this.NoteFinder.FinishBufferWrite(NFBufferID, Frames);
+                this.NoteFinder.InputDataEvent.Set();
             }
             Log.Info("Audio file finished processing.");
             InputStream.Dispose();

@@ -16,6 +16,7 @@ namespace ColorChord.NET.Visualizers;
 public class DirectProminent : IVisualizer, IDiscrete1D
 {
     public string Name { get; private init; }
+    public NoteFinderCommon NoteFinder { get; private init; }
 
     [ConfigString("TimeSource", "this")]
     private string TimeSource { get; set; } = "this";
@@ -40,6 +41,7 @@ public class DirectProminent : IVisualizer, IDiscrete1D
     {
         this.Name = name;
         Configurer.Configure(this, config);
+        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(DirectProminent)} could not find NoteFinder to attach to.");
     }
 
     private void HookTimeSource()
@@ -70,16 +72,15 @@ public class DirectProminent : IVisualizer, IDiscrete1D
 
     public void Update()
     {
-        if (ColorChord.NoteFinder == null || ColorChord.NoteFinder.OctaveBinValues == null) { return; }
-        if (this.IsOwnTimeSource) { ColorChord.NoteFinder?.UpdateOutputs(); }
+        if (this.IsOwnTimeSource) { this.NoteFinder.UpdateOutputs(); }
 
         float MaxValue = 0F;
         int MaxIndex = 0;
-        for (int i = 0; i < ColorChord.NoteFinder.OctaveBinValues.Length; i++)
+        for (int i = 0; i < this.NoteFinder.OctaveBinValues.Length; i++)
         {
-            if (MaxValue < ColorChord.NoteFinder.OctaveBinValues[i])
+            if (MaxValue < this.NoteFinder.OctaveBinValues[i])
             {
-                MaxValue = ColorChord.NoteFinder.OctaveBinValues[i];
+                MaxValue = this.NoteFinder.OctaveBinValues[i];
                 MaxIndex = i;
             }
         }
@@ -87,7 +88,7 @@ public class DirectProminent : IVisualizer, IDiscrete1D
         if (MaxValue == 0F) { this.Data[0] = 0; }
         else
         {
-            this.Data[0] = VisualizerTools.CCToRGB((float)MaxIndex / ColorChord.NoteFinder.OctaveBinValues.Length, 1F, MathF.Pow(MaxValue, this.SaturationExponent) * this.SaturationAmplifier);
+            this.Data[0] = VisualizerTools.CCToRGB((float)MaxIndex / this.NoteFinder.OctaveBinValues.Length, 1F, MathF.Pow(MaxValue, this.SaturationExponent) * this.SaturationAmplifier);
         }
 
         foreach (IOutput Output in this.Outputs) { Output.Dispatch(); }

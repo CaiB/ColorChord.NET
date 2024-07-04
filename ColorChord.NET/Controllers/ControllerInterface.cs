@@ -1,11 +1,12 @@
 ﻿using ColorChord.NET.API;
 using ColorChord.NET.API.Controllers;
+using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
+using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Visualizers;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using static ColorChord.NET.API.Controllers.ISetting;
 
 namespace ColorChord.NET.Controllers;
 
@@ -66,13 +67,13 @@ public class ControllerInterface : IControllerInterface
     {
         List<ISetting> Results = new();
 
-        if (ColorChord.Source is IControllableAttr ControllableSource)
+        foreach (IAudioSource Source in ColorChord.SourceInsts.Values)
         {
-            AddComponentSettingsToList(ControllableSource, Results, Component.Source, ColorChord.Source.GetType().Name);
+            if (Source is IControllableAttr ControllableSource) { AddComponentSettingsToList(ControllableSource, Results, Component.Source, Source.Name); }
         }
-        if (ColorChord.NoteFinder is IControllableAttr ControllableNoteFinder)
+        foreach (NoteFinderCommon NoteFinder in ColorChord.NoteFinderInsts.Values)
         {
-            AddComponentSettingsToList(ControllableNoteFinder, Results, Component.NoteFinder, ColorChord.NoteFinder.GetType().Name);
+            if (NoteFinder is IControllableAttr ControllableNoteFinder) { AddComponentSettingsToList(ControllableNoteFinder, Results, Component.NoteFinder, NoteFinder.Name); }
         }
         foreach (IVisualizer Visualizer in ColorChord.VisualizerInsts.Values)
         {

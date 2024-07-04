@@ -18,6 +18,8 @@ namespace ColorChord.NET.Outputs.Display
         private readonly DisplayOpenGL HostWindow;
         private readonly IContinuous1D DataSource;
 
+        private readonly BaseNoteFinder BaseNF; // TODO: Generalize this
+
         private Shader? Shader;
 
         [ConfigFloat("Size1", 0.0F, 10000.0F, 8.0F)]
@@ -58,9 +60,10 @@ namespace ColorChord.NET.Outputs.Display
                 Log.Error("NoiseField cannot be used with this visualizer, as it does not output 1D continuous data.");
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IContinuous1D.");
             }
-            if (ColorChord.NoteFinder is not BaseNoteFinder) { throw new Exception("NoiseField currently only supports BaseNoteFinder."); }
             this.HostWindow = parent;
             this.DataSource = (IContinuous1D)visualizer;
+            if (this.HostWindow.NoteFinder is not BaseNoteFinder BaseNoteFinder) { throw new Exception($"{nameof(NoiseField)} currently only supports {nameof(BaseNoteFinder)}."); }
+            this.BaseNF = BaseNoteFinder;
             Configurer.Configure(this, config);
         }
 
@@ -105,9 +108,9 @@ namespace ColorChord.NET.Outputs.Display
             // Beat detection
 
             // Get newest low-frequency data, and reset the accumulator.
-            float LowFreqData = BaseNoteFinder.LastLowFreqSum / (1 + BaseNoteFinder.LastLowFreqCount);
-            BaseNoteFinder.LastLowFreqSum = 0;
-            BaseNoteFinder.LastLowFreqCount = 0;
+            float LowFreqData = this.BaseNF.LastLowFreqSum / (1 + this.BaseNF.LastLowFreqCount);
+            this.BaseNF.LastLowFreqSum = 0;
+            this.BaseNF.LastLowFreqCount = 0;
 
             // Strong IIR for keeping an average of the low-frequency content to compare against for finding the beats
             const float IIR_HIST = 0.95F;

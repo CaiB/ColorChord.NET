@@ -5,11 +5,13 @@ namespace ColorChord.NET.API.NoteFinder;
 
 public abstract class NoteFinderCommon : IConfigurableAttr
 {
+    public abstract string Name { get; protected init; }
+
     /// <summary> When data was last added to the buffer. Used to detect idle state. </summary>
-    public static DateTime LastDataAdd { get; set; }
+    public DateTime LastDataAdd { get; private set; }
 
     /// <summary> The speed (in ms between runs) at which the note finder needs to run, set by the fastest visualizer. </summary>
-    public static uint ShortestPeriod { get; protected set; } = 100;
+    public uint ShortestPeriod { get; protected set; } = 100;
 
     /// <summary> The frequency spectrum data, before folding into a single octave. </summary>
     public abstract ReadOnlySpan<float> AllBinValues { get; }
@@ -23,7 +25,7 @@ public abstract class NoteFinderCommon : IConfigurableAttr
     /// <summary> Used to keep track of locations of notes that stay between frames in <see cref="Notes"/>, as that array's order may change. </summary>
     public abstract ReadOnlySpan<int> PersistentNoteIDs { get; }
 
-    public static AutoResetEvent InputDataEvent { get; protected set; } = new(false);
+    public AutoResetEvent InputDataEvent { get; protected set; } = new(false);
 
     /// <summary>How many note slots there are. Usually not all are in use.</summary>
     public abstract int NoteCount { get; } // TODO: Finish docs
@@ -41,10 +43,10 @@ public abstract class NoteFinderCommon : IConfigurableAttr
 
 
     private const int INTERMEDIATE_BUFFER_COUNT = 4;
-    private static readonly IntermediateBuffer[] IntermediateBuffers = new IntermediateBuffer[INTERMEDIATE_BUFFER_COUNT];
-    private static readonly int[] IntermediateBuffersToRead = new int[INTERMEDIATE_BUFFER_COUNT];
+    private readonly IntermediateBuffer[] IntermediateBuffers = new IntermediateBuffer[INTERMEDIATE_BUFFER_COUNT];
+    private readonly int[] IntermediateBuffersToRead = new int[INTERMEDIATE_BUFFER_COUNT];
 
-    public static void SetupBuffers()
+    public void SetupBuffers()
     {
         for (int i = 0; i < INTERMEDIATE_BUFFER_COUNT; i++)
         {
@@ -53,7 +55,7 @@ public abstract class NoteFinderCommon : IConfigurableAttr
         }
     }
 
-    public static short[]? GetBufferToWrite(out int bufferRef)
+    public short[]? GetBufferToWrite(out int bufferRef)
     {
         for (int i = 0; i < INTERMEDIATE_BUFFER_COUNT; i++)
         {
@@ -68,7 +70,7 @@ public abstract class NoteFinderCommon : IConfigurableAttr
         return null;
     }
 
-    public static short[]? GetBufferToRead(out int bufferRef, out uint amountToRead, out bool moreAvailable)
+    public short[]? GetBufferToRead(out int bufferRef, out uint amountToRead, out bool moreAvailable)
     {
         lock (IntermediateBuffersToRead)
         {
@@ -91,7 +93,7 @@ public abstract class NoteFinderCommon : IConfigurableAttr
         }
     }
 
-    public static bool IsBufferAvailableToWrite()
+    public bool IsBufferAvailableToWrite()
     {
         for (int i = 0; i < INTERMEDIATE_BUFFER_COUNT; i++)
         {
@@ -100,16 +102,17 @@ public abstract class NoteFinderCommon : IConfigurableAttr
         return false;
     }
 
-    public static void FinishBufferRead(int bufferRef)
+    public void FinishBufferRead(int bufferRef)
     {
         IntermediateBuffers[bufferRef].ReadMode = false;
     }
 
-    public static void FinishBufferWrite(int bufferRef, uint amountWritten)
+    public void FinishBufferWrite(int bufferRef, uint amountWritten)
     {
         if (bufferRef == -1) { return; }
         IntermediateBuffers[bufferRef].DataCount = amountWritten;
         IntermediateBuffers[bufferRef].ReadMode = true;
+        this.LastDataAdd = DateTime.UtcNow;
         lock (IntermediateBuffersToRead)
         {
             for (int i = 0; i < INTERMEDIATE_BUFFER_COUNT; i++)

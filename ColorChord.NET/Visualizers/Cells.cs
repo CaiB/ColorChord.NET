@@ -17,6 +17,8 @@ public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
     /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
     public string Name { get; private init; }
 
+    public NoteFinderCommon NoteFinder { get; private init; }
+
     /// <summary> The number of discrete points to be output. Usually equals the number of LEDs on a physical system. </summary>
     [Controllable(ConfigNames.LED_COUNT, 1)]
     [ConfigInt(ConfigNames.LED_COUNT, 1, 100000, 50)]
@@ -87,11 +89,12 @@ public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
     {
         this.Name = name;
         Configurer.Configure(this, config);
+        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(Cells)} could not find NoteFinder to attach to.");
         this.OutputData = new uint[this.LEDCount];
         this.LEDBinMapping = new int[this.LEDCount];
         this.LastChangeTime = new double[this.LEDCount];
-        this.NoteCount = ColorChord.NoteFinder!.NoteCount;
-        this.BinsPerOctave = ColorChord.NoteFinder!.BinsPerOctave;
+        this.NoteCount = this.NoteFinder.NoteCount;
+        this.BinsPerOctave = this.NoteFinder.BinsPerOctave;
     }
 
     public void Start()
@@ -99,7 +102,7 @@ public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
         this.KeepGoing = true;
         this.ProcessThread = new Thread(DoProcessing) { Name = "Cells " + this.Name };
         this.ProcessThread.Start();
-        ColorChord.NoteFinder!.AdjustOutputSpeed((uint)this.FramePeriod);
+        this.NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
     }
 
     public void Stop()
@@ -177,9 +180,9 @@ public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
             float TotalDesiredCount = 0; // How many LEDs we'd want on, taking into account the quantity for each colour
             for (int i = 0; i < NoteCount; i++)
             {
-                BinColours[i] = ColorChord.NoteFinder.Notes[i].Position / this.BinsPerOctave;
-                BinValuesSlow[i] = MathF.Pow(ColorChord.NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
-                BinValues[i] = MathF.Pow(ColorChord.NoteFinder.Notes[i].Amplitude, this.LightSiding);
+                BinColours[i] = this.NoteFinder.Notes[i].Position / this.BinsPerOctave;
+                BinValuesSlow[i] = MathF.Pow(this.NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
+                BinValues[i] = MathF.Pow(this.NoteFinder.Notes[i].Amplitude, this.LightSiding);
                 BinValuesSum += BinValuesSlow[i];
 
                 float DesiredCount = BinValuesSlow[i] * this.QtyAmp; // How many LEDs we'd like on for this colour

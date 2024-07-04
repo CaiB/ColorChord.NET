@@ -16,6 +16,7 @@ namespace ColorChord.NET.Outputs.Display
     {
         private readonly DisplayOpenGL HostWindow;
         private readonly IDiscrete1D DataSource;
+        private readonly BaseNoteFinder BaseNF; // TODO: Generalize this
 
         private Shader? RibbonShader, StarShader;
 
@@ -96,6 +97,8 @@ namespace ColorChord.NET.Outputs.Display
                 throw new InvalidOperationException("Incompatible visualizer. Must implement IDiscrete1D.");
             }
             this.HostWindow = hostWindow;
+            if (hostWindow.NoteFinder is not BaseNoteFinder BaseNoteFinderInst) { throw new Exception($"{nameof(ColorRibbon)} only supports {nameof(BaseNoteFinder)}."); }
+            this.BaseNF = BaseNoteFinderInst;
             Configurer.Configure(this, config);
             this.DataSource = (IDiscrete1D)visualizer;
             this.RibbonWidth = this.DataSource.GetCountDiscrete();
@@ -240,9 +243,9 @@ namespace ColorChord.NET.Outputs.Display
             // Beat detection
 
             // Get newest low-frequency data, and reset the accumulator.
-            float LowFreqData = BaseNoteFinder.LastLowFreqSum / (1 + BaseNoteFinder.LastLowFreqCount);
-            BaseNoteFinder.LastLowFreqSum = 0;
-            BaseNoteFinder.LastLowFreqCount = 0;
+            float LowFreqData = this.BaseNF.LastLowFreqSum / (1 + this.BaseNF.LastLowFreqCount);
+            this.BaseNF.LastLowFreqSum = 0;
+            this.BaseNF.LastLowFreqCount = 0;
 
             // Strong IIR for keeping an average of the low-frequency content to compare against for finding the beats
             const float IIR_HIST = 0.95F;
@@ -268,7 +271,7 @@ namespace ColorChord.NET.Outputs.Display
                     this.StarTextureData[i] = ColourData[i]; // TODO: Just use array.copy
                 }
                 this.NewLines = (this.NewLines + 1) % this.RibbonLength;
-                float AmplitudeNow = BaseNoteFinder.LastBinSum;
+                float AmplitudeNow = this.BaseNF.LastBinSum;
                 this.AmplitudeData[this.AmplitudeDataIndex] = AmplitudeNow;
                 this.AmplitudeDataIndex = (this.AmplitudeDataIndex + 1) % this.RibbonLength;
                 this.NewTexData = true;

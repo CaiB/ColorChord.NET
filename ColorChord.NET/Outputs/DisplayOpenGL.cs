@@ -4,6 +4,7 @@ using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Outputs.Display;
+using ColorChord.NET.API.Utility;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.Config;
 using OpenTK.Graphics.ES30;
@@ -18,11 +19,11 @@ using System.Runtime.InteropServices;
 
 namespace ColorChord.NET.Outputs
 {
-    [ThreadedInstance]
-    public class DisplayOpenGL : GameWindow, IOutput, IControllableAttr
+    public class DisplayOpenGL : GameWindow, IOutput, IControllableAttr, IThreadedInstance
     {
         private static readonly DebugProc DebugCallbackRef = DebugCallback; // Needed to prevent GC
 
+        public NoteFinderCommon NoteFinder { get; private init; }
         public IVisualizer Source { get; private set; }
 
         public string Name { get; private init; }
@@ -57,30 +58,30 @@ namespace ColorChord.NET.Outputs
 
         private readonly IDisplayMode? Display;
         private bool Stopping = false;
-
+        
         public DisplayOpenGL(string name, Dictionary<string, object> config) : base(GameWindowSettings.Default, SetupNativeWindow())
         {
             this.Name = name;
             this.Title = "ColorChord.NET: " + this.Name;
-            IVisualizer? Visualizer = Configurer.FindVisualizer(this, config);
-            if (Visualizer == null) { throw new InvalidOperationException($"{GetType().Name} cannot find visualizer to attach to"); }
+            IVisualizer? Visualizer = Configurer.FindVisualizer(config) ?? throw new InvalidOperationException($"{GetType().Name} cannot find visualizer to attach to");
             this.Source = Visualizer;
 
             Configurer.Configure(this, config);
+            this.NoteFinder = Configurer.FindNoteFinder(config) ?? this.Source.NoteFinder ?? throw new Exception($"{nameof(DisplayOpenGL)} {this.Name} could not find NoteFinder to get data from.");
             this.DefaultWidth = this.Width;
             this.DefaultHeight = this.Height;
 
-            if (config.ContainsKey("Modes")) // Make sure that everything else is configured before creating the modes!
+            if (config.TryGetValue("Modes", out object? ModesObj)) // Make sure that everything else is configured before creating the modes!
             {
-                Dictionary<string, object>[] ModeList = (Dictionary<string, object>[])config["Modes"];
+                Dictionary<string, object>[] ModeList = (Dictionary<string, object>[])ModesObj;
                 for (int i = 0; i < 1/*ModeList.Length*/; i++) // TODO: Add support for multiple modes.
                 {
-                    if (!ModeList[i].ContainsKey("Type")) { Log.Error("Mode at index " + i + " is missing \"Type\" specification."); continue; }
-                    this.Display = CreateMode("ColorChord.NET.Outputs.Display." + ModeList[i]["Type"], ModeList[i]);
-                    if (this.Display == null) { Log.Error("Failed to create display of type \"" + ModeList[i]["Type"] + "\" under \"" + this.Name + "\"."); }
+                    if (!ModeList[i].TryGetValue(ConfigNames.TYPE, out object? TypeObj)) { Log.Error($"Mode at index {i} is missing \"{ConfigNames.TYPE}\" specification."); continue; }
+                    this.Display = CreateMode("ColorChord.NET.Outputs.Display." + TypeObj, ModeList[i]);
+                    if (this.Display == null) { Log.Error($"Failed to create display of type \"{TypeObj}\" under \"{this.Name}\"."); }
                 }
                 if (ModeList.Length > 1) { Log.Warn("Config specifies multiple modes. This is not yet supported, so only the first one will be used."); }
-                Log.Info("Finished reading display modes under \"" + this.Name + "\".");
+                Log.Info($"Finished reading display modes under \"{this.Name}\".");
             }
 
             this.Source.AttachOutput(this);
@@ -93,12 +94,14 @@ namespace ColorChord.NET.Outputs
             return Output;
         }
 
-        public void Start()
+        public void InstThreadPostInit()
         {
             if (!this.Enabled) { return; }
             this.IsVisible = true;
             Run();
         }
+
+        public void Start() { }
 
         public void Stop() => this.Stopping = true;
 
@@ -145,7 +148,7 @@ namespace ColorChord.NET.Outputs
         protected override void OnRenderFrame(FrameEventArgs evt)
         {
             if (this.Stopping) { this.Display?.Close(); return; }
-            ColorChord.NoteFinder?.UpdateOutputs();
+            this.NoteFinder.UpdateOutputs();
             GL.Clear(ClearBufferMask.ColorBufferBit);
 
             this.Display?.Render();
