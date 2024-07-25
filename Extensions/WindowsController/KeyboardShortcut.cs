@@ -1,12 +1,12 @@
 ﻿using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
+using ColorChord.NET.API.Utility;
 using System;
 
 namespace ColorChord.NET.Extensions.WindowsController
 {
-    [ThreadedInstance]
-    public class KeyboardShortcut : Controller
+    public class KeyboardShortcut : Controller, IThreadedInstance
     {
         private static MessageHandler? WindowsInterface;
         private Dictionary<string, ISetting> Targets = new();
@@ -79,7 +79,9 @@ namespace ColorChord.NET.Extensions.WindowsController
             return (Modifiers, Key, Valid);
         }
 
-        public override void Start()
+        public override void Start() { }
+
+        public void InstThreadPostInit()
         {
             WindowsInterface!.SetCallback(HandleShortcut);
             WindowsInterface!.Start();
