@@ -40,7 +40,7 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
     {
         ReadOnlySpan<float> RawData = this.NoteFinder.AllBinValues;
         if (this.Data.Length != RawData.Length) { this.Data = new uint[RawData.Length]; }
-        for (int i = 0; i < RawData.Length; i++) { this.Data[i] = VisualizerTools.CCToRGB((i % 24) / 24F, 1F, MathF.Pow(RawData[i] * 4.5F, 2F)); }
+        for (int i = 0; i < RawData.Length; i++) { this.Data[i] = VisualizerTools.CCToRGB((float)i / this.NoteFinder.BinsPerOctave, 1F, MathF.Pow(RawData[i] * 4.5F, 2F)); }
         foreach (IOutput Out in this.Outputs) { Out.Dispatch(); }
     }
 

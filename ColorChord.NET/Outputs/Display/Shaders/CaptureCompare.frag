@@ -50,11 +50,13 @@ void main()
     {
         if (TexCoord.y < 0.5) // A
         {
+            //                                                 1.0~0.5           0.5~1.0  -      0        0.5        -                         * 
             TextureColour = texture(TextureUnitALive, (vec2(1.0 - TexCoord.y, TexCoord.x) - vec2(0.0, HorizontalSplit - (AdvanceALive / 2.0))) * vec2(2.0, 1.0 / (1.0 - HorizontalSplit)));
         }
         else // B
         {
-            TextureColour = texture(TextureUnitBLive, (TexCoord - vec2(HorizontalSplit, 0.5)) * vec2(1.0 / (1.0 - HorizontalSplit), 2.0));
+            //                                                 
+            TextureColour = texture(TextureUnitBLive, (vec2(1.0 - TexCoord.y, TexCoord.x) - vec2(0.5, HorizontalSplit - (AdvanceALive / 2.0))) * vec2(2.0, 1.0 / (1.0 - HorizontalSplit)));
         }
     }
     

@@ -53,4 +53,10 @@ public interface IConfigurer
     /// <param name="config">The config section of a component which needs to find a controller, the <see cref="ConfigNames.CONTROLLER_NAME"/> key will be used to find it by name.</param>
     /// <returns>The controller instance if it was found, null otherwise.</returns>
     public Controller? FindController(Dictionary<string, object> config);
+
+    /// <summary>Finds a specific component by its name. More specific methods of this interface should be preferred in most cases.</summary>
+    /// <param name="componentType">The type of component to find</param>
+    /// <param name="componentName">The "Name" parameter of that component to search for, ignored in the case of <see cref="Component.Source"/> or <see cref="Component.NoteFinder"/> if there is only 1 loaded of that type.</param>
+    /// <returns>THe component if found, null otherwise</returns>
+    public object? FindComponentByName(Component componentType, string componentName);
 }

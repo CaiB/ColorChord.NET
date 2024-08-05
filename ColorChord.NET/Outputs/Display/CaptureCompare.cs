@@ -1,21 +1,25 @@
 ﻿using ColorChord.NET.API;
+using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Outputs.Display;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
+using ColorChord.NET.Config;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using System;
+using System.Collections.Generic;
 
 namespace ColorChord.NET.Outputs.Display;
 
-public class CaptureCompare : IDisplayMode
+public class CaptureCompare : IDisplayMode, IConfigurableAttr
 {
     private readonly DisplayOpenGL HostWindow;
     private readonly IDiscrete1D DataSourceA, DataSourceB;
 
-    private const int TEX_HEIGHT = 128;
+    [ConfigInt("HistoryLength", 16, 16384, 768)]
+    private int TextureHeight = 768;
 
     private Shader? Shader;
 
@@ -44,11 +48,17 @@ public class CaptureCompare : IDisplayMode
        -1F,  1F, 0F, 0F
     };
 
-    public CaptureCompare(DisplayOpenGL parent, IVisualizer visualizer)
+    public CaptureCompare(DisplayOpenGL parent, IVisualizer visualizer, Dictionary<string, object> config)
     {
         this.HostWindow = parent;
         this.DataSourceA = visualizer as IDiscrete1D ?? throw new Exception($"{nameof(CaptureCompare)} cannot use the provided visualizer, as it doesn't support {nameof(IDiscrete1D)} output mode.");
-        this.DataSourceB = this.DataSourceA; // TODO: Actually read the second one
+        
+        IDiscrete1D? DataSourceBTemp = null;
+        if (config.TryGetValue("SecondaryVisualizer", out object? SecondVizNameObj) && SecondVizNameObj is string SecondVizName) { DataSourceBTemp = Configurer.FindComponentByName(Component.Visualizers, SecondVizName) as IDiscrete1D; }
+        if (DataSourceBTemp == null) { Log.Warn($"{nameof(CaptureCompare)} could not find the secondary visualizer, and is instead using the primary one for both inputs. You may set it using \"SecondaryVisualizer\"."); }
+        this.DataSourceB = DataSourceBTemp ?? this.DataSourceA;
+        config.Remove("SecondaryVisualizer");
+        Configurer.Configure(this, config);
     }
 
     public void Load()
@@ -67,13 +77,13 @@ public class CaptureCompare : IDisplayMode
         this.TextureHandleCaptureB = GL.GenTexture();
         this.TextureWidthA = this.DataSourceA.GetCountDiscrete();
         this.TextureWidthB = this.DataSourceB.GetCountDiscrete();
-        this.NewTextureDataA = new uint[this.TextureWidthA * TEX_HEIGHT];
-        this.NewTextureDataB = new uint[this.TextureWidthB * TEX_HEIGHT];
+        this.NewTextureDataA = new uint[this.TextureWidthA * TextureHeight];
+        this.NewTextureDataB = new uint[this.TextureWidthB * TextureHeight];
 
         // Activate texture
         GL.ActiveTexture(TextureUnit.Texture0);
         GL.BindTexture(TextureTarget.Texture2D, this.TextureHandleA);
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.TextureWidthA, TEX_HEIGHT, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataA);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.TextureWidthA, TextureHeight, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataA);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
@@ -81,7 +91,7 @@ public class CaptureCompare : IDisplayMode
 
         GL.ActiveTexture(TextureUnit.Texture1);
         GL.BindTexture(TextureTarget.Texture2D, this.TextureHandleB);
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.TextureWidthB, TEX_HEIGHT, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataB);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.TextureWidthB, TextureHeight, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataB);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
@@ -89,7 +99,7 @@ public class CaptureCompare : IDisplayMode
 
         GL.ActiveTexture(TextureUnit.Texture2);
         GL.BindTexture(TextureTarget.Texture2D, this.TextureHandleCaptureA);
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.TextureWidthA, TEX_HEIGHT, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataA);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.TextureWidthA, TextureHeight, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataA);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
@@ -97,7 +107,7 @@ public class CaptureCompare : IDisplayMode
 
         GL.ActiveTexture(TextureUnit.Texture3);
         GL.BindTexture(TextureTarget.Texture2D, this.TextureHandleCaptureB);
-        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.TextureWidthB, TEX_HEIGHT, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataB);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, this.TextureWidthB, TextureHeight, 0, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataB);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Nearest);
         GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
@@ -139,17 +149,28 @@ public class CaptureCompare : IDisplayMode
     public void Dispatch()
     {
         if (!this.SetupDone) { return; }
-        bool IsFromA = true;
-        IDiscrete1D Source = IsFromA ? this.DataSourceA : this.DataSourceB;
 
-        int Count = Source.GetCountDiscrete();
-        uint[] Data = Source.GetDataDiscrete();
-        if (PopulatedTextureLocA == TEX_HEIGHT - 1) { return; } // Drop this data, we are too behind
-        lock (NewTextureDataA)
         {
-            Array.Copy(Data, 0, NewTextureDataA, PopulatedTextureLocA * TextureWidthA, Count);
-            PopulatedTextureLocA++;
+            int Count = this.DataSourceA.GetCountDiscrete();
+            uint[] Data = this.DataSourceA.GetDataDiscrete();
+            if (this.PopulatedTextureLocA >= TextureHeight - 1) { return; } // Drop this data, we are too behind
+            lock (this.NewTextureDataA)
+            {
+                Array.Copy(Data, 0, this.NewTextureDataA, this.PopulatedTextureLocA * TextureWidthA, Count);
+                this.PopulatedTextureLocA++;
+            }
         }
+        {
+            int Count = this.DataSourceB.GetCountDiscrete();
+            uint[] Data = this.DataSourceB.GetDataDiscrete();
+            if (this.PopulatedTextureLocB >= TextureHeight - 1) { return; } // Drop this data, we are too behind
+            lock (this.NewTextureDataB)
+            {
+                Array.Copy(Data, 0, this.NewTextureDataB, this.PopulatedTextureLocB * TextureWidthB, Count);
+                this.PopulatedTextureLocB++;
+            }
+        }
+
         this.NewData = true;
     }
 
@@ -163,30 +184,57 @@ public class CaptureCompare : IDisplayMode
             if (this.PopulatedTextureLocA != 0)
             {
                 GL.ActiveTexture(TextureUnit.Texture0);
-                lock (NewTextureDataA)
+                lock (this.NewTextureDataA)
                 {
-                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.UploadedTextureLocA, this.TextureWidthA, this.PopulatedTextureLocA, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataA);
-                    this.UploadedTextureLocA = (this.UploadedTextureLocA + this.PopulatedTextureLocA) % TEX_HEIGHT;
-                    GL.Uniform1(this.LocationAdvanceALive, (float)this.UploadedTextureLocA / TEX_HEIGHT);
+                    if (this.UploadedTextureLocA + this.PopulatedTextureLocA < TextureHeight)
+                    {
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.UploadedTextureLocA, this.TextureWidthA, this.PopulatedTextureLocA, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataA);
+                    }
+                    else
+                    {
+                        int BottomCount = TextureHeight - this.UploadedTextureLocA;
+                        int TopCount = this.PopulatedTextureLocA - BottomCount;
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.UploadedTextureLocA, this.TextureWidthA, BottomCount, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataA);
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, this.TextureWidthA, TopCount, PixelFormat.Rgba, PixelType.UnsignedByte, ref this.NewTextureDataA[this.TextureWidthA * BottomCount]);
+                    }
+                    this.UploadedTextureLocA = (this.UploadedTextureLocA + this.PopulatedTextureLocA) % TextureHeight;
+                    GL.Uniform1(this.LocationAdvanceALive, (float)this.UploadedTextureLocA / TextureHeight);
                     this.PopulatedTextureLocA = 0;
                 }
             }
             if (this.PopulatedTextureLocB != 0)
             {
-
+                GL.ActiveTexture(TextureUnit.Texture1);
+                lock (this.NewTextureDataB)
+                {
+                    if (this.UploadedTextureLocB + this.PopulatedTextureLocB < TextureHeight)
+                    {
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.UploadedTextureLocB, this.TextureWidthB, this.PopulatedTextureLocB, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataB);
+                    }
+                    else
+                    {
+                        int BottomCount = TextureHeight - this.UploadedTextureLocB;
+                        int TopCount = this.PopulatedTextureLocB - BottomCount;
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, this.UploadedTextureLocB, this.TextureWidthB, BottomCount, PixelFormat.Rgba, PixelType.UnsignedByte, this.NewTextureDataB);
+                        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, this.TextureWidthB, TopCount, PixelFormat.Rgba, PixelType.UnsignedByte, ref this.NewTextureDataB[this.TextureWidthB * BottomCount]);
+                    }
+                    this.UploadedTextureLocB = (this.UploadedTextureLocB + this.PopulatedTextureLocB) % TextureHeight;
+                    GL.Uniform1(this.LocationAdvanceBLive, (float)this.UploadedTextureLocB / TextureHeight);
+                    this.PopulatedTextureLocB = 0;
+                }
             }
         }
 
         if (this.DoCaptureA)
         {
-            GL.CopyImageSubData(this.TextureHandleA, ImageTarget.Texture2D, 0, 0, 0, 0, this.TextureHandleCaptureA, ImageTarget.Texture2D, 0, 0, 0, 0, this.TextureWidthA, TEX_HEIGHT, 1);
-            GL.Uniform1(this.LocationAdvanceACapture, (float)this.UploadedTextureLocA / TEX_HEIGHT);
+            GL.CopyImageSubData(this.TextureHandleA, ImageTarget.Texture2D, 0, 0, 0, 0, this.TextureHandleCaptureA, ImageTarget.Texture2D, 0, 0, 0, 0, this.TextureWidthA, TextureHeight, 1);
+            GL.Uniform1(this.LocationAdvanceACapture, (float)this.UploadedTextureLocA / TextureHeight);
             this.DoCaptureA = false;
         }
         if (this.DoCaptureB)
         {
-            GL.CopyImageSubData(this.TextureHandleA, ImageTarget.Texture2D, 0, 0, 0, 0, this.TextureHandleCaptureB, ImageTarget.Texture2D, 0, 0, 0, 0, this.TextureWidthA, TEX_HEIGHT, 1);
-            GL.Uniform1(this.LocationAdvanceBCapture, (float)this.UploadedTextureLocA / TEX_HEIGHT);
+            GL.CopyImageSubData(this.TextureHandleB, ImageTarget.Texture2D, 0, 0, 0, 0, this.TextureHandleCaptureB, ImageTarget.Texture2D, 0, 0, 0, 0, this.TextureWidthB, TextureHeight, 1);
+            GL.Uniform1(this.LocationAdvanceBCapture, (float)this.UploadedTextureLocB / TextureHeight);
             this.DoCaptureB = false;
         }
 

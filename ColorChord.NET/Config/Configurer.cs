@@ -25,6 +25,7 @@ public sealed class ConfigurerInst : IConfigurer
     public IVisualizer? FindVisualizer(IOutput target, Dictionary<string, object> config, Type acceptableFormat) => Configurer.FindVisualizer(target, config, acceptableFormat);
     public IOutput? FindOutput(Dictionary<string, object> config) => Configurer.FindOutput(config);
     public Controller? FindController(Dictionary<string, object> config) => Configurer.FindController(config);
+    public object? FindComponentByName(Component componentType, string componentName) => Configurer.FindComponentByName(componentType, componentName);
 }
 
 public static class Configurer
@@ -260,6 +261,44 @@ public static class Configurer
     {
         if (!config.TryGetValue(CONTROLLER_NAME, out object? ControllerNameObj) || !ColorChord.ControllerInsts.TryGetValue((string)ControllerNameObj, out Controller? Controller)) { return null; }
         return Controller;
+    }
+
+    /// <summary>Finds a specific component by its name. More specific methods of this interface should be preferred in most cases.</summary>
+    /// <param name="componentType">The type of component to find</param>
+    /// <param name="componentName">The "Name" parameter of that component to search for, ignored in the case of <see cref="Component.Source"/> or <see cref="Component.NoteFinder"/> if there is only 1 loaded of that type.</param>
+    /// <returns>THe component if found, null otherwise</returns>
+    public static object? FindComponentByName(Component componentType, string componentName)
+    {
+        if (componentType == Component.Source)
+        {
+            IAudioSource? Source;
+            if (ColorChord.SourceInsts.Count == 1) { Source = ColorChord.SourceInsts.First().Value; }
+            else { ColorChord.SourceInsts.TryGetValue(componentName, out Source); }
+            return Source;
+        }
+        else if (componentType == Component.NoteFinder)
+        {
+            NoteFinderCommon? NoteFinder;
+            if (ColorChord.NoteFinderInsts.Count == 1) { NoteFinder = ColorChord.NoteFinderInsts.First().Value; }
+            else { ColorChord.NoteFinderInsts.TryGetValue(componentName, out NoteFinder); }
+            return NoteFinder;
+        }
+        else if (componentType == Component.Visualizers)
+        {
+            ColorChord.VisualizerInsts.TryGetValue(componentName, out IVisualizer? Visualizer);
+            return Visualizer;
+        }
+        else if (componentType == Component.Outputs)
+        {
+            ColorChord.OutputInsts.TryGetValue(componentName, out IOutput? Output);
+            return Output;
+        }
+        else if (componentType == Component.Controllers)
+        {
+            ColorChord.ControllerInsts.TryGetValue(componentName, out Controller? Controller);
+            return Controller;
+        }
+        return null;
     }
 
     /// <summary>Checks the config to see if a reasonable value is provided, otherwise uses the default and outputs a warning.</summary>
