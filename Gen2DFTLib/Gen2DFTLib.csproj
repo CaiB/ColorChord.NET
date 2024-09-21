@@ -8,6 +8,8 @@
 	<PublishAot>true</PublishAot>
 	<DefineConstants>STANDALONE_DFT_LIB</DefineConstants>
 	<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+	<IlcInstructionSet>native</IlcInstructionSet>
+	<IlcDisableReflection>true</IlcDisableReflection>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

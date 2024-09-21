@@ -3,7 +3,6 @@ using ColorChord.NET.API.Config;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Sources;
 using ColorChord.NET.Config;
-using ColorChord.NET.Outputs;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -46,6 +45,10 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
     /// <summary> The frequencies (in Hz) of each of the raw bins in <see cref="AllBinValues"/>. </summary>
     public ReadOnlySpan<float> BinFrequencies => this.DFT.RawBinFrequencies;
 
+    private float AllBinMax = 0.01F, AllBinMaxSmoothed = 0.01F;
+
+    public float[] AllBinValuesScaled;
+
     public byte[] PeakBits, WidebandBits;
     private byte[] AllowedBinWidths;
 
@@ -87,6 +90,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
         AllowedBinWidths = new byte[BinCount];
         PreviousBinValues = new float[BinCount];
         RecentBinChanges = new float[BinCount];
+        AllBinValuesScaled = new float[BinCount];
 
         for (int i = 0; i < AllowedBinWidths.Length; i++) { AllowedBinWidths[i] = (byte)MathF.Max(4F, 1.5F * MathF.Ceiling(this.DFT.RawBinWidths[i])); }
     }
@@ -166,6 +170,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
         for (int i = 0; i < WidebandBitsPacked.Length; i++) { WidebandBitsPacked[i] = 0; }
 
         Debug.Assert(((RawBinValuesPadded.Length - 2) % 8) == 0, "Bin count must be a multiple of 8"); // TODO: Add non-SIMD version to avoid this
+        Vector256<float> BinMaxIntermediate = Vector256<float>.Zero;
         for (int Step = 0; Step <= RawBinValuesPadded.Length - 10; Step += 8)
         {
             Vector256<float> LeftValues = Vector256.LoadUnsafe(ref RawBinValuesPadded[Step]); // TODO: Is there a better way to do this?
@@ -191,6 +196,18 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
             Vector256<float> NewRecentChange = Avx.Add(Avx.Multiply(Vector256.Create(RECENT_BIN_CHANGE_IIR), OldRecentChange), Avx.Multiply(Vector256.Create(RecentBinChangeIIRb), AbsDiffFromPrev));
             NewRecentChange.StoreUnsafe(ref RecentBinChanges[Step]);
             MiddleValues.StoreUnsafe(ref PreviousBinValues[Step]);
+            BinMaxIntermediate = Avx.Max(BinMaxIntermediate, MiddleValues);
+        }
+        Vector128<float> BinMaxCondense1 = Sse.Max(BinMaxIntermediate.GetLower(), BinMaxIntermediate.GetUpper());
+        float NewAllBinMax = MathF.Max(MathF.Max(BinMaxCondense1[0], BinMaxCondense1[1]), MathF.Max(BinMaxCondense1[2], BinMaxCondense1[3]));
+        this.AllBinMaxSmoothed = this.AllBinMax < NewAllBinMax ? (this.AllBinMax * 0.8F) + (NewAllBinMax * 0.2F) : (this.AllBinMax * 0.995F) + (NewAllBinMax * 0.005F);
+        this.AllBinMax = Math.Max(0.01F, AllBinMaxSmoothed);
+
+        for (int Step = 0; Step < AllBinValuesScaled.Length; Step += 8)
+        {
+            Vector256<float> MiddleValues = Vector256.LoadUnsafe(ref RawBinValuesPadded[Step + 1]);
+            Vector256<float> Scaled = Avx.Divide(MiddleValues, Vector256.Create(this.AllBinMaxSmoothed * 2.2F));
+            Scaled.StoreUnsafe(ref AllBinValuesScaled[Step]);
         }
 
         for (int Outer = 0; Outer < PeakBitsPacked.Length; Outer++)

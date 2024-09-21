@@ -120,15 +120,17 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         this.Shader!.Use();
 
         if (this.RawDataIn.Length != this.NoteFinder.AllBinValues.Length * 2) { this.RawDataIn = new float[this.NoteFinder.AllBinValues.Length * 2]; }
-        this.NoteFinder.AllBinValues.CopyTo(this.RawDataIn);
         if (this.G2NoteFinder != null)
         {
+            this.G2NoteFinder.AllBinValuesScaled.CopyTo(this.RawDataIn.AsSpan());
             this.G2NoteFinder.RecentBinChanges.CopyTo(this.RawDataIn, this.NoteFinder.AllBinValues.Length);
             GL.ActiveTexture(TextureUnit.Texture1);
             GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R8ui, this.NoteFinder.AllBinValues.Length / 8, 1, 0, PixelFormat.RedInteger, PixelType.UnsignedByte, this.G2NoteFinder.PeakBits);
             GL.ActiveTexture(TextureUnit.Texture2);
             GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R8ui, this.NoteFinder.AllBinValues.Length / 8, 1, 0, PixelFormat.RedInteger, PixelType.UnsignedByte, this.G2NoteFinder.WidebandBits);
         }
+        else { this.NoteFinder.AllBinValues.CopyTo(this.RawDataIn); }
+
         GL.ActiveTexture(TextureUnit.Texture0);
         GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.R32f, this.NoteFinder.AllBinValues.Length, 2, 0, PixelFormat.Red, PixelType.Float, this.RawDataIn);
         GL.BindVertexArray(this.VertexArrayHandle);

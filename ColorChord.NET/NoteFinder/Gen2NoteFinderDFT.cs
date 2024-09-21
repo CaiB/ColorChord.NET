@@ -17,13 +17,13 @@ namespace ColorChord.NET.NoteFinder;
 /// subscribed to periodic events. Then, when a visualizer or other output mechanism wants to use the data, it will call <see cref="Gen2NoteFinder.UpdateOutputs"/>
 /// which in turn will call <see cref="CalculateOutput"/>. This will merge together all of the data that has been received since the last output cycle,
 /// apply loudness correction, and format it into <see cref="AllBinValues"/> and <see cref="OctaveBinValues"/> for feature extraction in <see cref="Gen2NoteFinder.UpdateOutputs"/>.
-internal sealed class Gen2NoteFinderDFT
+public sealed class Gen2NoteFinderDFT
 {
     private const bool ENABLE_SIMD = true;
     private const int MIN_WINDOW_SIZE = 16; // At 48KHz, scaled for other sample rates
     private const uint MAX_WINDOW_SIZE = 6144; // At 48KHz, scaled for other sample rates
     private const uint ABSOLUTE_MAX_WINDOW_SIZE = 32768; // Cannot exceed this regardless of sample rate, otherwise the accumulators may overflow
-    private const uint USHORT_RANGE = ushort.MaxValue + 1;
+    private const uint USHORT_RANGE = ((uint)ushort.MaxValue) + 1;
     private const uint BINS_PER_OCTAVE = 24;
 
     private const ushort SINE_TABLE_90_OFFSET = 8;
@@ -127,7 +127,7 @@ internal sealed class Gen2NoteFinderDFT
 
     /// <summary> The frequency in Hz of each raw bin. </summary>
     /// <remarks> This isn't used in the main algorithm, only for pre-calculation of some data, and to present to the user. </remarks>
-    internal float[] RawBinFrequencies { get; init; }
+    public float[] RawBinFrequencies { get; init; }
 
     /// <summary> The range, in number of bins, of each bin's sensitivity to input signals. </summary>
     /// <remarks> A bin width of 2 would imply that this bin stops detecting anything in approximately the middle of the directly adjacent bin in both directions (a range of this bin's middle +/- 1.0 bins). </remarks>
@@ -172,22 +172,11 @@ internal sealed class Gen2NoteFinderDFT
         {
             float BinFrequency;
             uint ThisBufferSize;
-            //if (Bin == 0)
-            //{
-                //BinFrequency = 1.5F + (2F * ((float)Bin / BINS_PER_OCTAVE));
-                //ThisBufferSize = (uint)MathF.Round(WindowSizeForBinWidth(0.5F, SampleRate));
-                //ThisBufferSize = Math.Min(ABSOLUTE_MAX_WINDOW_SIZE, ThisBufferSize);
-            //    BinFrequency = 75F;
-            //    ThisBufferSize = RoundedWindowSizeForBinWidth(110F, BinFrequency, SampleRate);
-            //}
-            //else
-            {
-                float ThisOctaveStart = StartFrequency * MathF.Pow(2, Bin / BINS_PER_OCTAVE);
-                BinFrequency = CalculateNoteFrequency(StartFrequency, BINS_PER_OCTAVE, Bin);
-                float NextBinFrequency = CalculateNoteFrequency(StartFrequency, BINS_PER_OCTAVE, Bin + 2);
-                //float IdealWindowSize = WindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq); // TODO: Add scale factor to shift this from no overlap to -3dB point
-                ThisBufferSize = RoundedWindowSizeForBinWidth(NextBinFrequency - BinFrequency, BinFrequency, SampleRate);
-            }
+            float ThisOctaveStart = StartFrequency * MathF.Pow(2, Bin / BINS_PER_OCTAVE);
+            BinFrequency = CalculateNoteFrequency(StartFrequency, BINS_PER_OCTAVE, Bin);
+            float NextBinFrequency = CalculateNoteFrequency(StartFrequency, BINS_PER_OCTAVE, Bin + 2);
+            //float IdealWindowSize = WindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq); // TODO: Add scale factor to shift this from no overlap to -3dB point
+            ThisBufferSize = RoundedWindowSizeForBinWidth(NextBinFrequency - BinFrequency, BinFrequency, SampleRate);
 
             RawBinWidths[Bin] = MathF.Log2((BinFrequency + BinWidthAtWindowSize(ThisBufferSize, SampleRate)) / BinFrequency) * BinsPerOctave;
 
@@ -201,16 +190,8 @@ internal sealed class Gen2NoteFinderDFT
             SinTableStepSize[Bin].NCLeft = (ushort)Math.Round(StepSizeNCL);
             SinTableStepSize[Bin].NCRight = (ushort)Math.Round(StepSizeNCR);
 
-            //if (Bin > 0)
-            {
-                LoudnessCorrectionFactors[Bin] = GetLoudnessCorrection(BinFrequency, LoudnessCorrectionAmount);
-                SmoothingFactors[Bin] = MathF.Min(MathF.Max(0.1F, IIR_CONST - ((6000 - (int)ThisBufferSize) * 0.00010F)), IIR_CONST);
-            }
-            //else
-            //{
-            //    SmoothingFactors[Bin] = 1F;
-            //    LoudnessCorrectionFactors[Bin] = 0.5F;
-            //}
+            LoudnessCorrectionFactors[Bin] = LoudnessCorrectionAmount == 0F ? 1F : GetLoudnessCorrection(BinFrequency, LoudnessCorrectionAmount);
+            SmoothingFactors[Bin] = MathF.Min(MathF.Max(0.1F, IIR_CONST - ((6000 - (int)ThisBufferSize) * 0.00008F)), IIR_CONST);
         }
         MaxPresentWindowSize = MaxAudioBufferSize;
 
@@ -247,6 +228,12 @@ internal sealed class Gen2NoteFinderDFT
         if (!ENABLE_SIMD) { Log.Warn("SIMD has been compile-time disabled in this build. Expect significantly decreased efficiency."); }
 #pragma warning restore CS0162 // Unreachable code detected
         if (!Avx2.IsSupported) { Log.Warn("Your CPU does not appear to support AVX2, this may lead to poor performance."); }
+#else
+        //Console.WriteLine("SSE? " + Sse.IsSupported);
+        //Console.WriteLine("SSE2? " + Sse2.IsSupported);
+        //Console.WriteLine("SSE4.2? " + Sse42.IsSupported);
+        //Console.WriteLine("AVX? " + Avx.IsSupported);
+        //Console.WriteLine("AVX2? " + Avx2.IsSupported);
 #endif
     }
 
@@ -637,6 +624,23 @@ internal sealed class Gen2NoteFinderDFT
         }
     }
 
+    /// <summary> Clears all data structures, resetting back to a state equivalent to not having received any data yet. </summary>
+    public void Clear()
+    {
+        for (int i = 0; i < AudioBuffer.Length; i++) { AudioBuffer[i] = 0; }
+        for (int i = 0; i < BinCount; i++)
+        {
+            SinProductAccumulators[i] = new();
+            CosProductAccumulators[i] = new();
+            ProductAccumulators[i] = Vector256<long>.Zero;
+            MergedSinOutputs[i] = 0;
+            MergedCosOutputs[i] = 0;
+            AllBinValues[i + 1] = 0;
+            RawBinMagnitudes[i] = 0;
+        }
+        for (int i = 0; i < BinsPerOctave; i++) { OctaveBinValues[i] = 0; }
+    }
+
     /// <summary> Calculates the sine value of 2 positions </summary>
     /// <remarks> Does not require any SIMD support, however is significantly slower than <see cref="GetSine256(Vector256{ushort})"/> </remarks>
     /// <param name="sineTablePosition"> The wave positions, where one full sweep through possible values gives 1 full wavelength </param>
@@ -710,10 +714,8 @@ internal sealed class Gen2NoteFinderDFT
         public override readonly string ToString() => $"2xI32 L={this.NCLeft}, R={this.NCRight}";
     }
 
-    // Everyone loves magic numbers :)
-    // These were determined through simulations and regressions, which can be found in the Simulations folder in the root of the ColorChord.NET repository. See Simulations/WindowSizeVsBinWidthWithSampleRate.m.
-    private static float BinWidthAtWindowSize(float windowSize, float sampleRate) => ((sampleRate * 1.0414032F) + 592.49176F) / (windowSize + ((sampleRate * 0.00022935479F) + 1.5730453F));
-    private static float WindowSizeForBinWidth(float binWidth, float sampleRate) => (((sampleRate * 1.0414032F) + 592.49176F) / binWidth) - ((sampleRate * 0.00022935479F) + 1.5730453F);
+    private static float BinWidthAtWindowSize(float windowSize, float sampleRate) => sampleRate / windowSize;
+    private static float WindowSizeForBinWidth(float binWidth, float sampleRate) => sampleRate / binWidth;
 
     private static uint RoundedWindowSizeForBinWidth(float binWidth, float frequency, float sampleRate)
     {
