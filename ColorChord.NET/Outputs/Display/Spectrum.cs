@@ -11,7 +11,7 @@ using System.Collections.Generic;
 
 namespace ColorChord.NET.Outputs.Display;
 
-public class ShinNFDebug : IDisplayMode, IConfigurableAttr
+public class Spectrum : IDisplayMode, IConfigurableAttr
 {
     private readonly DisplayOpenGL HostWindow;
     private readonly NoteFinderCommon NoteFinder;
@@ -43,11 +43,11 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
     /// <summary> Whether this output is ready to accept data and draw. </summary>
     private bool SetupDone = false;
 
-    public ShinNFDebug(DisplayOpenGL parent, IVisualizer visualizer, Dictionary<string, object> config)
+    public Spectrum(DisplayOpenGL parent, IVisualizer visualizer, Dictionary<string, object> config)
     {
         this.HostWindow = parent;
         Configurer.Configure(this, config);
-        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(ShinNFDebug)} under \"{this.HostWindow.Name}\" could not find the NoteFinder to attach to.");
+        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(Spectrum)} under \"{this.HostWindow.Name}\" could not find the NoteFinder to attach to.");
         this.G2NoteFinder = this.NoteFinder as Gen2NoteFinder;
         this.RawDataIn = new float[this.NoteFinder.AllBinValues.Length * 2];
     }
@@ -61,7 +61,7 @@ public class ShinNFDebug : IDisplayMode, IConfigurableAttr
         // TODO: Blending/transparency setup needed?
 
         // Create objects
-        this.Shader = new("Passthrough2Textured.vert", "ShinNFDebug.frag");
+        this.Shader = new("Passthrough2Textured.vert", "Spectrum.frag");
         this.Shader.Use();
 
         this.VertexBufferHandle = GL.GenBuffer();
