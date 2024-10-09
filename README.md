@@ -4,7 +4,8 @@
 
 ## See the [ColorChord.NET Website](https://www.colorchord.net) for documentation/install instructions.
 
-**[Click here for downloads](https://github.com/CaiB/ColorChord.NET/releases)**
+- **[Click here for downloads](https://github.com/CaiB/ColorChord.NET/releases)**
+- **[Information about the standalone Gen2DFT library usable from other software](https://github.com/CaiB/ColorChord.NET/tree/master/Gen2DFTLib/readme.md)**
 
 ### Info
 
