@@ -28,11 +28,12 @@ build_script:
     . $env:APPVEYOR_BUILD_FOLDER\DoAutobuild.ps1
 artifacts:
 - path: ColorChord.NET*autobuild-v*.zip
+- path: Gen2DFTLib-autobuild-v*.zip
 deploy:
 - provider: GitHub
   tag: auto-v$(appveyor_build_version)
   release: Automatic Build v$(appveyor_build_version)
-  description: This is an automatic build of the latest commits. Usage is at your own risk. Unless you are actively debugging, it is recommended to use a regular release instead.
+  description: This is an automatic build of the latest under-development code. This build may be unstable or may not work at all. If you prefer a more stable build, download one of the regular releases instead.
   auth_token:
     secure: fIgQpdctIp9szYmG0dfhfD0Cc4/eKQYO7aGXOOYULOB4Bu5SIg6GE+ZRw9kTFNRZ
   artifact: /ColorChord\.NET.*autobuild-v.*\.zip/
