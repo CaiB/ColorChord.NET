@@ -3,8 +3,9 @@ For ColorChord.NET, I developed a custom DFT algorithm ["Gen2DFT"](https://githu
 
 Other people have expressed interest in using the algorithm in their own projects, and as such I made it a standalone module that can be AOT compiled to a native DLL. This means that while it is written in C#, it is usable from any language that supports C-style DLL calls, and it also does not require .NET to be installed to use it.
 
-I also co-authored a conference paper detailing the algorithm. If you use this algorithm in your research, we would highly appreciate a citation.  
-TODO: Add citation info (paper under review)
+I also co-authored a conference paper detailing the algorithm. If you use this algorithm in your research, we would highly appreciate a citation.
+- Pre-publish version: [arXiv.org - Window Function-less DFT with Reduced Noise and Latency for Real-Time Music Analysis](https://arxiv.org/abs/2410.07982)
+- TODO: Add more info once review by conference is complete
 
 [`Gen2DFT.cs`](https://github.com/CaiB/ColorChord.NET/blob/master/Gen2DFTLib/Gen2DFT.cs) in this directory is responsible for translating the C# API into one that is usable from unmanaged code. All of the functions exported in the DLL are defined and documented in this file. Documentation is also exported to an XML file included with the DLL download for use by your IDE to provide inline documentation.
 
