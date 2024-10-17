@@ -203,11 +203,13 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
         this.AllBinMaxSmoothed = this.AllBinMax < NewAllBinMax ? (this.AllBinMax * 0.8F) + (NewAllBinMax * 0.2F) : (this.AllBinMax * 0.995F) + (NewAllBinMax * 0.005F);
         this.AllBinMax = Math.Max(0.01F, AllBinMaxSmoothed);
 
+        Vector256<float> CutoffVal = Vector256.Create(this.AllBinMaxSmoothed * 0.02F);
         for (int Step = 0; Step < AllBinValuesScaled.Length; Step += 8)
         {
             Vector256<float> MiddleValues = Vector256.LoadUnsafe(ref RawBinValuesPadded[Step + 1]);
             Vector256<float> Scaled = Avx.Divide(MiddleValues, Vector256.Create(this.AllBinMaxSmoothed * 2.2F));
-            Scaled.StoreUnsafe(ref AllBinValuesScaled[Step]);
+            Vector256<float> WithCutoff = Avx.Max(Vector256<float>.Zero, Avx.Subtract(Scaled, CutoffVal));
+            WithCutoff.StoreUnsafe(ref AllBinValuesScaled[Step]);
         }
 
         for (int Outer = 0; Outer < PeakBitsPacked.Length; Outer++)

@@ -175,15 +175,16 @@ public sealed class Gen2NoteFinderDFT
         RawBinWidths = new float[BinCount];
 
         uint MaxAudioBufferSize = 0;
-        for (uint Bin = 0; Bin < BinCount; Bin++)
+        for (int Bin = 0; Bin < BinCount; Bin++)
         {
             float BinFrequency;
             uint ThisBufferSize;
             float ThisOctaveStart = StartFrequency * MathF.Pow(2, Bin / BinsPerOctave);
             BinFrequency = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin);
-            float NextBinFrequency = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin + 2);
+            float NextBinFrequencyUp = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin + 1);
+            float NextBinFrequencyDown = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin - 1);
             //float IdealWindowSize = WindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq); // TODO: Add scale factor to shift this from no overlap to -3dB point
-            ThisBufferSize = RoundedWindowSizeForBinWidth(NextBinFrequency - BinFrequency, BinFrequency, SampleRate);
+            ThisBufferSize = RoundedWindowSizeForBinWidth(NextBinFrequencyUp - NextBinFrequencyDown, BinFrequency, SampleRate);
 
             RawBinWidths[Bin] = MathF.Log2((BinFrequency + BinWidthAtWindowSize(ThisBufferSize, SampleRate)) / BinFrequency) * BinsPerOctave;
 
@@ -627,7 +628,7 @@ public sealed class Gen2NoteFinderDFT
         {
             float OutBinVal = this.RawBinMagnitudes[Bin] * this.LoudnessCorrectionFactors[Bin];
             this.OctaveBinValues[Bin % BinsPerOctave] += OutBinVal / this.OctaveCount;
-            this.AllBinValues[Bin + 1] = MathF.Max(0, OutBinVal - 0.08F);
+            this.AllBinValues[Bin + 1] = MathF.Max(0, OutBinVal);
         }
     }
 
@@ -735,8 +736,8 @@ public sealed class Gen2NoteFinderDFT
         return (uint)Math.Min(ABSOLUTE_MAX_WINDOW_SIZE, MathF.Round((MathF.Max(MinWindowSizePeriods, MathF.Min(MaxWindowSizePeriods, MathF.Round(PeriodsInWindow))) * PeriodInSamples) + (PeriodInSamples * 0.5F)));
     }
 
-    private static float CalculateNoteFrequency(float octaveStart, uint binsPerOctave, uint binIndex) => octaveStart * GetNoteFrequencyMultiplier(binsPerOctave, binIndex);
-    private static float GetNoteFrequencyMultiplier(uint binsPerOctave, uint binIndex) => MathF.Pow(2F, (float)binIndex / binsPerOctave);
+    private static float CalculateNoteFrequency(float octaveStart, uint binsPerOctave, int binIndex) => octaveStart * GetNoteFrequencyMultiplier(binsPerOctave, binIndex);
+    private static float GetNoteFrequencyMultiplier(uint binsPerOctave, int binIndex) => MathF.Pow(2F, (float)binIndex / binsPerOctave);
 
     /// <summary> Gets a factor to multiply the output amplitude by to correct for percieved loudness. </summary>
     /// <remarks> Output is based on ISO 226:2023 data, and assumes a fixed loudness, and that the item being multiplied is sqrt(dB level). </remarks>
