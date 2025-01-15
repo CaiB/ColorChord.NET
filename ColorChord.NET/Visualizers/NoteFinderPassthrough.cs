@@ -19,6 +19,12 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
     [ConfigFloat("TimePeriod", -1000000, 1000000, 100)]
     private float TimePeriod = 100F;
 
+    [ConfigFloat("SaturationAmplifier", 0, 1000, 4.5F)]
+    private float SaturationAmplifier = 4.5F;
+
+    [ConfigFloat("SaturationExponent", 0, 100, 2F)]
+    private float SaturationExponent = 2F;
+
     private List<IOutput> Outputs = new(4);
 
     private uint[] Data;
@@ -40,7 +46,7 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
     {
         ReadOnlySpan<float> RawData = this.NoteFinder.AllBinValues;
         if (this.Data.Length != RawData.Length) { this.Data = new uint[RawData.Length]; }
-        for (int i = 0; i < RawData.Length; i++) { this.Data[i] = VisualizerTools.CCToRGB((float)i / this.NoteFinder.BinsPerOctave, 1F, MathF.Pow(RawData[i] * 4.5F, 2F)); }
+        for (int i = 0; i < RawData.Length; i++) { this.Data[i] = VisualizerTools.CCToRGB((float)i / this.NoteFinder.BinsPerOctave, 1F, MathF.Pow(RawData[i] * this.SaturationAmplifier, this.SaturationExponent)); }
         foreach (IOutput Out in this.Outputs) { Out.Dispatch(); }
     }
 

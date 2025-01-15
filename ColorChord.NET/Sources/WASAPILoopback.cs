@@ -144,7 +144,7 @@ public class WASAPILoopback : IAudioSource
         if (IsErrorAndOut(ErrorCode, "Could not get device timing info.")) { return; }
 
         ErrorCode = this.Client.GetCurrentSharedModeEnginePeriod(out IntPtr MixFormatPtr2, out uint FramesPerBatch); // TODO: Automatically scale this based on the framerate of the outputs
-        if (IsErrorAndOut(ErrorCode, "Could not get engine periodicity info.")) { return; }
+        if (IsErrorAndOut(ErrorCode, "Could not get current engine periodicity info.")) { return; }
 
         // Check if we can get PCM data directly (default is usually float)
         WaveFormatExtensible RequestedFormat = new()
@@ -170,7 +170,12 @@ public class WASAPILoopback : IAudioSource
             Marshal.FreeCoTaskMem(RequestedFormatPtr);
             RequestedFormatPtr = IntPtr.Zero;
             WaveFormatEx? ResponseFormat = WaveFormatEx.FromPointer(ResponseFormatPtr);
-            Log.Warn($"WASAPI responded with 0x{IsRequestSupportedRaw:X8} when PCM was requested, falling back to using its format instead.");
+
+#pragma warning disable CS0162 // Unreachable code detected
+            if (FORCE_DEFAULT_FORMAT) { Log.Warn("Requesting more optimal format from WASAPI was disabled at compile time."); }
+            else { Log.Warn($"WASAPI responded with 0x{IsRequestSupportedRaw:X8} when PCM was requested, falling back to using its format instead."); }
+#pragma warning restore CS0162 // Unreachable code detected
+
             this.FormatIsPCM = (this.MixFormat.IsExtensible() && this.MixFormat.SubFormat == WaveFormatGUIDs.PCM) || (!this.MixFormat.IsExtensible() && this.MixFormat.Format == WaveFormatBasic.PCM);
         }
         else
@@ -178,6 +183,10 @@ public class WASAPILoopback : IAudioSource
             this.MixFormat = RequestedFormat;
             this.FormatIsPCM = true;
         }
+
+        ErrorCode = this.Client.GetSharedModeEnginePeriod(IsRequestSupported ? RequestedFormatPtr : MixFormatPtr, out uint DefaultPeriodFrames, out uint FundamentalPeriodFrames, out uint MinimumPeriodFrames, out uint MaximumPeriodFrames);
+        if (IsErrorAndOut(ErrorCode, "Could not get detailed engine periodicity info.")) { return; }
+        Log.Debug($"WASAPI engine periodicities: default = {DefaultPeriodFrames}, fundamental = {FundamentalPeriodFrames}, min = {MinimumPeriodFrames}, max = {MaximumPeriodFrames} frames.");
 
         Log.Info($"Chosen audio format is {this.MixFormat.Format} {WaveFormatGUIDs.GetNameFromGUID(this.MixFormat.SubFormat)}, {this.MixFormat.ChannelCount} channel, {this.MixFormat.SampleRate}Hz sample rate, {this.MixFormat.BitsPerSample}b per sample.");
         Log.Info($"Default transaction period is {DefaultInterval} ticks, minimum is {MinimumInterval} ticks. Current mode is {FramesPerBatch} frames per dispatch.");

@@ -30,7 +30,7 @@ public class Spectrum : IDisplayMode, IConfigurableAttr
     };
 
     private int VertexBufferHandle, VertexArrayHandle, TextureHandleRawBins, TextureHandlePeakBits, TextureHandleWidebandBits;
-    private int LocationBinCount, LocationScaleFactor, LocationExponent;
+    private int LocationBinCount, LocationBPO, LocationScaleFactor, LocationExponent;
 
     private float[] RawDataIn;
 
@@ -97,6 +97,8 @@ public class Spectrum : IDisplayMode, IConfigurableAttr
 
         this.LocationBinCount = this.Shader.GetUniformLocation("BinCount");
         GL.Uniform1(this.LocationBinCount, this.NoteFinder.AllBinValues.Length);
+        this.LocationBPO = this.Shader.GetUniformLocation("BinsPerOctave");
+        GL.Uniform1(this.LocationBPO, this.NoteFinder.BinsPerOctave);
         this.LocationScaleFactor = this.Shader.GetUniformLocation("ScaleFactor");
         GL.Uniform1(this.LocationScaleFactor, this.ScaleFactor);
         this.LocationExponent = this.Shader.GetUniformLocation("Exponent");

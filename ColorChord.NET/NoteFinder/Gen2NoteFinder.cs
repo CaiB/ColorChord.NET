@@ -25,6 +25,9 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
     [ConfigInt("Octaves", 1, 20, 6)]
     public uint OctaveCount { get; private set; }
 
+    [ConfigInt("BinsPerOctave", 4, 960, 24)]
+    private uint BPO = 24;
+
     [ConfigFloat("StartFreq", 0F, 20000F, 55F)]
     public float StartFrequency { get; private set; } = 55F;
 
@@ -77,7 +80,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
 
         SetupBuffers();
         this.SampleRate = 48000; // TODO: Temporary until source is connected ahead of time
-        this.DFT = new(this.OctaveCount, 24, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, RunTimingReceivers);
+        this.DFT = new(this.OctaveCount, this.BPO, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, RunTimingReceivers);
         Reconfigure();
     }
 
@@ -106,7 +109,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
     public override void SetSampleRate(int sampleRate)
     {
         this.SampleRate = (uint)sampleRate;
-        this.DFT = new(this.OctaveCount, 24, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, RunTimingReceivers);
+        this.DFT = new(this.OctaveCount, this.BPO, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, RunTimingReceivers);
         Reconfigure();
         Log.Debug($"There are {TimingReceivers.Length} timing receivers");
         for (int i = 0; i < TimingReceivers.Length; i++)

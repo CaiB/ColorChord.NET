@@ -1,11 +1,10 @@
 #version 330 core
 #extension GL_EXT_gpu_shader4 : enable
 
-#define BINS_PER_OCATVE 24
-
 in vec2 TexCoord;
 
 uniform int BinCount;
+uniform int BinsPerOctave;
 uniform sampler2D TextureRawBins;
 uniform usampler2D TexturePeakBits, TextureWidebandBits;
 uniform float ScaleFactor;
@@ -36,7 +35,7 @@ void main()
     float ChangeHere = texture(TextureRawBins, vec2((SectionHere + 0.5) / BinCount, 0.75)).r * 10.0;
     uint PeakHere = (texture(TexturePeakBits, vec2(((SectionHere / 8) + 0.5) / textureSize(TexturePeakBits, 0).x, 0.5)).r >> (SectionHere % 8)) & 1u;
     uint WidebandHere = (texture(TextureWidebandBits, vec2(((SectionHere / 8) + 0.5) / textureSize(TextureWidebandBits, 0).x, 0.5)).r >> (SectionHere % 8)) & 1u;
-    vec3 Colour = AngleToRGB(mod(float(SectionHere) / BINS_PER_OCATVE, 1.0), 1.0 - (0.8 * WidebandHere), min(1.0, 0.1 + (HeightHere * 3.0)) - (0.9 * WidebandHere));
+    vec3 Colour = AngleToRGB(mod(float(SectionHere) / BinsPerOctave, 1.0), 1.0 - (0.8 * WidebandHere), min(1.0, 0.1 + (HeightHere * 3.0)) - (0.9 * WidebandHere));
     float IsBar = step(abs(TexCoord.y), HeightHere);
     //float IsBar = (step(0.0, TexCoord.y) * step(TexCoord.y, HeightHere)) + ((step(0.0, -TexCoord.y) * step(-TexCoord.y, ChangeHere)));
     FragColor = vec4((IsBar * Colour) + ((1.0 - IsBar) * vec3(0.1) * PeakHere * Colour), 1.0);
