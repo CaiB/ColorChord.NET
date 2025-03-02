@@ -4,6 +4,7 @@ using ColorChord.NET.API;
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
@@ -510,6 +511,8 @@ public sealed class Gen2NoteFinderDFT
     {
         int BinCount = this.BinCount;
         Span<double> RotatedValues = stackalloc double[4 * 2];
+        Vector128<ushort> CosShift = Vector128.Create(SINE_TABLE_90_OFFSET_SCALED);
+        Vector256<short> MixedSinVals = Vector256<short>.Zero;
 
         Debug.Assert(BinCount % 4 == 0, "BinCount needs to be a multiple of 4.");
         lock (this.MergedDataLockObj)
@@ -517,18 +520,38 @@ public sealed class Gen2NoteFinderDFT
             int BinIndex = 0;
             while (BinIndex < BinCount)
             {
+                if (Avx2.IsSupported && ENABLE_SIMD)
+                {
+                    Span<ushort> TableLocsSpan = MemoryMarshal.Cast<DualU16, ushort>(SinTableLocationAdd.AsSpan(BinIndex, 4)); // {[Left, Right] x 4}
+                    Vector128<ushort> SinLocs = Vector128.LoadUnsafe(ref MemoryMarshal.GetReference(TableLocsSpan));
+                    Vector128<ushort> CosLocs = Sse2.Add(SinLocs, CosShift);
+                    Vector256<ushort> MixedLocs = Vector256.Create(SinLocs, CosLocs); // {SinL[0], SinR[0], SinL[1], SinR[1], SinL[2], SinR[2], SinL[3], SinR[3],  CosL[0], CosR[0], CosL[1], CosR[1], CosL[2], CosR[2], CosL[3], CosR[3]}
+                    MixedSinVals = GetSine256(MixedLocs);
+                }
+
                 for (int SubIndex = 0; SubIndex < 4; SubIndex++)
                 {
                     int InnerIndex = BinIndex + SubIndex;
                     Vector256<long> Products = this.ProductAccumulators[InnerIndex];
-                    DualI16 SinVal = GetSine(this.SinTableLocationAdd[InnerIndex], false);
-                    DualI16 CosVal = GetSine(this.SinTableLocationAdd[InnerIndex], true);
+                    long RotatedLSin, RotatedLCos, RotatedRSin, RotatedRCos; // Product accumulators are assumed to be up to 32768 32b values summed => 15b * 32b = 47b
 
-                    // Product accumulators are assumed to be up to 32768 32b values summed => 15b * 32b = 47b
-                    long RotatedLSin = (Products[0] * CosVal.NCLeft) - (Products[2] * SinVal.NCLeft); // (47b * 16b) - (47b * 16b) = 64b
-                    long RotatedLCos = (Products[0] * SinVal.NCLeft) + (Products[2] * CosVal.NCLeft);
-                    long RotatedRSin = (Products[1] * CosVal.NCRight) - (Products[3] * SinVal.NCRight);
-                    long RotatedRCos = (Products[1] * SinVal.NCRight) + (Products[3] * CosVal.NCRight);
+                    if (Avx2.IsSupported && ENABLE_SIMD)
+                    {
+                        int IndexOffset = SubIndex << 1;
+                        RotatedLSin = (Products[0] * MixedSinVals[8 + IndexOffset]) - (Products[2] * MixedSinVals[0 + IndexOffset]); // (47b * 16b) - (47b * 16b) = 64b
+                        RotatedLCos = (Products[0] * MixedSinVals[0 + IndexOffset]) + (Products[2] * MixedSinVals[8 + IndexOffset]);
+                        RotatedRSin = (Products[1] * MixedSinVals[9 + IndexOffset]) - (Products[3] * MixedSinVals[1 + IndexOffset]);
+                        RotatedRCos = (Products[1] * MixedSinVals[1 + IndexOffset]) + (Products[3] * MixedSinVals[9 + IndexOffset]);
+                    }
+                    else
+                    {
+                        DualI16 SinVal = GetSine(this.SinTableLocationAdd[InnerIndex], false);
+                        DualI16 CosVal = GetSine(this.SinTableLocationAdd[InnerIndex], true);
+                        RotatedLSin = (Products[0] * CosVal.NCLeft) - (Products[2] * SinVal.NCLeft); // (47b * 16b) - (47b * 16b) = 64b
+                        RotatedLCos = (Products[0] * SinVal.NCLeft) + (Products[2] * CosVal.NCLeft);
+                        RotatedRSin = (Products[1] * CosVal.NCRight) - (Products[3] * SinVal.NCRight);
+                        RotatedRCos = (Products[1] * SinVal.NCRight) + (Products[3] * CosVal.NCRight);
+                    }
 
                     long Sin = (RotatedLSin >> 32) * (RotatedRSin >> 32); // (64b >> 32) * (64b >> 32) = 64b
                     long Cos = (RotatedLCos >> 32) * (RotatedRCos >> 32);
