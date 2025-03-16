@@ -2,7 +2,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Numerics;
 
-namespace ColorChordTests.UnitTests;
+namespace ColorChord.NET.Tests.UnitTests;
 
 [TestClass]
 public class UtilitiesTests

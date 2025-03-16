@@ -10,7 +10,7 @@ using System.Runtime.Intrinsics;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ColorChordTests.UnitTests;
+namespace ColorChord.NET.Tests.UnitTests;
 
 [TestClass]
 public class Gen2DFTTests
