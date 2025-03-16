@@ -2,7 +2,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Numerics;
 
-namespace ColorChordTests;
+namespace ColorChordTests.UnitTests;
 
 [TestClass]
 public class UtilitiesTests
@@ -55,10 +55,10 @@ public class UtilitiesTests
         uint Output = VisualizerTools.HSVToRGB(h / 360F, s, v);
         byte ExpectedR = (byte)(expectedRGB >> 16);
         byte ExpectedG = (byte)(expectedRGB >> 8);
-        byte ExpectedB = (byte)(expectedRGB);
+        byte ExpectedB = (byte)expectedRGB;
         byte ResultR = (byte)(Output >> 16);
         byte ResultG = (byte)(Output >> 8);
-        byte ResultB = (byte)(Output);
+        byte ResultB = (byte)Output;
         Assert.AreEqual(ExpectedR, ResultR, TOLERANCE,   $"Red output was out of range for input (H={h}, S={s}, V={v}), expected 0x{ExpectedR:X2} but result was 0x{ResultR:X2}");
         Assert.AreEqual(ExpectedG, ResultG, TOLERANCE, $"Green output was out of range for input (H={h}, S={s}, V={v}), expected 0x{ExpectedG:X2} but result was 0x{ResultG:X2}");
         Assert.AreEqual(ExpectedB, ResultB, TOLERANCE,  $"Blue output was out of range for input (H={h}, S={s}, V={v}), expected 0x{ExpectedB:X2} but result was 0x{ResultB:X2}");
@@ -78,10 +78,10 @@ public class UtilitiesTests
         uint Output = VisualizerTools.HSVToRGB(h / 360F, s, v);
         byte ExpectedR = (byte)(expectedRGB >> 16);
         byte ExpectedG = (byte)(expectedRGB >> 8);
-        byte ExpectedB = (byte)(expectedRGB);
+        byte ExpectedB = (byte)expectedRGB;
         byte ResultR = (byte)(Output >> 16);
         byte ResultG = (byte)(Output >> 8);
-        byte ResultB = (byte)(Output);
+        byte ResultB = (byte)Output;
         Assert.AreEqual(ExpectedR, ResultR, TOLERANCE,   $"Red output was out of range for input (H={h}, S={s}, V={v}), expected 0x{ExpectedR:X2} but result was 0x{ResultR:X2}");
         Assert.AreEqual(ExpectedG, ResultG, TOLERANCE, $"Green output was out of range for input (H={h}, S={s}, V={v}), expected 0x{ExpectedG:X2} but result was 0x{ResultG:X2}");
         Assert.AreEqual(ExpectedB, ResultB, TOLERANCE,  $"Blue output was out of range for input (H={h}, S={s}, V={v}), expected 0x{ExpectedB:X2} but result was 0x{ResultB:X2}");
@@ -111,10 +111,10 @@ public class UtilitiesTests
         uint Output = VisualizerTools.CCToRGB(note, sat, val);
         byte ExpectedR = (byte)(expectedRGB >> 16);
         byte ExpectedG = (byte)(expectedRGB >> 8);
-        byte ExpectedB = (byte)(expectedRGB);
+        byte ExpectedB = (byte)expectedRGB;
         byte ResultR = (byte)(Output >> 16);
         byte ResultG = (byte)(Output >> 8);
-        byte ResultB = (byte)(Output);
+        byte ResultB = (byte)Output;
         Assert.AreEqual(ExpectedR, ResultR, TOLERANCE,   $"Red output was out of range for input (N={note}, S={sat}, V={val}), expected 0x{ExpectedR:X2} but result was 0x{ResultR:X2}");
         Assert.AreEqual(ExpectedG, ResultG, TOLERANCE, $"Green output was out of range for input (N={note}, S={sat}, V={val}), expected 0x{ExpectedG:X2} but result was 0x{ResultG:X2}");
         Assert.AreEqual(ExpectedB, ResultB, TOLERANCE,  $"Blue output was out of range for input (N={note}, S={sat}, V={val}), expected 0x{ExpectedB:X2} but result was 0x{ResultB:X2}");

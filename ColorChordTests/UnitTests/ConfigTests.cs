@@ -4,7 +4,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Collections.Generic;
 
-namespace ColorChordTests
+namespace ColorChordTests.UnitTests
 {
     [TestClass]
     public class ConfigTests
