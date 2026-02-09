@@ -5,7 +5,6 @@ using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
-using ColorChord.NET.Config;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -98,8 +97,8 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     public Linear(string name, Dictionary<string, object> config)
     {
         this.Name = name;
-        Configurer.Configure(this, config);
-        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(Linear)} \"{name}\" could not find the NoteFinder to attach to.");
+        ColorChordAPI.Configurer.Configure(this, config);
+        this.NoteFinder = ColorChordAPI.Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(Linear)} \"{name}\" could not find the NoteFinder to attach to.");
         this.NoteCount = this.NoteFinder.NoteCount;
         this.BinsPerOctave = this.NoteFinder.BinsPerOctave;
         this.OutputDataContinuous = new ContinuousDataUnit[this.NoteCount];

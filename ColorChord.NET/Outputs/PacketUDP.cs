@@ -129,9 +129,9 @@ namespace ColorChord.NET.Outputs
         public PacketUDP(string name, Dictionary<string, object> config)
         {
             this.Name = name;
-            IVisualizer? Source = Configurer.FindVisualizer(config) ?? throw new Exception($"{nameof(PacketUDP)} \"{name}\" could not find requested visualizer.");
+            IVisualizer? Source = ColorChordAPI.Configurer.FindVisualizer(config) ?? throw new Exception($"{nameof(PacketUDP)} \"{name}\" could not find requested visualizer.");
             this.Source = Source;
-            Configurer.Configure(this, config);
+            ColorChordAPI.Configurer.Configure(this, config);
 
             // Post-configuration setup
             this.Mode = ReadProtocol(this.ProtocolFromConfig);

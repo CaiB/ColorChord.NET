@@ -4,6 +4,7 @@ using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Outputs.Display;
+using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Utility;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.Config;
@@ -19,7 +20,7 @@ using System.Runtime.InteropServices;
 
 namespace ColorChord.NET.Outputs
 {
-    public class DisplayOpenGL : GameWindow, IOutput, IControllableAttr, IThreadedInstance
+    public class DisplayOpenGL : GameWindow, IOutput, IControllableAttr, IThreadedInstance, ITimingSource
     {
         private static readonly DebugProc DebugCallbackRef = DebugCallback; // Needed to prevent GC
 
@@ -58,6 +59,7 @@ namespace ColorChord.NET.Outputs
 
         private readonly IDisplayMode? Display;
         private bool Stopping = false;
+        private readonly List<TimingReceiver> TimingReceivers = new(4);
         
         public DisplayOpenGL(string name, Dictionary<string, object> config) : base(GameWindowSettings.Default, SetupNativeWindow())
         {
@@ -73,14 +75,15 @@ namespace ColorChord.NET.Outputs
 
             if (config.TryGetValue("Modes", out object? ModesObj)) // Make sure that everything else is configured before creating the modes!
             {
-                Dictionary<string, object>[] ModeList = (Dictionary<string, object>[])ModesObj;
+                List<object> ModesList = ModesObj as List<object> ?? throw new Exception("\"Modes\" must be an array of objects");
                 for (int i = 0; i < 1/*ModeList.Length*/; i++) // TODO: Add support for multiple modes.
                 {
-                    if (!ModeList[i].TryGetValue(ConfigNames.TYPE, out object? TypeObj)) { Log.Error($"Mode at index {i} is missing \"{ConfigNames.TYPE}\" specification."); continue; }
-                    this.Display = CreateMode("ColorChord.NET.Outputs.Display." + TypeObj, ModeList[i]);
+                    Dictionary<string, object> ThisMode = ModesList[i] as Dictionary<string, object> ?? throw new Exception($"Mode number {i + 1} was not a valid object");
+                    if (!ThisMode.TryGetValue(ConfigNames.TYPE, out object? TypeObj)) { Log.Error($"Mode number {i + 1} is missing \"{ConfigNames.TYPE}\" specification."); continue; }
+                    this.Display = CreateMode("ColorChord.NET.Outputs.Display." + TypeObj, ThisMode);
                     if (this.Display == null) { Log.Error($"Failed to create display of type \"{TypeObj}\" under \"{this.Name}\"."); }
                 }
-                if (ModeList.Length > 1) { Log.Warn("Config specifies multiple modes. This is not yet supported, so only the first one will be used."); }
+                if (ModesList.Count > 1) { Log.Warn("Config specifies multiple modes. This is not yet supported, so only the first one will be used."); }
                 Log.Info($"Finished reading display modes under \"{this.Name}\".");
             }
 
@@ -148,6 +151,10 @@ namespace ColorChord.NET.Outputs
         protected override void OnRenderFrame(FrameEventArgs evt)
         {
             if (this.Stopping) { this.Display?.Close(); return; }
+            lock (this.TimingReceivers)
+            {
+                foreach (TimingReceiver Receiver in this.TimingReceivers) { Receiver.Invoke(); }
+            }
             this.NoteFinder.UpdateOutputs();
             GL.Clear(ClearBufferMask.ColorBufferBit);
 
@@ -211,5 +218,16 @@ namespace ColorChord.NET.Outputs
         }
 
         public void Dispatch() => this.Display?.Dispatch();
+
+        // Period is ignored
+        public void AddTimingReceiver(TimingReceiver receiver, float period)
+        {
+            lock (this.TimingReceivers) { this.TimingReceivers.Add(receiver); }
+        }
+
+        public void RemoveTimingReceiver(TimingReceiver receiver)
+        {
+            lock (this.TimingReceivers) { this.TimingReceivers.Remove(receiver); }
+        }
     }
 }

@@ -54,7 +54,9 @@ public static class Configurer
             TargetInst = Target;
         }
         if (TargetType == null) { Log.Error("Tried to configure object whose type cannot be determined."); return false; }
-        Log.Info("Reading config for " + TargetType.Name + '.');
+        if (!config.TryGetValue(TYPE, out object? TypeNameObj) || TypeNameObj is not string TypeName) { TypeName = TargetType.Name; }
+        if (!config.TryGetValue(NAME, out object? InstNameObj) || InstNameObj is not string InstName) { InstName = string.Empty; }
+        Log.Info($"Reading config for {TypeName} '{InstName}'");
 
         FieldInfo[] Fields = TargetType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
         PropertyInfo[] Properties = TargetType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
