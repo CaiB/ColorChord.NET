@@ -292,7 +292,7 @@ public class WASAPILoopback : IAudioSource
         this.AudioEvent.Set();
         this.ProcessThread?.Join();
         this.AudioEvent.Dispose();
-        AudioEventHandle.Free();
+        if (AudioEventHandle.IsAllocated) { AudioEventHandle.Free(); }
     }
 
     private unsafe void ProcessEventAudio()
