@@ -20,7 +20,7 @@ public class Gen2DFTTests
     [TestMethod]
     public void Init()
     {
-        this.DFTInst = new(4, 24, 48000, 110F, 0F, null);
+        this.DFTInst = new(4, 24, 48000, 110F, 0F, 1F, null);
     }
 
     private void AssertZeroOutput()
