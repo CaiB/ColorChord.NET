@@ -200,7 +200,7 @@ public class WASAPILoopback : IAudioSource
         else if (DeviceIsCapture == false) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_EVENTCALLBACK; }
         else { Log.Error("Device type was not determined!"); return; }
 
-        ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, MinimumInterval, MinimumInterval, IsRequestSupported ? RequestedFormatPtr : MixFormatPtr);
+        ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, MinimumInterval, 0, IsRequestSupported ? RequestedFormatPtr : MixFormatPtr);
         if (IsErrorAndOut(ErrorCode, "Could not init audio client.")) { return; }
 
         this.AudioEventHandle = GCHandle.Alloc(this.AudioEvent);

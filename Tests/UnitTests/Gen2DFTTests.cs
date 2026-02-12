@@ -134,8 +134,12 @@ public class Gen2DFTTests
 
         int WorstIndex = 0;
         float WorstError = 0F;
-        short WorstResult = 0, WorstExpected = 0;
+        short WorstResult = 0;
+        float WorstExpected = 0;
 
+        using (StreamWriter Stream = new("Gen2DFTTests_TestVecSineAll.csv"))
+        {
+            Stream.WriteLine("Input,InputRadians,Output,ExpectedOutput");
         for (int i = 0; i < ushort.MaxValue; i += 16)
         {
             Vector256<ushort> Position = Vector256.Create((ushort)i) + Incrementing;
@@ -145,20 +149,28 @@ public class Gen2DFTTests
             {
                 int InnerIndex = i + j;
                 float RealSine = TABLE_AMPLITUDE * MathF.Sin(InnerIndex / 65536F * MathF.Tau);
-                short RealSineRounded = (short)MathF.Round(RealSine);
-                float Difference = 100F * (LUTSines[j] - RealSineRounded) / TABLE_AMPLITUDE;
+                    //short RealSineRounded = (short)MathF.Round(RealSine);
+                    float Difference = 100F * (LUTSines[j] - RealSine) / TABLE_AMPLITUDE;
+                    Stream.Write(InnerIndex);
+                    Stream.Write(',');
+                    Stream.Write(InnerIndex / 65536F * MathF.Tau);
+                    Stream.Write(',');
+                    Stream.Write(LUTSines[j]);
+                    Stream.Write(',');
+                    Stream.WriteLine(RealSine);
                 if (Math.Abs(WorstError) < Math.Abs(Difference))
                 {
                     WorstIndex = InnerIndex;
                     WorstError = Difference;
-                    WorstExpected = RealSineRounded;
+                        WorstExpected = RealSine;
                     WorstResult = LUTSines[j];
                 }
                 Assert.IsTrue(Difference > -ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSines[j]} was too small compared to the expected value of {RealSine} at index {InnerIndex}");
                 Assert.IsTrue(Difference < ALLOWED_ERROR, $"The interpolated LUT sine output {LUTSines[j]} was too large compared to the expected value of {RealSine} at index {InnerIndex}");
             }
         }
-        Console.WriteLine($"Worst point was at i={WorstIndex} ({WorstIndex / 65536F:F5}): got {WorstResult}, should be {WorstExpected}, off by {WorstError:+0.00;-0.00;0.00}%");
+        }
+        Console.WriteLine($"Worst point was at i={WorstIndex} ({WorstIndex / 65536F:F5}): got {WorstResult}, should be {WorstExpected}, off by {WorstError:+0.0000;-0.0000;0.0000}%");
     }
 
     [TestMethod]
