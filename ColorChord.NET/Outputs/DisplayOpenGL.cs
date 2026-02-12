@@ -8,6 +8,7 @@ using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Utility;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.Config;
+using ColorChord.NET.Extensions;
 using OpenTK.Graphics.ES30;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
@@ -79,9 +80,9 @@ namespace ColorChord.NET.Outputs
                 for (int i = 0; i < 1/*ModeList.Length*/; i++) // TODO: Add support for multiple modes.
                 {
                     Dictionary<string, object> ThisMode = ModesList[i] as Dictionary<string, object> ?? throw new Exception($"Mode number {i + 1} was not a valid object");
-                    if (!ThisMode.TryGetValue(ConfigNames.TYPE, out object? TypeObj)) { Log.Error($"Mode number {i + 1} is missing \"{ConfigNames.TYPE}\" specification."); continue; }
-                    this.Display = CreateMode("ColorChord.NET.Outputs.Display." + TypeObj, ThisMode);
-                    if (this.Display == null) { Log.Error($"Failed to create display of type \"{TypeObj}\" under \"{this.Name}\"."); }
+                    if (!ThisMode.TryGetValue(ConfigNames.TYPE, out object? TypeObj) || TypeObj is not string TypeName) { Log.Error($"Mode number {i + 1} is missing a valid \"{ConfigNames.TYPE}\" specification."); continue; }
+                    this.Display = CreateMode(TypeName.StartsWith('#') ? TypeName : "ColorChord.NET.Outputs.Display." + TypeName, ThisMode);
+                    if (this.Display == null) { Log.Error($"Failed to create display of type \"{TypeName}\" under \"{this.Name}\"."); }
                 }
                 if (ModesList.Count > 1) { Log.Warn("Config specifies multiple modes. This is not yet supported, so only the first one will be used."); }
                 Log.Info($"Finished reading display modes under \"{this.Name}\".");
@@ -110,7 +111,13 @@ namespace ColorChord.NET.Outputs
 
         private IDisplayMode? CreateMode(string fullName, Dictionary<string, object> config)
         {
-            Type? ObjType = Type.GetType(fullName);
+            Type? ObjType;
+            if (fullName.StartsWith('#'))
+            {
+                fullName = fullName.Substring(1);
+                ObjType = ExtensionHandler.FindType(fullName);
+            }
+            else { ObjType = Type.GetType(fullName); }
             if (ObjType == null) { Log.Error($"Cannot find display mode type {fullName}!"); return null; }
             if (!typeof(IDisplayMode).IsAssignableFrom(ObjType)) { Log.Error($"Requested display mode {fullName} is not a valid display mode (must be IDisplayMode)."); return null; }
 

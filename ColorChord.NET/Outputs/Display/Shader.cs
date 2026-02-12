@@ -14,21 +14,23 @@ namespace ColorChord.NET.Outputs.Display
         private readonly int ShaderHandle;
         private bool IsDisposed = false;
 
-        public Shader(string vertexPath, string fragmentPath)
+        public Shader(string vertexPath, string fragmentPath, Assembly? vertexAssembly = null, Assembly? fragmentAssembly = null)
         {
+            string VertexPath = (vertexPath.StartsWith('#') ? vertexPath.Substring(1) : PATH_PREFIX + vertexPath);
+            string FragmentPath = (fragmentPath.StartsWith('#') ? fragmentPath.Substring(1) : PATH_PREFIX + fragmentPath);
             int VertexShaderHandle, FragmentShaderHandle;
 
             string VertexShaderSource, FragmentShaderSource;
 
             Assembly Asm = Assembly.GetExecutingAssembly();
-            using (Stream? VertexStream = Asm.GetManifestResourceStream(PATH_PREFIX + vertexPath))
+            using (Stream? VertexStream = (vertexAssembly ?? Asm).GetManifestResourceStream(VertexPath))
             {
-                if (VertexStream == null) { throw new Exception($"Could not load vertex shader \"{PATH_PREFIX}{vertexPath}\""); }
+                if (VertexStream == null) { throw new Exception($"Could not load vertex shader \"{VertexPath}\""); }
                 using (StreamReader VertexReader = new(VertexStream, Encoding.UTF8)) { VertexShaderSource = VertexReader.ReadToEnd(); }
             }
-            using (Stream? FragmentStream = Asm.GetManifestResourceStream(PATH_PREFIX + fragmentPath))
+            using (Stream? FragmentStream = (fragmentAssembly ?? Asm).GetManifestResourceStream(FragmentPath))
             {
-                if (FragmentStream == null) { throw new Exception($"Could not load fragment shader \"{PATH_PREFIX}{fragmentPath}\""); }
+                if (FragmentStream == null) { throw new Exception($"Could not load fragment shader \"{FragmentPath}\""); }
                 using (StreamReader FragmentReader = new(FragmentStream, Encoding.UTF8)) { FragmentShaderSource = FragmentReader.ReadToEnd(); }
             }
 
