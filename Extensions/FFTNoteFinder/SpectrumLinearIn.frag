@@ -9,6 +9,9 @@ uniform sampler2D TextureRawBins;
 uniform float ScaleFactor;
 uniform float Exponent;
 
+uniform float StartFreq;
+uniform float EndFreq;
+
 out vec4 FragColor;
 
 vec3 HSVToRGB(vec3 c)
@@ -30,7 +33,7 @@ vec3 AngleToRGB(float angle, float sat, float val)
 void main()
 {
     //int SectionHere = int(floor(TexCoord.x * BinCount));
-    float FreqHere = pow(2.0, (log2(55.0) + (TexCoord.x * (log2(3520.0) - log2(55.0)))));
+    float FreqHere = pow(2.0, (log2(StartFreq) + (TexCoord.x * (log2(EndFreq) - log2(StartFreq)))));
     int SectionHere = int(round(FreqHere * BinFreqSize));
 
     float HeightHere = pow(texture(TextureRawBins, vec2((SectionHere + 0.5) / BinCount, 0.5)).r, 1.0) * ScaleFactor;

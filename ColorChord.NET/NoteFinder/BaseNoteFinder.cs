@@ -167,6 +167,8 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     public override string Name { get; protected init; }
     public override int NoteCount { get => NOTE_QTY; }
     public override int BinsPerOctave { get => BINS_PER_OCTAVE; } // TODO: This is only really necessary because we don't scale the note output values. Consider doing that.
+    public override float StartFrequency { get => this.MinimumFrequency; }
+    public override int Octaves { get => OCTAVES; }
 
     private Note[] P_Notes;
     public override ReadOnlySpan<Note> Notes => P_Notes;

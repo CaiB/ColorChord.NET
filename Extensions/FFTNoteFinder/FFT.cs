@@ -41,6 +41,8 @@ public unsafe partial class FFT : NoteFinderCommon
     public override ReadOnlySpan<Note> Notes => throw new NotImplementedException();
     public override ReadOnlySpan<int> PersistentNoteIDs => throw new NotImplementedException();
     public override int NoteCount => throw new NotImplementedException();
+    public override float StartFrequency => throw new NotImplementedException();
+    public override int Octaves => throw new NotImplementedException();
 
     public override int BinsPerOctave => 1;
 
@@ -77,7 +79,7 @@ public unsafe partial class FFT : NoteFinderCommon
         const uint FFTW_ESTIMATE = 1 << 6;
         this.FFTPlan = FFTW_MakePlan((int)LenMain, this.MainBufferPtr, this.ResultBufferPtr, FFTW_ESTIMATE);
 
-        this.AllBins = new float[this.ResultCount];
+        this.AllBins = new float[(this.ResultCount / 2) + 1];
     }
 
     public override void AdjustOutputSpeed(uint period)
@@ -168,17 +170,18 @@ public unsafe partial class FFT : NoteFinderCommon
                 {
                     double ValA = this.ResultBuffer[i * 2];
                     double ValB = this.ResultBuffer[(i * 2) + 1];
-                    float Magnitude = (float)Math.Sqrt(ValA * ValA + ValB * ValB);
+                    float Magnitude = (float)Math.Sqrt((ValA * ValA) + (ValB * ValB));
                     NewAllBinMax = MathF.Max(NewAllBinMax, Magnitude);
                     this.AllBins[i / 2] = Magnitude;
                     i += 2;
                 }
             }
+            
             this.AllBinMaxSmoothed = this.AllBinMax < NewAllBinMax ? (this.AllBinMax * 0.8F) + (NewAllBinMax * 0.2F) : (this.AllBinMax * 0.995F) + (NewAllBinMax * 0.005F);
             this.AllBinMax = Math.Max(0.01F, AllBinMaxSmoothed);
-
+            
             {
-                float ScaleDivision = this.AllBinMaxSmoothed * 2.2F;
+                float ScaleDivision = this.AllBinMaxSmoothed * 4.5F;
                 Vector256<float> ScaleDivisionVec = Vector256.Create(ScaleDivision);
                 float CutoffVal = 0F; // = this.AllBinMaxSmoothed * 0.02F;
                 Vector256<float> CutoffValVec = Vector256.Create(CutoffVal);

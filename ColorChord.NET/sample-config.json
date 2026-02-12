@@ -2,12 +2,14 @@
     "Source":
     {
         "Type": "WASAPILoopback",
+        "Name": "ExampleSource",
         "Device": "default",
         "ShowDeviceInfo": true
     },
     "NoteFinder":
     {
-        "Type": "BaseNoteFinder"
+        "Type": "BaseNoteFinder",
+        "Name": "ExampleNoteFinder"
     },
     "Visualizers":
     [

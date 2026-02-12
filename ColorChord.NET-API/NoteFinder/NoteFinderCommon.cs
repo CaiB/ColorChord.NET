@@ -32,6 +32,10 @@ public abstract class NoteFinderCommon : IConfigurableAttr
 
     public abstract int BinsPerOctave { get; }
 
+    public abstract float StartFrequency { get; }
+
+    public abstract int Octaves { get; }
+
     public abstract void Start();
     public abstract void UpdateOutputs();
 
