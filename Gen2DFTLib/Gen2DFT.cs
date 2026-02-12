@@ -22,7 +22,7 @@ public static unsafe class Gen2DFT
     public static int Init(uint octaveCount, uint binsPerOctave, uint sampleRate, float startFrequency, float loudnessCorrection)
     {
         if (binsPerOctave % 4 != 0) { return -1; }
-        DFT = new(octaveCount, binsPerOctave, sampleRate, startFrequency, loudnessCorrection, null);
+        DFT = new(octaveCount, binsPerOctave, sampleRate, startFrequency, loudnessCorrection, MathF.Max(1F, binsPerOctave / 24F), null); // TODO: Allow configuring targetBinRange
         BinMagnitudesHandle = GCHandle.Alloc(DFT.RawBinMagnitudes, GCHandleType.Pinned);
         BinFrequenciesHandle = GCHandle.Alloc(DFT.RawBinFrequencies, GCHandleType.Pinned);
         BinWidthsHandle = GCHandle.Alloc(DFT.RawBinWidths, GCHandleType.Pinned);

@@ -60,6 +60,8 @@ public sealed class Gen2NoteFinderDFT
 
     public float StartFrequency { get; private init; }
 
+    public float TargetBinRange { get; private init; }
+
     /// <summary> The total number of bins over all octaves. </summary>
     public readonly ushort BinCount;
 
@@ -84,7 +86,7 @@ public sealed class Gen2NoteFinderDFT
     private readonly ushort[] AudioBufferSubHeads;
 
     /// <summary> How far forward in the sine table this bin should step with every added sample, such that one full sine wave (wrap back to 0) occurs after the number of steps corresponding to the bin frequency. Format is fixed-point 5b+11b. </summary>
-    /// <remarks> Indexed by [Bin], size is [<see cref="BinsPerOctave"/>] </remarks>
+    /// <remarks> Indexed by [Bin], size is [<see cref="BinCount"/>] </remarks>
     private readonly DualU16[] SinTableStepSize;
 
     /// <summary>
@@ -143,8 +145,9 @@ public sealed class Gen2NoteFinderDFT
     /// <param name="sampleRate"> The sample rate of the input audio signal </param>
     /// <param name="startFrequency"> The desired frequency of the lowest bin </param>
     /// <param name="loudnessCorrection"> The amount of human ear-modelled loudness correction to apply to the output bin values, between 0.0 and 1.0 </param>
+    /// <param name="targetBinRange"> How much overlap there should be with adjacent bins. 1.0 is recommended for 24 bins per octave. </param>
     /// <param name="timingCallback"> A callback that will be dispatched at defined regular intervals during audio processing </param>
-    public Gen2NoteFinderDFT(uint octaveCount, uint binsPerOctave, uint sampleRate, float startFrequency, float loudnessCorrection, TimingReceiverCallback? timingCallback) // TODO: Why are some properties while others not
+    public Gen2NoteFinderDFT(uint octaveCount, uint binsPerOctave, uint sampleRate, float startFrequency, float loudnessCorrection, float targetBinRange, TimingReceiverCallback? timingCallback) // TODO: Why are some properties while others not
     {
         this.OctaveCount = octaveCount;
         this.BinsPerOctave = binsPerOctave;
@@ -152,6 +155,7 @@ public sealed class Gen2NoteFinderDFT
         this.StartFrequency = startFrequency;
         this.LoudnessCorrectionAmount = loudnessCorrection;
         this.TimingCallback = timingCallback;
+        this.TargetBinRange = targetBinRange;
 
         this.BinCount = (ushort)(OctaveCount * BinsPerOctave);
         this.StartOfTopOctave = (ushort)((OctaveCount - 1) * BinsPerOctave);
@@ -182,8 +186,8 @@ public sealed class Gen2NoteFinderDFT
             uint ThisBufferSize;
             float ThisOctaveStart = StartFrequency * MathF.Pow(2, Bin / BinsPerOctave);
             BinFrequency = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin);
-            float NextBinFrequencyUp = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin + 1);
-            float NextBinFrequencyDown = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin - 1);
+            float NextBinFrequencyUp = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin + this.TargetBinRange);
+            float NextBinFrequencyDown = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin - this.TargetBinRange);
             //float IdealWindowSize = WindowSizeForBinWidth(TopOctaveNextBinFreq - TopOctaveBinFreq); // TODO: Add scale factor to shift this from no overlap to -3dB point
             ThisBufferSize = RoundedWindowSizeForBinWidth(NextBinFrequencyUp - NextBinFrequencyDown, BinFrequency, SampleRate);
 
@@ -759,8 +763,8 @@ public sealed class Gen2NoteFinderDFT
         return (uint)Math.Min(ABSOLUTE_MAX_WINDOW_SIZE, MathF.Round((MathF.Max(MinWindowSizePeriods, MathF.Min(MaxWindowSizePeriods, MathF.Round(PeriodsInWindow))) * PeriodInSamples) + (PeriodInSamples * 0.5F)));
     }
 
-    private static float CalculateNoteFrequency(float octaveStart, uint binsPerOctave, int binIndex) => octaveStart * GetNoteFrequencyMultiplier(binsPerOctave, binIndex);
-    private static float GetNoteFrequencyMultiplier(uint binsPerOctave, int binIndex) => MathF.Pow(2F, (float)binIndex / binsPerOctave);
+    private static float CalculateNoteFrequency(float octaveStart, uint binsPerOctave, float binIndex) => octaveStart * GetNoteFrequencyMultiplier(binsPerOctave, binIndex);
+    private static float GetNoteFrequencyMultiplier(uint binsPerOctave, float binIndex) => MathF.Pow(2F, binIndex / binsPerOctave);
 
     /// <summary> Gets a factor to multiply the output amplitude by to correct for percieved loudness. </summary>
     /// <remarks> Output is based on ISO 226:2023 data, and assumes a fixed loudness, and that the item being multiplied is sqrt(dB level). </remarks>

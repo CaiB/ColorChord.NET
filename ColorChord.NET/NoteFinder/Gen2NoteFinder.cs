@@ -36,6 +36,9 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
 
     public uint SampleRate { get; private set; }
 
+    [ConfigFloat("TargetBinRange", 0.001F, 1000F, 1F)]
+    public float TargetBinRange { get; private set; } = 1F;
+
     public override ReadOnlySpan<float> AllBinValues => this.DFT.AllBinValues.AsSpan(1, this.DFT.AllBinValues.Length - 2);
     public override ReadOnlySpan<float> OctaveBinValues => this.DFT.OctaveBinValues;
 
@@ -80,11 +83,11 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
 
         SetupBuffers();
         this.SampleRate = 48000; // TODO: Temporary until source is connected ahead of time
-        this.DFT = new(this.OctaveCount, this.BPO, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, RunTimingReceivers);
+        this.DFT = new(this.OctaveCount, this.BPO, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, this.TargetBinRange, RunTimingReceivers);
         Reconfigure();
     }
 
-    [MemberNotNull(nameof(PeakBits), nameof(WidebandBits), nameof(AllowedBinWidths), nameof(PreviousBinValues), nameof(RecentBinChanges))]
+    [MemberNotNull(nameof(PeakBits), nameof(WidebandBits), nameof(AllowedBinWidths), nameof(PreviousBinValues), nameof(RecentBinChanges), nameof(AllBinValuesScaled))]
     private void Reconfigure()
     {
         int BinCount = this.DFT.BinCount;
@@ -109,7 +112,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
     public override void SetSampleRate(int sampleRate)
     {
         this.SampleRate = (uint)sampleRate;
-        this.DFT = new(this.OctaveCount, this.BPO, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, RunTimingReceivers);
+        this.DFT = new(this.OctaveCount, this.BPO, this.SampleRate, this.StartFrequency, this.LoudnessCorrectionAmount, this.TargetBinRange, RunTimingReceivers);
         Reconfigure();
         Log.Debug($"There are {TimingReceivers.Length} timing receivers");
         for (int i = 0; i < TimingReceivers.Length; i++)
