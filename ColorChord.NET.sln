@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.3.32804.467
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11505.172 d18.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ColorChord.NET", "ColorChord.NET\ColorChord.NET.csproj", "{8FD047CD-693D-4D5A-8C1E-802101FCC54E}"
 EndProject
@@ -22,7 +22,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AudioFileSource", "Extensio
 		{2851D19F-7B96-4EA3-8438-90F186C07CC0} = {2851D19F-7B96-4EA3-8438-90F186C07CC0}
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ImageOutput", "Extensions\ImageOutput\ImageOutput.csproj", "{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FileOutputs", "Extensions\ImageOutput\FileOutputs.csproj", "{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}"
 	ProjectSection(ProjectDependencies) = postProject
 		{2851D19F-7B96-4EA3-8438-90F186C07CC0} = {2851D19F-7B96-4EA3-8438-90F186C07CC0}
 	EndProjectSection
