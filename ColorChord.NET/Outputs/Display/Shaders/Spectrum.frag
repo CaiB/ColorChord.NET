@@ -36,8 +36,8 @@ void main()
     uint PeakHere = (texture(TexturePeakBits, vec2(((SectionHere / 8) + 0.5) / textureSize(TexturePeakBits, 0).x, 0.5)).r >> (SectionHere % 8)) & 1u;
     uint WidebandHere = (texture(TextureWidebandBits, vec2(((SectionHere / 8) + 0.5) / textureSize(TextureWidebandBits, 0).x, 0.5)).r >> (SectionHere % 8)) & 1u;
     vec3 Colour = AngleToRGB(mod(float(SectionHere) / BinsPerOctave, 1.0), 1.0 - (0.8 * WidebandHere), min(1.0, 0.1 + (HeightHere * 3.0)) - (0.9 * WidebandHere));
+    //vec3 Colour = AngleToRGB(mod(float(SectionHere) / BinsPerOctave, 1.0), 1.0, 1.0);
     float IsBar = step(abs(TexCoord.y), HeightHere);
-    //float IsBar = (step(0.0, TexCoord.y) * step(TexCoord.y, HeightHere)) + ((step(0.0, -TexCoord.y) * step(-TexCoord.y, ChangeHere)));
     FragColor = vec4((IsBar * Colour) + ((1.0 - IsBar) * vec3(0.1) * PeakHere * Colour), 1.0);
-    //FragColor = vec4(vec3(0.8), 1.0);
+    //FragColor = vec4((IsBar * Colour), 1.0);
 }

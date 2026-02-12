@@ -69,7 +69,7 @@ public static class VisualizerTools
         if (Sse41.IsSupported && ALLOW_SIMD)
         {
             Vector128<float> SHIFT = Vector128.Create(5F / 6F, 3F / 6F, 1F / 6F, 0F);
-            Vector128<float> OFFSET = Vector128.Create(4F / 6F); // TODO: Check if generating these from each other would be faster
+            Vector128<float> OFFSET = Vector128.Create(4F / 6F); // TODO: Check if generating these from each other would be faster, i.e. put this in slot 3 and then shuffle? Or bump others to put in slot 0 and broadcast
             Vector128<float> ZERO = Vector128<float>.Zero;
             Vector128<float> ONE = Vector128.Create(1F);
             Vector128<float> SIX = Vector128.Create(6F);
@@ -77,7 +77,7 @@ public static class VisualizerTools
 
             Vector128<float> Hue = Vector128.Create(hue);
             Vector128<float> SatVal = Sse.Min(ONE, Sse.Max(ZERO, Vector128.Create(sat, val, 0F, 0F)));
-            Vector128<float> Sat = Sse2.Shuffle(SatVal.AsInt32(), 0b00000000).AsSingle();
+            Vector128<float> Sat = Sse2.Shuffle(SatVal.AsInt32(), 0b00000000).AsSingle(); // Could be done with VBROADCASTSS, but this requires AVX2. Instead, duplicate the values beforehand and MOVDDUP? Maybe with MOVHLPS for the second one?
             Vector128<float> Val = Sse2.Shuffle(SatVal.AsInt32(), 0b01010101).AsSingle();
             Vector128<float> Chroma = Sse.Multiply(Val, Sat);
 
@@ -88,7 +88,7 @@ public static class VisualizerTools
 
             Vector128<float> RGBFloats = Sse.Subtract(Val, Sse.Multiply(Chroma, ClampedHue));
             Vector128<int> RGBScaled = Sse2.ConvertToVector128Int32(Sse41.RoundToNearestInteger(Sse.Multiply(RGBFloats, BYTE_SCALE)));
-            Vector128<int> RGBOrdered = Sse2.Shuffle(RGBScaled, 0b00000110);
+            Vector128<int> RGBOrdered = Sse2.Shuffle(RGBScaled, 0b00000110); // TODO: Might be able to re-order above ops to remove need for this?
             Vector128<short> RGBCompressed = Sse41.PackUnsignedSaturate(RGBOrdered, RGBOrdered).AsInt16();
             uint Result = Sse2.PackUnsignedSaturate(RGBCompressed, RGBCompressed).AsUInt32()[0] & 0xFFFFFF;
             return Result;

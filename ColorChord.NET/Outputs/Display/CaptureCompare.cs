@@ -59,6 +59,7 @@ public class CaptureCompare : IDisplayMode, IConfigurableAttr
         this.DataSourceB = DataSourceBTemp ?? this.DataSourceA;
         config.Remove("SecondaryVisualizer");
         Configurer.Configure(this, config);
+        if (this.DataSourceB != this.DataSourceA) { ((IVisualizer)this.DataSourceB).AttachOutput(this.HostWindow); }
     }
 
     public void Load()
@@ -178,6 +179,8 @@ public class CaptureCompare : IDisplayMode, IConfigurableAttr
     {
         if (!this.SetupDone) { return; }
         this.Shader!.Use();
+
+        ((IVisualizer)this.DataSourceB).NoteFinder?.UpdateOutputs(); // TODO: Janky?
 
         if (this.NewData)
         {

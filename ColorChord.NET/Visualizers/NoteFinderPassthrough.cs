@@ -5,6 +5,7 @@ using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
 using ColorChord.NET.Config;
 using ColorChord.NET.NoteFinder;
+using ColorChord.NET.Outputs;
 using System;
 using System.Collections.Generic;
 
@@ -39,7 +40,7 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
 
     public void Start()
     {
-        (this.NoteFinder as Gen2NoteFinder)?.AddTimingReceiver(GetData, this.TimePeriod); // TODO: Generalize
+        if (this.NoteFinder is Gen2NoteFinder G2NF) { G2NF.AddTimingReceiver(GetData, this.TimePeriod); } // TODO: Generalize
     }
 
     public void GetData()
@@ -50,7 +51,11 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
         foreach (IOutput Out in this.Outputs) { Out.Dispatch(); }
     }
 
-    public void AttachOutput(IOutput output) => this.Outputs.Add(output);
+    public void AttachOutput(IOutput output)
+    {
+        this.Outputs.Add(output);
+        if (this.NoteFinder is not Gen2NoteFinder && output is DisplayOpenGL DOGL) { DOGL.AddTimingReceiver(GetData, 1); }
+    }
 
     public int GetCountDiscrete() => this.Data.Length;
 
