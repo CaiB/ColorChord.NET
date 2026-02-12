@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+	<RollForward>LatestMajor</RollForward>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>CC.NET-Ext-$(MSBuildProjectName)</AssemblyName>
+    <RootNamespace>ColorChord.NET.Extensions.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="SpectrumLinearIn.frag" />
+  </ItemGroup>
+	
+  <ItemGroup>
+    <ProjectReference Include="..\..\ColorChord.NET-API\ColorChord.NET-API.csproj" />
+    <ProjectReference Include="..\..\ColorChord.NET\ColorChord.NET.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="lib\libfftw3-3.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(BuildingInsideVisualStudio)' == 'true'">
+		<Exec Command="echo &quot;Copying to $(SolutionDir)ColorChord.NET\bin\$(Configuration)\net8.0\Extensions\$(TargetName).dll&quot;&#xD;&#xA;copy /Y &quot;$(TargetDir)$(TargetName).dll&quot; &quot;$(SolutionDir)ColorChord.NET\bin\$(Configuration)\net8.0\Extensions\$(TargetName).dll&quot;" />
+	</Target>
+
+</Project>
