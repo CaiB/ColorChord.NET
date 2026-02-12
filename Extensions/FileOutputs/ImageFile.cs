@@ -6,7 +6,7 @@ using ColorChord.NET.API.Visualizers.Formats;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace ColorChord.NET.Extensions.ImageOutput;
+namespace ColorChord.NET.Extensions.FileOutputs;
 
 /// <summary>Writes the output of an <see cref="IDiscrete1D"/> visualizer to image files.</summary>
 public class ImageFile : IOutput
