@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
 	<RollForward>LatestMajor</RollForward>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(BuildingInsideVisualStudio)' == 'true'">
-    <Exec Command="echo &quot;Copying to $(SolutionDir)ColorChord.NET\bin\$(Configuration)\net7.0\Extensions\$(TargetName).dll&quot;&#xD;&#xA;copy /Y &quot;$(TargetDir)$(TargetName).dll&quot; &quot;$(SolutionDir)ColorChord.NET\bin\$(Configuration)\net7.0\Extensions\$(TargetName).dll&quot;" />
+    <Exec Command="echo &quot;Copying to $(SolutionDir)ColorChord.NET\bin\$(Configuration)\net10.0\Extensions\$(TargetName).dll&quot;&#xD;&#xA;copy /Y &quot;$(TargetDir)$(TargetName).dll&quot; &quot;$(SolutionDir)ColorChord.NET\bin\$(Configuration)\net10.0\Extensions\$(TargetName).dll&quot;" />
   </Target>
 
 </Project>
