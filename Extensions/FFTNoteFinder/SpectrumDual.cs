@@ -45,9 +45,9 @@ public class SpectrumDual : IDisplayMode, IConfigurableAttr
 
     private int VertexBufferHandleTop, VertexArrayHandleTop, TextureHandleRawBinsTop, TextureHandlePeakBitsTop, TextureHandleWidebandBitsTop;
     private int VertexBufferHandleBot, VertexArrayHandleBot, TextureHandleRawBinsBot;
-    private int LocationBinCountTop, LocationBPOTop, LocationScaleFactorTop, LocationExponentTop;
+    private int LocationBinCountTop, LocationBPOTop, LocationScaleFactorTop, LocationExponentTop, LocationFeatureBitsTop;
     private int LocationBinCountBot, LocationBinFreqSizeBot, LocationScaleFactorBot, LocationExponentBot;
-    private int LocationStartFreq, LocationEndFreq;
+    private int LocationStartFreqBot, LocationEndFreqBot;
 
     private float[] RawDataInTop, RawDataInBot;
 
@@ -124,6 +124,8 @@ public class SpectrumDual : IDisplayMode, IConfigurableAttr
         GL.Uniform1(this.LocationScaleFactorTop, this.ScaleFactor);
         this.LocationExponentTop = this.ShaderTop.GetUniformLocation("Exponent");
         GL.Uniform1(this.LocationExponentTop, this.Exponent);
+        this.LocationFeatureBitsTop = this.ShaderTop.GetUniformLocation("FeatureBits");
+        GL.Uniform1(this.LocationFeatureBitsTop, 0b0011U);
 
         // Prepare and upload vertex data
         GL.BindVertexArray(this.VertexArrayHandleTop);
@@ -162,10 +164,10 @@ public class SpectrumDual : IDisplayMode, IConfigurableAttr
         GL.Uniform1(this.LocationScaleFactorBot, this.ScaleFactor);
         this.LocationExponentBot = this.ShaderBot.GetUniformLocation("Exponent");
         GL.Uniform1(this.LocationExponentBot, this.Exponent);
-        this.LocationStartFreq = this.ShaderBot.GetUniformLocation("StartFreq");
-        GL.Uniform1(this.LocationStartFreq, this.NoteFinder.StartFrequency);
-        this.LocationEndFreq = this.ShaderBot.GetUniformLocation("EndFreq");
-        GL.Uniform1(this.LocationEndFreq, this.NoteFinder.StartFrequency * MathF.Pow(2, this.NoteFinder.Octaves));
+        this.LocationStartFreqBot = this.ShaderBot.GetUniformLocation("StartFreq");
+        GL.Uniform1(this.LocationStartFreqBot, this.NoteFinder.StartFrequency);
+        this.LocationEndFreqBot = this.ShaderBot.GetUniformLocation("EndFreq");
+        GL.Uniform1(this.LocationEndFreqBot, this.NoteFinder.StartFrequency * MathF.Pow(2, this.NoteFinder.Octaves));
 
         // Prepare and upload vertex data
         GL.BindVertexArray(this.VertexArrayHandleBot);

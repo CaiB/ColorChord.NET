@@ -30,7 +30,7 @@ public class Spectrum : IDisplayMode, IConfigurableAttr
     };
 
     private int VertexBufferHandle, VertexArrayHandle, TextureHandleRawBins, TextureHandlePeakBits, TextureHandleWidebandBits;
-    private int LocationBinCount, LocationBPO, LocationScaleFactor, LocationExponent;
+    private int LocationBinCount, LocationBPO, LocationScaleFactor, LocationExponent, LocationFeatureBits;
 
     private float[] RawDataIn;
 
@@ -39,6 +39,18 @@ public class Spectrum : IDisplayMode, IConfigurableAttr
 
     [ConfigFloat("ScaleExponent", 0F, 10F, 3F)]
     private float Exponent = 3F;
+
+    [ConfigBool("PeakHighlight", true)]
+    private bool PeakHighlight = true;
+
+    [ConfigBool("HideWideband", true)]
+    private bool HideWideband = true;
+
+    [ConfigBool("EnableColour", true)]
+    private bool EnableColour = true;
+
+    [ConfigBool("StartInCenter", true)]
+    private bool StartInCenter = true;
 
     /// <summary> Whether this output is ready to accept data and draw. </summary>
     private bool SetupDone = false;
@@ -103,6 +115,8 @@ public class Spectrum : IDisplayMode, IConfigurableAttr
         GL.Uniform1(this.LocationScaleFactor, this.ScaleFactor);
         this.LocationExponent = this.Shader.GetUniformLocation("Exponent");
         GL.Uniform1(this.LocationExponent, this.Exponent);
+        this.LocationFeatureBits = this.Shader.GetUniformLocation("FeatureBits");
+        SetFeatureBits();
 
         // Prepare and upload vertex data
         GL.BindVertexArray(this.VertexArrayHandle);
@@ -115,6 +129,12 @@ public class Spectrum : IDisplayMode, IConfigurableAttr
 
         this.SetupDone = true;
     }
+
+    private void SetFeatureBits() => GL.Uniform1(this.LocationFeatureBits, (uint)(
+        (this.StartInCenter ? 1 : 0) | 
+        (this.EnableColour ? 2 : 0) |
+        (this.HideWideband ? 4 : 0) |
+        (this.PeakHighlight ? 8 : 0)));
 
     public void Render()
     {

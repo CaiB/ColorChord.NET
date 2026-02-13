@@ -22,7 +22,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AudioFileSource", "Extensio
 		{2851D19F-7B96-4EA3-8438-90F186C07CC0} = {2851D19F-7B96-4EA3-8438-90F186C07CC0}
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FileOutputs", "Extensions\ImageOutput\FileOutputs.csproj", "{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FileOutputs", "Extensions\FileOutputs\FileOutputs.csproj", "{A1C693C2-8B33-44C8-8A06-F9D1C881FFA1}"
 	ProjectSection(ProjectDependencies) = postProject
 		{2851D19F-7B96-4EA3-8438-90F186C07CC0} = {2851D19F-7B96-4EA3-8438-90F186C07CC0}
 	EndProjectSection

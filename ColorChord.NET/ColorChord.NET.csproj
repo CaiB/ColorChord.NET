@@ -40,7 +40,6 @@
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Radar.vert" />
     <EmbeddedResource Include="Outputs\Display\Shaders\RadialPoles.frag" />
-    <EmbeddedResource Include="Outputs\Display\Shaders\SpectrumBasic.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Spectrum.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothCircle.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\Passthrough2.vert" />
