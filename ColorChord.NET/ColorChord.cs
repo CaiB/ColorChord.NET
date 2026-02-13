@@ -9,6 +9,7 @@ using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.Config;
 using ColorChord.NET.Controllers;
 using ColorChord.NET.Extensions;
+using OpenTK.Windowing.Desktop;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -53,6 +54,10 @@ namespace ColorChord.NET
             }
 
             ColorChordAPI.Configurer = ConfigurerInst.Inst;
+            // Janky workaround for OpenTK insisting the application's main thread is the only possible way a user could want to use their library.
+            // This can't be done inside DisplayOpenGL because the constructor's base() call has to be first, and throws an exception is this is not already set before it runs.
+            // https://github.com/opentk/opentk/issues/1206
+            GLFWProvider.CheckForMainThread = false;
 
             ExtensionHandler.LoadExtensions();
             ExtensionHandler.InitExtensions();
