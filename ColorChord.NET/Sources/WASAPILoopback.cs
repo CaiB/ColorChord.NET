@@ -40,7 +40,6 @@ public class WASAPILoopback : IAudioSource
     private int BytesPerFrame;
     
     private bool KeepGoing = true;
-    private bool StreamReady = false;
     private Thread? ProcessThread;
 
     private IMMDeviceEnumerator? DeviceEnumerator;
@@ -220,7 +219,6 @@ public class WASAPILoopback : IAudioSource
         // Begin streaming
         ErrorCode = this.Client.Start();
         if (IsErrorAndOut(ErrorCode, "Could not start audio client.")) { return; }
-        this.StreamReady = true;
 
         this.KeepGoing = true;
         this.ProcessThread = new Thread(ProcessEventAudio) { Name = $"WASAPILoopback {this.Name}" };
@@ -346,8 +344,6 @@ public class WASAPILoopback : IAudioSource
 
         ErrorCode = this.Client == null ? -1 : this.Client.Stop();
         IsErrorAndOut(ErrorCode, "Failed to stop audio client.");
-
-        this.StreamReady = false;
     }
 
     private static bool IsError(int hresult) => hresult < 0;

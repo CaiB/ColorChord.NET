@@ -19,7 +19,8 @@ public class FakeNoteFinder : NoteFinderCommon
 
     public override int NoteCount => 12;
     public override int BinsPerOctave => 12;
-    public int Octaves => 5;
+    public override int Octaves => 5;
+    public override float StartFrequency => 55F;
 
     public FakeNoteFinder(string name)
     {

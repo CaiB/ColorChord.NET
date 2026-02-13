@@ -119,7 +119,8 @@ namespace ColorChord.NET
             {
                 if (Reader.Length > FILE_SIZE_LIMIT_MB * 1024 * 1024) { throw new Exception($"The config JSON file is over the {FILE_SIZE_LIMIT_MB} MiB size limit."); }
                 FileContent = new byte[Reader.Length];
-                Reader.Read(FileContent, 0, FileContent.Length);
+                int BytesRead = Reader.Read(FileContent, 0, FileContent.Length);
+                if (BytesRead != FileContent.Length) { throw new Exception("The config file's size did not match the amount of data read."); }
             }
 
             byte[] ConfigHash = MD5.HashData(FileContent);
@@ -307,7 +308,7 @@ namespace ColorChord.NET
                     }
                     return ArrB;
                 case JsonTokenType.String:
-                    List<string> ArrS = [reader.GetString()];
+                    List<string> ArrS = [reader.GetString() ?? string.Empty];
                     reader.Read();
                     while (reader.TokenType != JsonTokenType.EndArray)
                     {

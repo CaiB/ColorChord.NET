@@ -18,8 +18,8 @@ public class LinearBenchmarks
     [Params(true, false)]
     public bool IsOrdered;
 
-    private NoteFinderCommon Source;
-    private Linear Target;
+    private NoteFinderCommon? Source;
+    private Linear? Target;
 
     [GlobalSetup]
     public void Prepare()
@@ -47,6 +47,6 @@ public class LinearBenchmarks
     [Benchmark]
     public void Update()
     {
-        this.Target.Update();
+        this.Target!.Update();
     }
 }

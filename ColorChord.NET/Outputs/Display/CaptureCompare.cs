@@ -10,6 +10,7 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace ColorChord.NET.Outputs.Display;
 
@@ -30,7 +31,7 @@ public class CaptureCompare : IDisplayMode, IConfigurableAttr
 
     private int LocationAdvanceALive, LocationAdvanceBLive, LocationAdvanceACapture, LocationAdvanceBCapture, LocationACaptureBounds, LocationBCaptureBounds;
 
-    private uint[] NewTextureDataA, NewTextureDataB;
+    private uint[]? NewTextureDataA, NewTextureDataB;
     private int UploadedTextureLocA, UploadedTextureLocB, PopulatedTextureLocA, PopulatedTextureLocB;
 
     private bool DoCaptureA, DoCaptureB, PushNewBounds;
@@ -62,6 +63,7 @@ public class CaptureCompare : IDisplayMode, IConfigurableAttr
         if (this.DataSourceB != this.DataSourceA) { ((IVisualizer)this.DataSourceB).AttachOutput(this.HostWindow); }
     }
 
+    [MemberNotNull(nameof(NewTextureDataA), nameof(NewTextureDataB))]
     public void Load()
     {
         // Make shader and geometry storage
@@ -155,7 +157,7 @@ public class CaptureCompare : IDisplayMode, IConfigurableAttr
             int Count = this.DataSourceA.GetCountDiscrete();
             uint[] Data = this.DataSourceA.GetDataDiscrete();
             if (this.PopulatedTextureLocA >= TextureHeight - 1) { return; } // Drop this data, we are too behind
-            lock (this.NewTextureDataA)
+            lock (this.NewTextureDataA!)
             {
                 Array.Copy(Data, 0, this.NewTextureDataA, this.PopulatedTextureLocA * TextureWidthA, Count);
                 this.PopulatedTextureLocA++;
@@ -165,7 +167,7 @@ public class CaptureCompare : IDisplayMode, IConfigurableAttr
             int Count = this.DataSourceB.GetCountDiscrete();
             uint[] Data = this.DataSourceB.GetDataDiscrete();
             if (this.PopulatedTextureLocB >= TextureHeight - 1) { return; } // Drop this data, we are too behind
-            lock (this.NewTextureDataB)
+            lock (this.NewTextureDataB!)
             {
                 Array.Copy(Data, 0, this.NewTextureDataB, this.PopulatedTextureLocB * TextureWidthB, Count);
                 this.PopulatedTextureLocB++;
@@ -187,7 +189,7 @@ public class CaptureCompare : IDisplayMode, IConfigurableAttr
             if (this.PopulatedTextureLocA != 0)
             {
                 GL.ActiveTexture(TextureUnit.Texture0);
-                lock (this.NewTextureDataA)
+                lock (this.NewTextureDataA!)
                 {
                     if (this.UploadedTextureLocA + this.PopulatedTextureLocA < TextureHeight)
                     {
@@ -208,7 +210,7 @@ public class CaptureCompare : IDisplayMode, IConfigurableAttr
             if (this.PopulatedTextureLocB != 0)
             {
                 GL.ActiveTexture(TextureUnit.Texture1);
-                lock (this.NewTextureDataB)
+                lock (this.NewTextureDataB!)
                 {
                     if (this.UploadedTextureLocB + this.PopulatedTextureLocB < TextureHeight)
                     {
@@ -248,11 +250,8 @@ public class CaptureCompare : IDisplayMode, IConfigurableAttr
             this.PushNewBounds = false;
         }
         
-
         GL.BindVertexArray(this.VertexArrayHandle);
         GL.DrawArrays(PrimitiveType.Triangles, 0, GeometryData.Length / 4);
-
-
     }
 
     private void OnMouseUp(MouseButtonEventArgs args)

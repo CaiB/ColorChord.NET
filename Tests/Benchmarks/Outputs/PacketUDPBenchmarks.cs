@@ -9,13 +9,13 @@ namespace ColorChord.NET.Tests.Benchmarks.Outputs;
 public class PacketUDPBenchmarks
 {
     [Params("Raw", "TPM2.NET")]
-    public string Protocol { get; set; }
+    public string Protocol { get; set; } = "Raw";
 
     [Params(50)]
     public int LEDCount { get; set; }
 
-    private FakeDiscrete1D Source;
-    private PacketUDP Target;
+    private FakeDiscrete1D? Source;
+    private PacketUDP? Target;
 
     [GlobalSetup]
     public void Prepare()
@@ -42,6 +42,6 @@ public class PacketUDPBenchmarks
     [Benchmark]
     public void Dispatch()
     {
-        this.Target.Dispatch();
+        this.Target!.Dispatch();
     }
 }
