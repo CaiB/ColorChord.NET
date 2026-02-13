@@ -188,6 +188,8 @@ public static class Configurer
             foreach (string Item in config.Keys)
             {
                 if (Item == "Type" || Item == "Name") { continue; }
+                if (TargetInst is NoteFinderCommon && Item == "SourceName") { continue; }
+                if (TargetInst is IVisualizer && Item == "NoteFinderName") { continue; }
                 if (TargetInst is IOutput && (Item == "VisualizerName" || Item == "Modes")) { continue; }
                 Log.Warn($"Unknown config entry \"{Item}\" found while configuring {TargetType.FullName}.");
             }
