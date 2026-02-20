@@ -18,6 +18,9 @@ public unsafe partial class FFT : NoteFinderCommon
     [ConfigInt("WindowSize", 64, 65536, 1024)]
     public uint WindowSize { get; private set; }
 
+    [ConfigFloat("LoudnessCorrection", 0.0F, 1.0F, 0.0F)]
+    public float LoudnessCorrectionAmount { get; private set; } = 0F;
+
     public uint SampleRate { get; private set; }
 
     private Thread? ProcessThread;
@@ -36,6 +39,7 @@ public unsafe partial class FFT : NoteFinderCommon
 
     private float AllBinMax = 0.01F, AllBinMaxSmoothed = 0.01F;
     private float[] AllBins;
+    private float[] LoudnessCorrectionFactors;
     public override ReadOnlySpan<float> AllBinValues => this.AllBins;
     public override ReadOnlySpan<float> OctaveBinValues => throw new NotImplementedException();
     public override ReadOnlySpan<Note> Notes => throw new NotImplementedException();
@@ -61,7 +65,7 @@ public unsafe partial class FFT : NoteFinderCommon
         InitFFTW();
     }
 
-    [MemberNotNull(nameof(AllBins))]
+    [MemberNotNull(nameof(AllBins), nameof(LoudnessCorrectionFactors))]
     private void InitFFTW()
     {
         uint LenMain = this.WindowSize;
@@ -80,6 +84,8 @@ public unsafe partial class FFT : NoteFinderCommon
         this.FFTPlan = FFTW_MakePlan((int)LenMain, this.MainBufferPtr, this.ResultBufferPtr, FFTW_ESTIMATE);
 
         this.AllBins = new float[(this.ResultCount / 2) + 1];
+        this.LoudnessCorrectionFactors = new float[(this.ResultCount / 2) + 1];
+        PopulateLoudnessFactors();
     }
 
     public override void AdjustOutputSpeed(uint period)
@@ -87,7 +93,21 @@ public unsafe partial class FFT : NoteFinderCommon
         throw new NotImplementedException();
     }
 
-    public override void SetSampleRate(int sampleRate) { this.SampleRate = (uint)sampleRate; }
+    public override void SetSampleRate(int sampleRate)
+    {
+        this.SampleRate = (uint)sampleRate;
+        PopulateLoudnessFactors();
+    }
+
+    private void PopulateLoudnessFactors()
+    {
+        int Length = this.LoudnessCorrectionFactors.Length;
+        for (int i = 0; i < Length; i++)
+        {
+            float Frequency = ((float)i / (Length - 1)) * (this.SampleRate / 2F);
+            this.LoudnessCorrectionFactors[i] = LoudnessCorrection.GetLoudnessCorrection(Frequency, this.LoudnessCorrectionAmount);
+        }
+    }
 
     public override void Start()
     {
@@ -189,14 +209,15 @@ public unsafe partial class FFT : NoteFinderCommon
                 while (Avx.IsSupported && j + 8 <= this.AllBins.Length)
                 {
                     Vector256<float> MiddleValues = Vector256.LoadUnsafe(ref this.AllBins[j]);
-                    Vector256<float> Scaled = Avx.Divide(MiddleValues, ScaleDivisionVec);
+                    Vector256<float> ScaledLoud = Avx.Multiply(MiddleValues, Vector256.LoadUnsafe(ref this.LoudnessCorrectionFactors[j]));
+                    Vector256<float> Scaled = Avx.Divide(ScaledLoud, ScaleDivisionVec);
                     Vector256<float> WithCutoff = Avx.Max(Vector256<float>.Zero, Avx.Subtract(Scaled, CutoffValVec));
                     WithCutoff.StoreUnsafe(ref this.AllBins[j]);
                     j += 8;
                 }
                 while (j < this.AllBins.Length)
                 {
-                    float Scaled = this.AllBins[j] / ScaleDivision;
+                    float Scaled = this.AllBins[j] * this.LoudnessCorrectionFactors[j] / ScaleDivision;
                     this.AllBins[j] = MathF.Max(0F, Scaled - CutoffVal);
                     j++;
                 }
