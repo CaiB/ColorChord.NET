@@ -5,7 +5,22 @@ Other people have expressed interest in using the algorithm in their own project
 
 I also co-authored a conference paper detailing the algorithm. If you use this algorithm in your research, we would highly appreciate a citation.
 - Pre-publish version: [arXiv.org - Window Function-less DFT with Reduced Noise and Latency for Real-Time Music Analysis](https://arxiv.org/abs/2410.07982)
-- TODO: Add more info once review by conference is complete
+- EUSIPCO 2025 published version: [EUSIPCO 2025 - Window Function-less DFT with Reduced Noise and Latency for Real-Time Music Analysis](https://eusipco2025.org/wp-content/uploads/pdfs/0000431.pdf)
+
+```bibtex
+@INPROCEEDINGS{
+    ColorChordDotNET_Gen2DFT,
+    place={Palermo, Italy},
+    title={Window Function-less DFT with Reduced Noise and Latency for Real-Time Music Analysis},
+    booktitle={33rd European Signal Processing Conference (EUSIPCO 2025)},
+    publisher={IEEE},
+    author={Biesinger, Cai and Awano, Hiromitsu and Hashimoto, Masanori},
+    year={2025},
+    pages={431–435},
+    keywords={Time-frequency analysis;Visualization;Noise;Discrete Fourier transforms;Signal processing algorithms;Real-time systems;Multiple signal classification;Low latency communication;Signal resolution;Spectral analysis;low latency;real-time processing;acoustic signal processing;spectral analysis;music analysis},
+    doi={10.23919/EUSIPCO63237.2025.11226525}
+} 
+```
 
 [`Gen2DFT.cs`](https://github.com/CaiB/ColorChord.NET/blob/master/Gen2DFTLib/Gen2DFT.cs) in this directory is responsible for translating the C# API into one that is usable from unmanaged code. All of the functions exported in the DLL are defined and documented in this file. Documentation is also exported to an XML file included with the DLL download for use by your IDE to provide inline documentation.
 
