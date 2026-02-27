@@ -290,7 +290,6 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 
     private void Render()
     {
-        Console.WriteLine($"Beginning render");
         ref ComPtr<ID3D12CommandAllocator> CommandAllocator = ref this.CommandAllocators[this.CurrentBackBuffer];
         ref ComPtr<ID3D12Resource> BackBuffer = ref this.BufferRTVs[this.CurrentBackBuffer];
         CommandAllocator.Get()->Reset();
@@ -334,11 +333,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             
             this.CurrentBackBuffer = this.SwapChain4.Get()->GetCurrentBackBufferIndex();
 
-            Console.WriteLine($"Render waiting for fence {this.FrameFenceValue} to use {this.CurrentBackBuffer}");
             WaitForFenceValue(ref this.FrameFence, this.FrameFenceValues[this.CurrentBackBuffer], this.FrameFenceEvent);
-            Console.WriteLine($"Render done waiting for fence {this.FrameFenceValue}");
-            Console.WriteLine("----");
-            Console.WriteLine($"Render on {Thread.CurrentThread.ManagedThreadId}");
             if (this.SizeChanged) { HandleResize(); }
             //Console.WriteLine("Frame rendered!!!!!!!!!!");
         }
@@ -351,9 +346,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     {
         this.SizeChanged = false;
         // TODO: Check if size actually changed first?
-        Console.WriteLine($"Resize waiting for fence {this.FrameFenceValue + 1}");
         Flush(ref this.CommandQueue, ref this.FrameFence, ref this.FrameFenceValue, this.FrameFenceEvent);
-        Console.WriteLine($"Resize done waiting for fence {this.FrameFenceValue}");
         int NewWidth = Math.Max(1, this.Window.Width);
         int NewHeight = Math.Max(1, this.Window.Height);
 
@@ -371,7 +364,6 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         this.CurrentBackBuffer = this.SwapChain4.Get()->GetCurrentBackBufferIndex();
 
         UpdateRenderTargetViews(ref this.Device, ref this.SwapChain4, ref this.DescriptorHeapRTV);
-        Console.WriteLine($"Resize operations finished");
     }
 
     public void Dispatch()

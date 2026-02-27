@@ -17,7 +17,7 @@ public class Window
         get
         {
             Win32API.GetClientRect(this.Handle, out RectI32 ClientRect);
-            return ClientRect.Left - ClientRect.Right;
+            return ClientRect.Right - ClientRect.Left;
         }
         set
         {
@@ -93,7 +93,7 @@ public class Window
 
     public void Create()
     {
-        this.Handle = Win32API.CreateWindowEx(WindowStyleEx.None, ClassAtom, this.WindowTitle, WindowStyle.OverlappedWindow | WindowStyle.Visible, 0, 0, InitialWidth, InitialHeight, IntPtr.Zero, IntPtr.Zero, this.Instance, IntPtr.Zero);
+        this.Handle = Win32API.CreateWindowEx(WindowStyleEx.NoRedirectionBitmap, ClassAtom, this.WindowTitle, WindowStyle.OverlappedWindow | WindowStyle.Visible, 0, 0, InitialWidth, InitialHeight, IntPtr.Zero, IntPtr.Zero, this.Instance, IntPtr.Zero);
         if (this.Handle == IntPtr.Zero) { throw new Exception($"Creating the window resulted in error 0x{Marshal.GetLastWin32Error():X8}"); }
     }
 
@@ -142,7 +142,6 @@ public class Window
                 // TODO: Handle this event
                 break;
             case MessageID.WM_SIZE:
-                Console.WriteLine($"Resize on {Thread.CurrentThread.ManagedThreadId}");
                 this.OnResize?.Invoke(this, new()); // TODO: remove new
                 break;
             case MessageID.WM_MOVE:
