@@ -261,3 +261,4 @@ __pycache__/
 *.pyc
 /ColorChord.NET/Properties/launchSettings.json
 /ColorChord.NET/Config/DefaultConfigInfo.cs
+*.cso

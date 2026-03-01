@@ -8,6 +8,7 @@ using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Utility;
 using ColorChord.NET.Config;
+using ColorChord.NET.Outputs.DisplayD3D12Modes;
 using ColorChord.NET.Outputs.DisplayD3D12Support;
 using Win32;
 using Win32.Graphics.Direct3D;
@@ -56,6 +57,8 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     private uint CurrentBackBuffer = 0;
     public bool SizeChanged = false;
 
+    private TutorialMode Mode;
+
     public DisplayD3D12(string name, Dictionary<string, object> config)
     {
         this.Name = name;
@@ -64,6 +67,9 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         this.Window.Create();
         this.Window.OnResize += OnResize;
 
+        this.Mode = new(this.Window, this);
+
+        // TODO: Hey there's a lot of things in here that should be pinning memory before grabbing heap pointers!!!!
         if (D3D_DEBUG)
         {
             ThrowIfFailed(D3D12GetDebugInterface(__uuidof<ID3D12Debug>(), (void**)this.DebugLayer.GetAddressOf()));
@@ -137,9 +143,9 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         using ComPtr<ID3D12InfoQueue> D3DInfoQueue = default;
         if (this.Device.CopyTo(&D3DInfoQueue).Success)
         {
-            D3DInfoQueue.Get()->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
-            D3DInfoQueue.Get()->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
-            D3DInfoQueue.Get()->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
+            //D3DInfoQueue.Get()->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
+            //D3DInfoQueue.Get()->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
+            //D3DInfoQueue.Get()->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
             // TODO: filter out some messages
 
             //Span<Win32.Graphics.Direct3D12.MessageId> HiddenMessages = stackalloc Win32.Graphics.Direct3D12.MessageId[4]
@@ -213,6 +219,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 
         this.FrameFenceEventHandle = GCHandle.Alloc(this.FrameFenceEvent);
 
+        this.Mode.LoadContent(ref this.Device, new(ref this.Device, CommandListType.Copy));
 
         Console.WriteLine("We got here");
     }
@@ -268,11 +275,15 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         }
     }
 
-    void Flush(ref ComPtr<ID3D12CommandQueue> commandQueue, ref ComPtr<ID3D12Fence> fence, ref ulong fenceValue, AutoResetEvent fenceEvent)
+    public void Flush(ref ComPtr<ID3D12CommandQueue> commandQueue, ref ComPtr<ID3D12Fence> fence, ref ulong fenceValue, AutoResetEvent fenceEvent)
     {
         ulong fenceValueForSignal = AddSignalToQueue(ref commandQueue, ref fence, ref fenceValue);
         WaitForFenceValue(ref fence, fenceValueForSignal, fenceEvent);
     }
+
+    public void Flush() => Flush(ref this.CommandQueue, ref this.FrameFence, ref this.FrameFenceValue, this.FrameFenceEvent);
+
+    public ref ComPtr<ID3D12Device2> GetDevice() => ref this.Device;
 
     private ulong FrameCounterForFPS = 0;
     private readonly Stopwatch Stopwatch = new();
@@ -286,6 +297,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             FrameCounterForFPS = 0;
             this.Stopwatch.Restart();
         }
+        this.Mode.Update();
     }
 
     private void Render()
@@ -295,15 +307,19 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         CommandAllocator.Get()->Reset();
         this.CommandList.Get()->Reset(CommandAllocator.Get(), null);
 
+        CpuDescriptorHandle RTV = this.DescriptorHeapRTV.Get()->GetCPUDescriptorHandleForHeapStart();
+        RTV.Offset((int)this.CurrentBackBuffer, this.RTVDescriptorSize);
+
         // Clear the render target.
         {
             ResourceBarrier Barrier = ResourceBarrier.InitTransition(BackBuffer.Get(), ResourceStates.Present, ResourceStates.RenderTarget);
             this.CommandList.Get()->ResourceBarrier(1, &Barrier);
+            
             Span<float> ClearColour = [0x81 / 255F, 0x14 / 255F, 0x26 / 255F, 1.0F];
-            CpuDescriptorHandle RTV = this.DescriptorHeapRTV.Get()->GetCPUDescriptorHandleForHeapStart();
-            RTV.Offset((int)this.CurrentBackBuffer, this.RTVDescriptorSize);
             this.CommandList.Get()->ClearRenderTargetView(RTV, ClearColour.GetPointer(), 0, null);
         }
+
+        this.Mode.Render(ref this.CommandList, ref RTV);
 
         // Present
         {

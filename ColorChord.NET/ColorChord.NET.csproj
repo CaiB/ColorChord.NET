@@ -49,6 +49,7 @@
     <EmbeddedResource Include="Outputs\Display\Shaders\SmoothRadialBright.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\tube3d.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\tube3d.vert" />
+	<EmbeddedResource Include="Outputs\DisplayD3D12Modes\Shaders\Compiled\*.cso" />
     <EmbeddedResource Include="sample-config.json" />
   </ItemGroup>
   <ItemGroup>
@@ -59,6 +60,7 @@
   <ItemGroup>
     <PackageReference Include="OpenTK" Version="4.9.4" />
     <PackageReference Include="Vortice.Win32.Graphics.D3D12MemoryAllocator" Version="2.3.0" />
+    <PackageReference Include="Vortice.Win32.Graphics.Direct3D.Fxc" Version="2.3.0" />
     <PackageReference Include="Vortice.Win32.Graphics.Direct3D12" Version="2.3.0" />
     <PackageReference Include="Vortice.Win32.Graphics.Dxgi" Version="2.3.0" />
   </ItemGroup>
@@ -108,5 +110,8 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <EmbeddedResource Include="Outputs\Display\Shaders\CaptureCompare.frag" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Outputs\DisplayD3D12Modes\Shaders\Compiled\" />
 	</ItemGroup>
 </Project>
