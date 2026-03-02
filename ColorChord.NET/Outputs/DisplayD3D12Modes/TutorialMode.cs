@@ -229,13 +229,13 @@ public unsafe class TutorialMode
         };
 
         PipelineStateObjectBuilder PSOBuilder = new();
-        //PSOBuilder.AppendMember(new PSORootSignature(this.RootSignature.Get())); // TODO: this requires this.RootSignature to be pinned until ???????
-        //PSOBuilder.AppendMember(new PSOInputLayout(new() { NumElements = (uint)VertexInputs.Length, pInputElementDescs = VertexInputs.GetPointer() }));
+        PSOBuilder.AppendMember(new PSORootSignature(this.RootSignature.Get())); // TODO: this requires this.RootSignature to be pinned until ???????
+        PSOBuilder.AppendMember(new PSOInputLayout(new() { NumElements = (uint)VertexInputs.Length, pInputElementDescs = VertexInputs.GetPointer() }));
         PSOBuilder.AppendMember(new PSOPrimitiveTopology(PrimitiveTopologyType.Triangle));
         PSOBuilder.AppendMember(new PSOVertexShader(new ShaderBytecode(VertexShaderBlob.Get()))); // TODO same as ^
-        //PSOBuilder.AppendMember(new PSOPixelShader(new ShaderBytecode(PixelShaderBlob.Get()))); // ^
-        //PSOBuilder.AppendMember(new PSODepthStencilFormat(Format.D32Float));
-        //PSOBuilder.AppendMember(new PSORenderTargetFormats(RTVFormats));
+        PSOBuilder.AppendMember(new PSOPixelShader(new ShaderBytecode(PixelShaderBlob.Get()))); // ^
+        PSOBuilder.AppendMember(new PSODepthStencilFormat(Format.D32Float));
+        PSOBuilder.AppendMember(new PSORenderTargetFormats(RTVFormats));
         byte[] PSOStream = PSOBuilder.GetResult();
         uint PSOStreamSize = PSOBuilder.GetResultLength();
 
@@ -267,8 +267,8 @@ public unsafe class TutorialMode
         {
             this.Host.Flush();
 
-            width = Math.Min(1, width);
-            height = Math.Min(1, height);
+            width = Math.Max(1, width);
+            height = Math.Max(1, height);
 
             ref ComPtr<ID3D12Device2> Device = ref this.Host.GetDevice();
             ClearValue OptimizedClearValue = new()
@@ -309,7 +309,7 @@ public unsafe class TutorialMode
 
     public void Update()
     {
-        this.Time += 0.05F;
+        this.Time += 0.00005F;
         float Angle = this.Time * 90F;
         this.ModelMatrix = OpenTK.Mathematics.Matrix4.CreateRotationX(Angle);
 

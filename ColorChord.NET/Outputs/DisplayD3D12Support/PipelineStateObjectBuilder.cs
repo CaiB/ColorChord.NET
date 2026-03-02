@@ -26,7 +26,6 @@ public class PipelineStateObjectBuilder
     public unsafe void AppendMember<T>(T member) where T: unmanaged, IPSOMember
     {
         int StructSize = Marshal.SizeOf<T>();
-        Console.WriteLine($"Appending struct of size {StructSize} at location {this.ContentLength}");
         if (this.Buffer.Length < this.ContentLength + StructSize) { Expand(StructSize); }
         ReadOnlySpan<byte> StructAsBytes = new(&member, StructSize); // TODO: does member need to be pinned for this?
         StructAsBytes.CopyTo(new(this.Buffer, this.ContentLength, this.Buffer.Length - this.ContentLength));
@@ -54,7 +53,7 @@ public struct PSOInputLayout(InputLayoutDescription desc) : IPSOMember
 
 public struct PSOPrimitiveTopology(PrimitiveTopologyType primitiveTopologyType) : IPSOMember
 {
-    private readonly PSOSubobjectType Tag = PSOSubobjectType.InputLayout;
+    private readonly PSOSubobjectType Tag = PSOSubobjectType.PrimitiveTopology;
     public PrimitiveTopologyType Value = primitiveTopologyType;
 }
 
@@ -78,7 +77,7 @@ public struct PSODepthStencilFormat(Format format) : IPSOMember
 
 public struct PSORenderTargetFormats(RtFormatArray formatArray) : IPSOMember
 {
-    private readonly PSOSubobjectType Tag = PSOSubobjectType.DepthStencilFormat;
+    private readonly PSOSubobjectType Tag = PSOSubobjectType.RenderTargetFormats;
     public RtFormatArray Value = formatArray;
 }
 
