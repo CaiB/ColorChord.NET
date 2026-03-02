@@ -1,24 +1,16 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text;
 using ColorChord.NET.Outputs.DisplayD3D12Support;
-using OpenTK.Audio.OpenAL;
-using OpenTK.Compute.OpenCL;
 using Win32;
 using Win32.Graphics.Direct3D;
 using Win32.Graphics.Direct3D12;
 using Win32.Graphics.Dxgi.Common;
 using Win32.Numerics;
-using static System.Net.WebRequestMethods;
 using static Win32.Apis;
 using static Win32.Graphics.Direct3D.Fxc.Apis;
 using static Win32.Graphics.Direct3D12.Apis;
-using static Win32.Graphics.Dxgi.Apis;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Modes;
 
@@ -55,7 +47,7 @@ public unsafe class TutorialMode
     private float FOV = 45F;
     private bool ContentLoaded = false;
     private float Time = 0F;
-    private OpenTK.Mathematics.Matrix4 ModelMatrix, ViewMatrix, ProjectionMatrix;
+    private Matrix4x4 ModelMatrix, ViewMatrix, ProjectionMatrix;
 
     private ComPtr<ID3D12Resource> GPUVertexBuffer = default;
     private VertexBufferView GPUVertexBufferView;
@@ -311,15 +303,15 @@ public unsafe class TutorialMode
     {
         this.Time += 0.00005F;
         float Angle = this.Time * 90F;
-        this.ModelMatrix = OpenTK.Mathematics.Matrix4.CreateRotationX(Angle);
+        this.ModelMatrix = Matrix4x4.CreateRotationX(Angle);
 
-        OpenTK.Mathematics.Vector3 EyePosition = new(0, 0, -10);
-        OpenTK.Mathematics.Vector3 FocusPoint = new(0, 0, 0);
-        OpenTK.Mathematics.Vector3 UpDirection = new(0, 1, 0);
-        this.ViewMatrix = OpenTK.Mathematics.Matrix4.LookAt(EyePosition, FocusPoint, UpDirection);
+        Vector3 EyePosition = new(0, 0, -10);
+        Vector3 FocusPoint = new(0, 0, 0);
+        Vector3 UpDirection = new(0, 1, 0);
+        this.ViewMatrix = Matrix4x4.CreateLookAtLeftHanded(EyePosition, FocusPoint, UpDirection);
 
         float AspectRatio = this.Window.Width / (float)this.Window.Height;
-        this.ProjectionMatrix = OpenTK.Mathematics.Matrix4.CreatePerspectiveFieldOfView(this.FOV / 180F * MathF.PI, AspectRatio, 0.1F, 100F);
+        this.ProjectionMatrix = Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(this.FOV / 180F * MathF.PI, AspectRatio, 0.1F, 100F);
     }
 
     public void Render(ref ComPtr<ID3D12GraphicsCommandList> commandList, ref CpuDescriptorHandle rtv)
@@ -345,8 +337,8 @@ public unsafe class TutorialMode
         commandList.Get()->OMSetRenderTargets(1, &RTV, false, &DSV);
 
         // Push matrix
-        OpenTK.Mathematics.Matrix4 MVPMatrix = this.ModelMatrix * this.ViewMatrix * this.ProjectionMatrix;
-        commandList.Get()->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(OpenTK.Mathematics.Matrix4) / sizeof(float)), &MVPMatrix, 0);
+        Matrix4x4 MVPMatrix = this.ModelMatrix * this.ViewMatrix * this.ProjectionMatrix;
+        commandList.Get()->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(Matrix4x4) / sizeof(float)), &MVPMatrix, 0);
 
         commandList.Get()->DrawIndexedInstanced((uint)(this.CubeIndices.Length), 1, 0, 0, 0);
 
