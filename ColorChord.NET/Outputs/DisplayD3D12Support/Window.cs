@@ -67,7 +67,7 @@ public class Window
     public readonly IntPtr BackgroundBrush;
     private ushort ClassAtom;
 
-    public event EventHandler? OnResize;
+    public event EventHandler? OnResize, OnClose;
 
     public Window()
     {
@@ -148,6 +148,7 @@ public class Window
                 Console.WriteLine($"Window was moved!");
                 break;
             case MessageID.WM_CLOSE:
+                this.OnClose?.Invoke(this, new());
                 Console.WriteLine("Closed.");
                 break;
             case MessageID.WM_DESTROY:
