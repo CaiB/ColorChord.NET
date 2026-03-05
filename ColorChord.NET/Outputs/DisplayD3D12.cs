@@ -21,6 +21,7 @@ using static Win32.Apis;
 using static Win32.Graphics.Direct3D12.Apis;
 using static Win32.Graphics.Dxgi.Apis;
 using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
+using ColorChord.NET.API;
 
 namespace ColorChord.NET.Outputs;
 
@@ -106,8 +107,9 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             COMRelease(&DebugLayer);
         }
 
-        IDXGIFactory6* DXGIFactory = null;
-        ThrowIfFailed(CreateDXGIFactory2(D3D_DEBUG, __uuidof<IDXGIFactory6>(), (void**)&DXGIFactory));
+        IDXGIFactory2* DXGIFactory2 = null;
+        ThrowIfFailed(CreateDXGIFactory2(D3D_DEBUG, __uuidof<IDXGIFactory2>(), (void**)&DXGIFactory2));
+        IDXGIFactory6* DXGIFactory = COMCastAndReleaseOld<IDXGIFactory2, IDXGIFactory6>(&DXGIFactory2);
 
         IDXGIAdapter1* DXGIAdapter = null;
         bool SupportsD3D12 = false;
@@ -122,7 +124,8 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             do
             {
                 HResult EnumResult = DXGIFactory->EnumAdapterByGpuPreference(AdapterIndex, GpuPreference.HighPerformance, __uuidof<IDXGIAdapter1>(), (void**)&DXGIAdapter);
-                if (EnumResult.Failure) { break; }
+                if (EnumResult == 0x887A0002) { break; } // No more adapters
+                ThrowIfFailed(EnumResult);
 
                 AdapterDescription1 AdapterDesc = default;
                 ThrowIfFailed(DXGIAdapter->GetDesc1(&AdapterDesc));
@@ -132,6 +135,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                     // Check to see if the adapter supports Direct3D 12, but don't create the actual device yet.
                     if (D3D12CreateDevice((IUnknown*)DXGIAdapter, FeatureLevel.Level_11_0, __uuidof<ID3D12Device>(), null).Success)
                     {
+                        Log.Debug($"Found D3D12-capable GPU '" + new string(AdapterDesc.Description) + "'.");
                         SupportsD3D12 = true;
                         break;
                     }
@@ -231,7 +235,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             IDXGISwapChain1* Swapchain1 = null;
             ThrowIfFailed(DXGIFactory->CreateSwapChainForHwnd((IUnknown*)nthis->CommandQueue, this.Window.Handle, &SwapChainDesc, null, null, &Swapchain1));
             ThrowIfFailed(DXGIFactory->MakeWindowAssociation(this.Window.Handle, WindowAssociationFlags.NoAltEnter)); // Disable the Alt+Enter fullscreen toggle feature. Switching to fullscreen will be handled manually.
-            nthis->Swapchain = COMCastAndReleaseOld<IDXGISwapChain1, IDXGISwapChain3>(Swapchain1);
+            nthis->Swapchain = COMCastAndReleaseOld<IDXGISwapChain1, IDXGISwapChain3>(&Swapchain1);
             ThrowIfFailed(nthis->Swapchain->SetMaximumFrameLatency(1));
             nthis->SwapchainWaitHandle = nthis->Swapchain->GetFrameLatencyWaitableObject();
 
@@ -430,7 +434,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 
         fixed (NativeResources* nthis = &this.Native)
         {
-            UpdateRenderTargetViews(this.Native.Device, this.Native.Swapchain, this.Native.DescriptorHeapRTV, &nthis->BufferRTV0, &nthis->BufferRTV1);
+            UpdateRenderTargetViews(nthis->Device, nthis->Swapchain, nthis->DescriptorHeapRTV, &nthis->BufferRTV0, &nthis->BufferRTV1);
         }
 
         if (this.HasDepth)
@@ -438,10 +442,11 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             ResourceDescription DepthResource = ResourceDescription.Tex2D(Format.D32Float, (ulong)NewWidth, (uint)NewHeight, 1, 0, 1, 0, ResourceFlags.AllowDepthStencil);
             HeapProperties HeapProps = new(HeapType.Default);
             
+            COMRelease(ref this.Native.DepthBuffer);
             ID3D12Resource* NewDepthBuffer;
             fixed (ClearValue* DepthClearPtr = &this.OptimizedDepthClearValue) { ThrowIfFailed(this.Native.Device->CreateCommittedResource(&HeapProps, HeapFlags.None, &DepthResource, ResourceStates.DepthWrite, DepthClearPtr, __uuidof<ID3D12Resource>(), (void**)&NewDepthBuffer)); }
             fixed (DepthStencilViewDescription* DSVDescPtr = &this.DSVDesc) { this.Native.Device->CreateDepthStencilView(NewDepthBuffer, DSVDescPtr, this.Native.DescriptorHeapDSV->GetCPUDescriptorHandleForHeapStart()); }
-            //COMRelease(&NewDepthBuffer);
+            this.Native.DepthBuffer = NewDepthBuffer;
         }
         this.Mode.Resize(NewWidth, NewHeight);
         this.PreviousHeight = NewHeight;
