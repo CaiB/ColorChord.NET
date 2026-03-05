@@ -17,7 +17,7 @@ struct VertexShaderOutput
     float4 Position : SV_Position;
 };
 
-VertexShaderOutput main(VertexPosColor IN)
+VertexShaderOutput Main(VertexPosColor IN)
 {
     VertexShaderOutput OUT;
 

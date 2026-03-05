@@ -1,12 +1,16 @@
 ﻿using System;
+using System.Diagnostics;
 using Win32.Graphics.Direct3D12;
+using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;
 
-public unsafe class VertexBuffer<T> where T : unmanaged
+public unsafe class VertexBuffer<T> : IDisposable where T : unmanaged
 {
     private ID3D12Resource* BF_Buffer;
     private VertexBufferView BF_View;
+    private bool IsDisposed;
+
     public ID3D12Resource* Buffer { get => this.BF_Buffer; }
     public VertexBufferView View { get => this.BF_View; }
 
@@ -15,11 +19,7 @@ public unsafe class VertexBuffer<T> where T : unmanaged
     /// <summary>Copies new vertex data to the GPU, automatically freeing the old data if it was previously loaded</summary>
     public void Load(ID3D12Device2* device, ID3D12GraphicsCommandList2* copyCommandList, ReadOnlySpan<T> data)
     {
-        if (this.BF_Buffer != null)
-        {
-            this.BF_Buffer->Release();
-            this.BF_Buffer = null;
-        }
+        COMRelease(ref this.BF_Buffer);
         DisplayD3D12.UpdateBufferResource(device, copyCommandList, data, ResourceFlags.None, out ID3D12Resource* IntermediateVertexBuffer, out this.BF_Buffer);
         this.BF_View = new()
         {
@@ -31,6 +31,25 @@ public unsafe class VertexBuffer<T> where T : unmanaged
 
     public void Use(ID3D12GraphicsCommandList* directCommandList)
     {
+        Debug.Assert(this.Buffer != null);
         fixed (VertexBufferView* VertexViewPtr = &this.BF_View) { directCommandList->IASetVertexBuffers(0, 1, VertexViewPtr); }
+    }
+
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!this.IsDisposed)
+        {
+            COMRelease(ref this.BF_Buffer);
+            this.IsDisposed = true;
+        }
+    }
+
+    ~VertexBuffer() => Dispose(disposing: false);
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }

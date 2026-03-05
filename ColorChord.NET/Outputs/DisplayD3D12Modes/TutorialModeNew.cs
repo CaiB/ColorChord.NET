@@ -12,6 +12,7 @@ using Win32.Graphics.Direct3D;
 using Win32.Graphics.Direct3D12;
 using Win32.Graphics.Dxgi.Common;
 using static Win32.Graphics.Direct3D12.Apis;
+using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Modes;
 
@@ -94,7 +95,7 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode
         ];
         RootParameter1.InitAsConstants(out RootParameter1 MatrixParameter, (uint)(sizeof(Matrix4x4) / sizeof(float)), 0, 0, ShaderVisibility.Vertex);
         RootParameter1[] RootParameters = [MatrixParameter];
-        this.Shader = new(device, VertexInputs, "Tutorial_V.cso", "Tutorial_P.cso", rootParameters: RootParameters);
+        this.Shader = new(device, VertexInputs, "VS_Tutorial.cso", "PS_Tutorial.cso", rootParameters: RootParameters);
 
         ulong FenceValue = copyQueue.ExecuteCommandList(CopyCommandList);
 
@@ -103,6 +104,7 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode
 
         copyQueue.WaitForFenceValue(FenceValue);
         this.Ready = true;
+        COMRelease(&CopyCommandList);
     }
 
     public void Render(ID3D12GraphicsCommandList* directCommandList)
@@ -110,6 +112,7 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode
         if (!this.Ready) { return; }
         this.Time += 0.04F;
         this.ModelMatrix = Matrix4x4.CreateRotationY(this.Time) * Matrix4x4.CreateRotationZ(this.Time / 10F) * Matrix4x4.CreateRotationX(this.Time / 100F);
+        this.ModelMatrix *= Matrix4x4.CreateTranslation(MathF.Sin(this.Time * 3F) * 5F, MathF.Sin(this.Time * 7F) * 2F, MathF.Tan(this.Time));
 
         Vector3 EyePosition = new(0, 0, -10);
         Vector3 FocusPoint = new(0, 0, 0);
@@ -141,7 +144,7 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode
     public void Close()
     {
         this.Shader?.Dispose();
-        // TODO: dispose buffers and any other stuff here
-        throw new NotImplementedException();
+        this.VertexBuffer?.Dispose();
+        this.IndexBuffer?.Dispose();
     }
 }

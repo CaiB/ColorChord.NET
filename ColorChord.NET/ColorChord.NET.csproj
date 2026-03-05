@@ -27,6 +27,7 @@
     <None Include="..\.editorconfig">
       <Link>.editorconfig</Link>
     </None>
+	<EmbeddedResource Include="Outputs\Display\Shaders\CaptureCompare.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\CloudChamberRing.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\CloudChamberTrails.frag" />
     <EmbeddedResource Include="Outputs\Display\Shaders\ColorRibbon.frag" />
@@ -104,12 +105,10 @@
 
     <Target Name="PreBuild" BeforeTargets="CoreCompile">
         <Exec Command="powershell -ExecutionPolicy Unrestricted -File &quot;$(ProjectDir)..\GenBuildInfo.ps1&quot; -ConfigHashFile &quot;$(ProjectDir)Config\DefaultConfigInfo.cs&quot; -ConfigFile &quot;$(ProjectDir)sample-config.json&quot;" />
+		<Exec Command="powershell -ExecutionPolicy Unrestricted -File &quot;$(ProjectDir)..\CompileDXShaders.ps1&quot;" />
 	</Target>
 	<ItemGroup>
 		<Compile Include="$(ProjectDir)Config\DefaultConfigInfo.cs" />
-	</ItemGroup>
-	<ItemGroup>
-	  <EmbeddedResource Include="Outputs\Display\Shaders\CaptureCompare.frag" />
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Outputs\DisplayD3D12Modes\Shaders\Compiled\" />

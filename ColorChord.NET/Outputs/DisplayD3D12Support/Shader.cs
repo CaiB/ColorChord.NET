@@ -7,6 +7,7 @@ using Win32.Graphics.Dxgi.Common;
 using static Win32.Apis;
 using static Win32.Graphics.Direct3D.Fxc.Apis;
 using static Win32.Graphics.Direct3D12.Apis;
+using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;
 
@@ -100,6 +101,11 @@ public sealed unsafe class Shader : IDisposable
                 this.PipelineState = PipelineState;
             }
         }
+
+        COMRelease(&VertexShaderBlob);
+        COMRelease(&PixelShaderBlob);
+        COMRelease(&RootSignatureBlob);
+        COMRelease(&ErrorBlob);
     }
 
     public void Use(ID3D12GraphicsCommandList* commandList)
@@ -112,9 +118,8 @@ public sealed unsafe class Shader : IDisposable
     {
         if (!this.IsDisposed)
         {
-            if (disposing) { } // if managed
-            if (this.PipelineState != null) { this.PipelineState->Release(); }
-            if (this.RootSignature != null) { this.RootSignature->Release(); }
+            COMRelease(ref this.PipelineState);
+            COMRelease(ref this.RootSignature);
             this.IsDisposed = true;
         }
     }
