@@ -47,7 +47,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     {
         public ID3D12Device2* Device;
         public IDXGISwapChain3* Swapchain;
-        public Handle SwapchainWaitHandle; // TODO: for some reason this is getting set to null :(
+        public nint SwapchainWaitHandle;
         public ID3D12DescriptorHeap* DescriptorHeapRTV;
         public ID3D12Resource* BufferRTV0;
         public ID3D12Resource* BufferRTV1;
@@ -237,7 +237,13 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             ThrowIfFailed(DXGIFactory->MakeWindowAssociation(this.Window.Handle, WindowAssociationFlags.NoAltEnter)); // Disable the Alt+Enter fullscreen toggle feature. Switching to fullscreen will be handled manually.
             nthis->Swapchain = COMCastAndReleaseOld<IDXGISwapChain1, IDXGISwapChain3>(&Swapchain1);
             ThrowIfFailed(nthis->Swapchain->SetMaximumFrameLatency(1));
-            nthis->SwapchainWaitHandle = nthis->Swapchain->GetFrameLatencyWaitableObject();
+            // nthis->SwapchainWaitHandle = (this.Native.Swapchain->GetFrameLatencyWaitableObject()).Value;
+            // ^ that doesn't work, re-implemented the function call manually below. See https://github.com/amerkoleci/Vortice.Win32/issues/6
+            {
+                void* GetFrameLatencyWaitableObjectFunctionPtr = nthis->Swapchain->lpVtbl[33];
+                var GetFrameLatencyWaitableObjectDelegate = (delegate* unmanaged[MemberFunction]<IDXGISwapChain3*, nint>)GetFrameLatencyWaitableObjectFunctionPtr;
+                nthis->SwapchainWaitHandle = GetFrameLatencyWaitableObjectDelegate(nthis->Swapchain);
+            }
 
             nthis->DescriptorHeapRTV = CreateDescriptorHeap(nthis->Device, DescriptorHeapType.Rtv, NUM_FRAMEBUFFERS);
             this.RTVDescriptorSize = nthis->Device->GetDescriptorHandleIncrementSize(DescriptorHeapType.Rtv);
@@ -427,9 +433,9 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         this.FrameFenceValues[0] = this.FrameFenceValues[this.CurrentBackBuffer];
         this.FrameFenceValues[1] = this.FrameFenceValues[this.CurrentBackBuffer];
 
-        SwapChainDescription SwapchainDesc = default;
-        ThrowIfFailed(this.Native.Swapchain->GetDesc(&SwapchainDesc));
-        ThrowIfFailed(this.Native.Swapchain->ResizeBuffers(NUM_FRAMEBUFFERS, (uint)NewWidth, (uint)NewHeight, SwapchainDesc.BufferDesc.Format, SwapchainDesc.Flags));
+        SwapChainDescription1 SwapchainDesc = default;
+        ThrowIfFailed(this.Native.Swapchain->GetDesc1(&SwapchainDesc));
+        ThrowIfFailed(this.Native.Swapchain->ResizeBuffers(NUM_FRAMEBUFFERS, (uint)NewWidth, (uint)NewHeight, SwapchainDesc.Format, SwapchainDesc.Flags));
         this.CurrentBackBuffer = this.Native.Swapchain->GetCurrentBackBufferIndex();
 
         fixed (NativeResources* nthis = &this.Native)
@@ -463,6 +469,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         this.Stopwatch.Start();
         while (this.KeepGoing)
         {
+            Win32API.WaitForSingleObjectEx(this.Native.SwapchainWaitHandle, 1000, true);
             Update();
             Render();
         }

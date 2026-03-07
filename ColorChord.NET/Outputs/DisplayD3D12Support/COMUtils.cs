@@ -31,12 +31,12 @@ public static unsafe class COMUtils
         return Result;
     }
 
-    public static TTo* COMCastAndReleaseOld<TFrom, TTo>(TFrom* from) where TFrom : unmanaged, IUnknown.Interface
+    public static TTo* COMCastAndReleaseOld<TFrom, TTo>(TFrom** from) where TFrom : unmanaged, IUnknown.Interface
                                                                      where TTo : unmanaged, INativeGuid
     {
         TTo* Result;
-        ThrowIfFailed(from->QueryInterface(__uuidof<TTo>(), (void**)&Result));
-        COMRelease(&from);
+        ThrowIfFailed((*from)->QueryInterface(__uuidof<TTo>(), (void**)&Result));
+        COMRelease(from);
         return Result;
     }
 

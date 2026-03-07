@@ -192,6 +192,14 @@ public static partial class Win32API
     [LibraryImport("user32.dll", EntryPoint = "GetWindowLongW")]
     public static partial int GetWindowLongW(IntPtr windowHandle, int index);
 
+    /// <summary>Waits until the specified object is in the signaled state, an I/O completion routine or asynchronous procedure call (APC) is queued to the thread, or the time-out interval elapses.</summary>
+    /// <param name="handle">A handle to the object. If this handle is closed while the wait is still pending, the function's behavior is undefined. The handle must have the SYNCHRONIZE access right.</param>
+    /// <param name="timeoutMillisec">The time-out interval, in milliseconds. If a nonzero value is specified, the function waits until the object is signaled, an I/O completion routine or APC is queued, or the interval elapses. If zero, the function does not enter a wait state if the criteria is not met; it always returns immediately. If <see cref="uint.MaxValue"/>, the function will return only when the object is signaled or an I/O completion routine or APC is queued.</param>
+    /// <param name="alertable">If this parameter is TRUE and the thread is in the waiting state, the function returns when the system queues an I/O completion routine or APC, and the thread runs the routine or function. Otherwise, the function does not return, and the completion routine or APC function is not executed.</param>
+    /// <returns>If the function succeeds, the return value indicates the event that caused the function to return.</returns>
+    [LibraryImport("kernel32.dll", EntryPoint = "WaitForSingleObjectEx")]
+    public static partial WaitReturn WaitForSingleObjectEx(IntPtr handle, uint timeoutMillisec, [MarshalAs(UnmanagedType.I4)] bool alertable);
+
     /// <summary>A callback function, which you define in your application, that processes messages sent to a window.</summary>
     /// <param name="windowHandle">A handle to the window.</param>
     /// <param name="messageID">The type of message.</param>
