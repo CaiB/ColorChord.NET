@@ -657,3 +657,28 @@ public enum NativeCursorIndex : ushort
     /// <summary>Hourglass</summary>
     Wait = 32514
 }
+
+public enum WindowMemoryOffset : int
+{
+    WindowStyleEx = -20,
+    InstanceHandle = -6,
+    ParentWindowHandle = -8,
+    ID = -12,
+    WindowStyle = -16,
+    UserData = -21,
+    WindowProcedure = -4
+}
+
+public enum WaitReturn : uint
+{
+    /// <summary>The specified object is a mutex object that was not released by the thread that owned the mutex object before the owning thread terminated. Ownership of the mutex object is granted to the calling thread and the mutex is set to nonsignaled. If the mutex was protecting persistent state information, you should check it for consistency.</summary>
+    Abandoned = 0x80,
+    /// <summary>The wait was ended by one or more user-mode asynchronous procedure calls (APC) queued to the thread.</summary>
+    IOCompletion = 0xC0,
+    /// <summary>The state of the specified object is signaled.</summary>
+    Signaled = 0,
+    /// <summary>The time-out interval elapsed, and the object's state is nonsignaled.</summary>
+    Timeout = 0x102,
+    /// <summary>The function has failed. To get extended error information, call <see cref="System.Runtime.InteropServices.Marshal.GetLastWin32Error"/>.</summary>
+    Failed = uint.MaxValue
+}

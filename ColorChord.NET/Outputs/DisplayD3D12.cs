@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Numerics;
-using System.Runtime.InteropServices;
-using System.Threading;
+﻿using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.Outputs;
@@ -11,17 +6,22 @@ using ColorChord.NET.API.Utility;
 using ColorChord.NET.Config;
 using ColorChord.NET.Outputs.DisplayD3D12Modes;
 using ColorChord.NET.Outputs.DisplayD3D12Support;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Threading;
 using Win32;
 using Win32.Graphics.Direct3D;
 using Win32.Graphics.Direct3D12;
 using Win32.Graphics.Dxgi;
 using Win32.Graphics.Dxgi.Common;
 using Win32.Numerics;
+using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
 using static Win32.Apis;
 using static Win32.Graphics.Direct3D12.Apis;
 using static Win32.Graphics.Dxgi.Apis;
-using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
-using ColorChord.NET.API;
 
 namespace ColorChord.NET.Outputs;
 
@@ -402,7 +402,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                 nthis->CommandQueue->ExecuteCommandLists(1, &CommandListGeneric);
                 COMRelease(&CommandListGeneric);
 
-                ThrowIfFailed(nthis->Swapchain->Present(1, 0)); // TODO: maybe support VRR
+                ThrowIfFailed(nthis->Swapchain->Present(1, 0));
 
                 // TODO: Here https://www.3dgep.com/learning-directx-12-1/#present it's after the Present
                 // But here https://github.com/jpvanoosten/LearningDirectX12/blob/v0.0.1/Tutorial1/src/main.cpp#L516 it's before the Present

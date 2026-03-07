@@ -177,20 +177,43 @@ public static partial class Win32API
     [return: MarshalAs(UnmanagedType.I4)]
     public static partial bool GetClientRect(IntPtr windowHandle, out RectI32 rect);
 
+    /// <summary>Retrieves the dimensions of the bounding rectangle of the specified window. The dimensions are given in screen coordinates that are relative to the upper-left corner of the screen.</summary>
+    /// <param name="windowHandle">A handle to the window.</param>
+    /// <param name="rect">A pointer to a <see cref="RectI32"/> structure that receives the screen coordinates of the upper-left and lower-right corners of the window.</param>
+    /// <returns>If the function fails, the return value is false. To get extended error information, call <see cref="Marshal.GetLastWin32Error"/>.</returns>
     [LibraryImport("user32.dll", EntryPoint = "GetWindowRect")]
     [return: MarshalAs(UnmanagedType.I4)]
     public static partial bool GetWindowRect(IntPtr windowHandle, out RectI32 rect);
 
+    /// <summary>Calculates the required size of the window rectangle, based on the desired size of the client rectangle.</summary>
+    /// <param name="rect">A pointer to a <see cref="RectI32"/> structure that contains the coordinates of the top-left and bottom-right corners of the desired client area. When the function returns, the structure contains the coordinates of the top-left and bottom-right corners of the window to accommodate the desired client area.</param>
+    /// <param name="windowStyle">The window style of the window whose required size is to be calculated. Note that you cannot specify the <see cref="WindowStyle.Overlapped"/> style.</param>
+    /// <param name="hasMenu">Indicates whether the window has a menu.</param>
+    /// <param name="extendedWindowStyle">The extended window style of the window whose required size is to be calculated.</param>
+    /// <returns></returns>
     [LibraryImport("user32.dll", EntryPoint = "AdjustWindowRectEx")]
     [return: MarshalAs(UnmanagedType.I4)]
-    public static partial bool AdjustWindowRectEx(RectI32 rect, uint windowStyle, [MarshalAs(UnmanagedType.I4)] bool hasMenu, uint extendedWindowStyle);
+    public static partial bool AdjustWindowRectEx(RectI32 rect, WindowStyle windowStyle, [MarshalAs(UnmanagedType.I4)] bool hasMenu, WindowStyleEx extendedWindowStyle);
 
+    /// <summary>Changes the position and dimensions of the specified window. For a top-level window, the position and dimensions are relative to the upper-left corner of the screen.</summary>
+    /// <param name="windowHandle">A handle to the window.</param>
+    /// <param name="x">The new position of the left side of the window.</param>
+    /// <param name="y">The new position of the top of the window.</param>
+    /// <param name="width">The new width of the window.</param>
+    /// <param name="height">The new height of the window.</param>
+    /// <param name="repaint">Indicates whether the window is to be repainted. If this parameter is TRUE, the window receives a message. If the parameter is FALSE, no repainting of any kind occurs. This applies to the client area, the nonclient area (including the title bar and scroll bars), and any part of the parent window uncovered as a result of moving a child window.</param>
+    /// <returns>If the function fails, the return value is false. To get extended error information, call <see cref="Marshal.GetLastWin32Error"/>.</returns>
     [LibraryImport("user32.dll", EntryPoint = "MoveWindow")]
     [return: MarshalAs(UnmanagedType.I4)]
     public static partial bool MoveWindow(IntPtr windowHandle, int x, int y, int width, int height, [MarshalAs(UnmanagedType.I4)] bool repaint);
 
+    /// <summary>Retrieves information about the specified window. The function also retrieves the 32-bit (DWORD) value at the specified offset into the extra window memory.</summary>
+    /// <remarks>This function should not be used to retrieve pointers or handles, use GetWindowLongPtr instead.</remarks>
+    /// <param name="windowHandle">A handle to the window and, indirectly, the class to which the window belongs.</param>
+    /// <param name="offset">The zero-based offset to the value to be retrieved. Valid values are in the range zero through the number of bytes of extra window memory, minus four; for example, if you specified 12 or more bytes of extra memory, a value of 8 would be an index to the third 32-bit integer. To retrieve any other value, specify one of the following values.</param>
+    /// <returns>If the function succeeds, the return value is the requested value. If the function fails, the return value is zero. To get extended error information, call <see cref="Marshal.GetLastWin32Error"/>.</returns>
     [LibraryImport("user32.dll", EntryPoint = "GetWindowLongW")]
-    public static partial int GetWindowLongW(IntPtr windowHandle, int index);
+    public static partial int GetWindowLongW(IntPtr windowHandle, WindowMemoryOffset offset);
 
     /// <summary>Waits until the specified object is in the signaled state, an I/O completion routine or asynchronous procedure call (APC) is queued to the thread, or the time-out interval elapses.</summary>
     /// <param name="handle">A handle to the object. If this handle is closed while the wait is still pending, the function's behavior is undefined. The handle must have the SYNCHRONIZE access right.</param>

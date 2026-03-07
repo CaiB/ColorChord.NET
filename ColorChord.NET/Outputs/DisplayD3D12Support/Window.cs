@@ -32,7 +32,7 @@ public class Window
                     Top = PrevWindowRect.Top,
                     Bottom = PrevWindowRect.Bottom
                 };
-                Win32API.AdjustWindowRectEx(NewRect, (uint)Win32API.GetWindowLongW(this.Handle, -16), false, (uint)Win32API.GetWindowLongW(this.Handle, -20));
+                Win32API.AdjustWindowRectEx(NewRect, (WindowStyle)Win32API.GetWindowLongW(this.Handle, WindowMemoryOffset.WindowStyle), false, (WindowStyleEx)Win32API.GetWindowLongW(this.Handle, WindowMemoryOffset.WindowStyleEx));
                 Win32API.MoveWindow(this.Handle, NewRect.Left, NewRect.Top, NewRect.Right - NewRect.Left, NewRect.Bottom - NewRect.Top, true);
             }
         }
@@ -58,7 +58,7 @@ public class Window
                     Top = PrevWindowRect.Top,
                     Bottom = PrevWindowRect.Top + value
                 };
-                Win32API.AdjustWindowRectEx(NewRect, (uint)Win32API.GetWindowLongW(this.Handle, -16), false, (uint)Win32API.GetWindowLongW(this.Handle, -20));
+                Win32API.AdjustWindowRectEx(NewRect, (WindowStyle)Win32API.GetWindowLongW(this.Handle, WindowMemoryOffset.WindowStyle), false, (WindowStyleEx)Win32API.GetWindowLongW(this.Handle, WindowMemoryOffset.WindowStyleEx));
                 Win32API.MoveWindow(this.Handle, NewRect.Left, NewRect.Top, NewRect.Right - NewRect.Left, NewRect.Bottom - NewRect.Top, true);
             }
         }
