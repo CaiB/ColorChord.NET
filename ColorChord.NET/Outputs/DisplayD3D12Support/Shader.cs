@@ -1,12 +1,12 @@
 ﻿using System;
 using System.IO;
 using System.Reflection;
-using Win32.Graphics.Direct3D;
-using Win32.Graphics.Direct3D12;
-using Win32.Graphics.Dxgi.Common;
-using static Win32.Apis;
-using static Win32.Graphics.Direct3D.Fxc.Apis;
-using static Win32.Graphics.Direct3D12.Apis;
+using Vortice.Win32.Graphics.Direct3D;
+using Vortice.Win32.Graphics.Direct3D12;
+using Vortice.Win32.Graphics.Dxgi.Common;
+using static Vortice.Win32.Apis;
+using static Vortice.Win32.Graphics.Direct3D.Fxc.Apis;
+using static Vortice.Win32.Graphics.Direct3D12.Apis;
 using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;

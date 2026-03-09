@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
-using Win32.Graphics.Direct3D12;
-using Win32.Graphics.Dxgi.Common;
+using Vortice.Win32.Graphics.Direct3D12;
+using Vortice.Win32.Graphics.Dxgi.Common;
 using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;
@@ -30,7 +30,7 @@ public unsafe class IndexBuffer<T> : IDisposable where T : unmanaged
                 Type ByteType when typeof(T) == typeof(byte) => Format.R8Uint,
                 Type UShortType when typeof(T) == typeof(ushort) => Format.R16Uint,
                 Type UIntType when typeof(T) == typeof(uint) => Format.R32Uint,
-                _ => throw new Exception($"{nameof(IndexBuffer<>)} does not support the type {typeof(T).FullName}")
+                _ => throw new Exception($"{nameof(IndexBuffer<T>)} does not support the type {typeof(T).FullName}")
             },
             SizeInBytes = (uint)(sizeof(T) * data.Length)
         };

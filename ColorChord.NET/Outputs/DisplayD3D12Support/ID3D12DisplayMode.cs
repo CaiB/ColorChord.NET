@@ -1,5 +1,5 @@
 ﻿using ColorChord.NET.API.Visualizers.Formats;
-using Win32.Graphics.Direct3D12;
+using Vortice.Win32.Graphics.Direct3D12;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;
 

@@ -7,11 +7,11 @@ using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
 using ColorChord.NET.Config;
 using ColorChord.NET.Outputs.DisplayD3D12Support;
-using Win32;
-using Win32.Graphics.Direct3D;
-using Win32.Graphics.Direct3D12;
-using Win32.Graphics.Dxgi.Common;
-using static Win32.Graphics.Direct3D12.Apis;
+using Vortice.Win32;
+using Vortice.Win32.Graphics.Direct3D;
+using Vortice.Win32.Graphics.Direct3D12;
+using Vortice.Win32.Graphics.Dxgi.Common;
+using static Vortice.Win32.Graphics.Direct3D12.Apis;
 using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Modes;

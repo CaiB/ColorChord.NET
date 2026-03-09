@@ -1,5 +1,5 @@
-﻿using Win32;
-using static Win32.Apis;
+﻿using Vortice.Win32;
+using static Vortice.Win32.Apis;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;
 

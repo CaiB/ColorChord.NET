@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
-using Win32.Graphics.Direct3D12;
+using Vortice.Win32.Graphics.Direct3D12;
 using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;

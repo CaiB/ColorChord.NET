@@ -12,16 +12,16 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Threading;
-using Win32;
-using Win32.Graphics.Direct3D;
-using Win32.Graphics.Direct3D12;
-using Win32.Graphics.Dxgi;
-using Win32.Graphics.Dxgi.Common;
-using Win32.Numerics;
+using Vortice.Win32;
+using Vortice.Win32.Graphics.Direct3D;
+using Vortice.Win32.Graphics.Direct3D12;
+using Vortice.Win32.Graphics.Dxgi;
+using Vortice.Win32.Graphics.Dxgi.Common;
+using Vortice.Win32.Numerics;
 using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
-using static Win32.Apis;
-using static Win32.Graphics.Direct3D12.Apis;
-using static Win32.Graphics.Dxgi.Apis;
+using static Vortice.Win32.Apis;
+using static Vortice.Win32.Graphics.Direct3D12.Apis;
+using static Vortice.Win32.Graphics.Dxgi.Apis;
 
 namespace ColorChord.NET.Outputs;
 
@@ -47,7 +47,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     {
         public ID3D12Device2* Device;
         public IDXGISwapChain3* Swapchain;
-        public nint SwapchainWaitHandle;
+        public Handle SwapchainWaitHandle;
         public ID3D12DescriptorHeap* DescriptorHeapRTV;
         public ID3D12Resource* BufferRTV0;
         public ID3D12Resource* BufferRTV1;
@@ -226,7 +226,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                 SampleDesc = SampleDescription.Default,
                 BufferUsage = Usage.RenderTargetOutput,
                 BufferCount = NUM_FRAMEBUFFERS,
-                Scaling = Scaling.None,
+                Scaling = Scaling.Stretch,
                 SwapEffect = SwapEffect.FlipDiscard,
                 AlphaMode = AlphaMode.Unspecified,
                 Flags = SwapChainFlags.FrameLatencyWaitableObject
@@ -237,13 +237,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             ThrowIfFailed(DXGIFactory->MakeWindowAssociation(this.Window.Handle, WindowAssociationFlags.NoAltEnter)); // Disable the Alt+Enter fullscreen toggle feature. Switching to fullscreen will be handled manually.
             nthis->Swapchain = COMCastAndReleaseOld<IDXGISwapChain1, IDXGISwapChain3>(&Swapchain1);
             ThrowIfFailed(nthis->Swapchain->SetMaximumFrameLatency(1));
-            // nthis->SwapchainWaitHandle = (this.Native.Swapchain->GetFrameLatencyWaitableObject()).Value;
-            // ^ that doesn't work, re-implemented the function call manually below. See https://github.com/amerkoleci/Vortice.Win32/issues/6
-            {
-                void* GetFrameLatencyWaitableObjectFunctionPtr = nthis->Swapchain->lpVtbl[33];
-                var GetFrameLatencyWaitableObjectDelegate = (delegate* unmanaged[MemberFunction]<IDXGISwapChain3*, nint>)GetFrameLatencyWaitableObjectFunctionPtr;
-                nthis->SwapchainWaitHandle = GetFrameLatencyWaitableObjectDelegate(nthis->Swapchain);
-            }
+            nthis->SwapchainWaitHandle = nthis->Swapchain->GetFrameLatencyWaitableObject();
 
             nthis->DescriptorHeapRTV = CreateDescriptorHeap(nthis->Device, DescriptorHeapType.Rtv, NUM_FRAMEBUFFERS);
             this.RTVDescriptorSize = nthis->Device->GetDescriptorHandleIncrementSize(DescriptorHeapType.Rtv);

@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Win32;
-using Win32.Graphics.Direct3D12;
-using static Win32.Apis;
+using Vortice.Win32;
+using Vortice.Win32.Graphics.Direct3D12;
+using static Vortice.Win32.Apis;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;
 
@@ -120,7 +120,7 @@ public sealed unsafe class CommandQueue : IDisposable
     {
         if (!IsFenceComplete(fenceValue))
         {
-            this.Fence->SetEventOnCompletion(fenceValue, (Win32.Handle)this.FenceEvent.SafeWaitHandle.DangerousGetHandle());
+            this.Fence->SetEventOnCompletion(fenceValue, (Handle)this.FenceEvent.SafeWaitHandle.DangerousGetHandle());
             this.FenceEvent.WaitOne();
         }
     }

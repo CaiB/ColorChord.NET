@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Win32.Graphics.Direct3D12;
-using Win32.Graphics.Dxgi.Common;
+using Vortice.Win32.Graphics.Direct3D12;
+using Vortice.Win32.Graphics.Dxgi.Common;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;
 
