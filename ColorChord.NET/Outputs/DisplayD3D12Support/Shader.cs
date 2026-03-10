@@ -18,7 +18,7 @@ public sealed unsafe class Shader : IDisposable
     private ID3D12PipelineState* PipelineState = null;
     private bool IsDisposed;
 
-    public Shader(ID3D12Device2* device, InputElementDescription[] vertexInputs, string vertexPath, string pixelPath, Assembly? vertexAssembly = null, Assembly? pixelAssembly = null, RootParameter1[]? rootParameters = null)
+    public Shader(ID3D12Device2* device, InputElementDescription[] vertexInputs, string vertexPath, string pixelPath, Assembly? vertexAssembly = null, Assembly? pixelAssembly = null, RootParameter1[]? rootParameters = null, bool useDepth = false)
     {
         string VertexPath = (vertexPath.StartsWith('#') ? vertexPath.Substring(1) : PATH_PREFIX + vertexPath);
         string PixelPath = (pixelPath.StartsWith('#') ? pixelPath.Substring(1) : PATH_PREFIX + pixelPath);
@@ -54,7 +54,7 @@ public sealed unsafe class Shader : IDisposable
         if (device->CheckFeatureSupport(Feature.RootSignature, &FeatureData, sizeof(FeatureDataRootSignature)).Failure) { FeatureData.HighestVersion = RootSignatureVersion.V1_0; }
         RootSignatureFlags RootSignatureFlags =
             RootSignatureFlags.AllowInputAssemblerInputLayout |
-            RootSignatureFlags.DenyHullShaderRootAccess | RootSignatureFlags.DenyDomainShaderRootAccess | RootSignatureFlags.DenyGeometryShaderRootAccess | RootSignatureFlags.DenyPixelShaderRootAccess;
+            RootSignatureFlags.DenyHullShaderRootAccess | RootSignatureFlags.DenyDomainShaderRootAccess | RootSignatureFlags.DenyGeometryShaderRootAccess;
 
         VersionedRootSignatureDescription RootSignatureDescription;
         if (rootParameters == null || rootParameters.Length == 0) { VersionedRootSignatureDescription.Init_1_1(out RootSignatureDescription, 0, null, 0, null, RootSignatureFlags); }
@@ -84,7 +84,7 @@ public sealed unsafe class Shader : IDisposable
             PSOBuilder.AppendMember(new PSOPrimitiveTopology(PrimitiveTopologyType.Triangle));
             PSOBuilder.AppendMember(new PSOVertexShader(new ShaderBytecode(VertexShaderBlob))); // TODO same as ^
             PSOBuilder.AppendMember(new PSOPixelShader(new ShaderBytecode(PixelShaderBlob))); // ^
-            PSOBuilder.AppendMember(new PSODepthStencilFormat(Format.D32Float));
+            PSOBuilder.AppendMember(new PSODepthStencilFormat(useDepth ? Format.D32Float : Format.Unknown));
             PSOBuilder.AppendMember(new PSORenderTargetFormats(RTVFormats));
             byte[] PSOStream = PSOBuilder.GetResult();
             uint PSOStreamSize = PSOBuilder.GetResultLength();

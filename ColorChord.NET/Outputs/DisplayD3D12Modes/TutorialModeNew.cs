@@ -13,10 +13,11 @@ using Vortice.Win32.Graphics.Direct3D12;
 using Vortice.Win32.Graphics.Dxgi.Common;
 using static Vortice.Win32.Graphics.Direct3D12.Apis;
 using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
+using ColorChord.NET.API.Config;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Modes;
 
-public unsafe class TutorialModeNew : ID3D12DisplayMode
+public unsafe class TutorialModeNew : ID3D12DisplayMode, IConfigurableAttr
 {
     struct VertexData
     {
@@ -65,7 +66,7 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode
 
     public bool SupportsFormat(IVisualizerFormat format) => true;
 
-    public void Load(ID3D12Device2* device, CommandQueue copyQueue)
+    public void Load(ID3D12Device2* device, CommandQueue copyQueue, ID3D12GraphicsCommandList* directCommandList)
     {
         ID3D12GraphicsCommandList2* CopyCommandList = copyQueue.GetCommandList();
         this.VertexBuffer = new(device, CopyCommandList, this.Vertices);
@@ -95,7 +96,7 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode
         ];
         RootParameter1.InitAsConstants(out RootParameter1 MatrixParameter, (uint)(sizeof(Matrix4x4) / sizeof(float)), 0, 0, ShaderVisibility.Vertex);
         RootParameter1[] RootParameters = [MatrixParameter];
-        this.Shader = new(device, VertexInputs, "VS_Tutorial.cso", "PS_Tutorial.cso", rootParameters: RootParameters);
+        this.Shader = new(device, VertexInputs, "VS_Tutorial.cso", "PS_Tutorial.cso", rootParameters: RootParameters, useDepth: this.Host.HasDepth);
 
         ulong FenceValue = copyQueue.ExecuteCommandList(CopyCommandList);
 
@@ -107,7 +108,7 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode
         COMRelease(&CopyCommandList);
     }
 
-    public void Render(ID3D12GraphicsCommandList* directCommandList)
+    public void Render(ID3D12Device2* device, ID3D12GraphicsCommandList* directCommandList)
     {
         if (!this.Ready) { return; }
         this.Time += 0.04F;

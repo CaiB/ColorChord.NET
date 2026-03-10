@@ -65,7 +65,7 @@ namespace ColorChord.NET.Outputs
         public DisplayOpenGL(string name, Dictionary<string, object> config) : base(GameWindowSettings.Default, SetupNativeWindow())
         {
             this.Name = name;
-            this.Title = "ColorChord.NET: " + this.Name;
+            this.Title = "ColorChord.NET (OpenGL): " + this.Name;
             IVisualizer? Visualizer = Configurer.FindVisualizer(config) ?? throw new InvalidOperationException($"{GetType().Name} cannot find visualizer to attach to");
             this.Source = Visualizer;
 

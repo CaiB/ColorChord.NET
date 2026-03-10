@@ -1,17 +1,21 @@
-﻿using ColorChord.NET.API;
-using ColorChord.NET.API.Config;
-using ColorChord.NET.API.Controllers;
-using ColorChord.NET.API.Outputs;
-using ColorChord.NET.API.Utility;
-using ColorChord.NET.Config;
-using ColorChord.NET.Outputs.DisplayD3D12Modes;
-using ColorChord.NET.Outputs.DisplayD3D12Support;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using ColorChord.NET.API;
+using ColorChord.NET.API.Config;
+using ColorChord.NET.API.Controllers;
+using ColorChord.NET.API.NoteFinder;
+using ColorChord.NET.API.Outputs;
+using ColorChord.NET.API.Outputs.Display;
+using ColorChord.NET.API.Utility;
+using ColorChord.NET.API.Visualizers;
+using ColorChord.NET.Config;
+using ColorChord.NET.Extensions;
+using ColorChord.NET.Outputs.DisplayD3D12Modes;
+using ColorChord.NET.Outputs.DisplayD3D12Support;
 using Vortice.Win32;
 using Vortice.Win32.Graphics.Direct3D;
 using Vortice.Win32.Graphics.Direct3D12;
@@ -28,7 +32,7 @@ namespace ColorChord.NET.Outputs;
 public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 {
     private const int NUM_FRAMEBUFFERS = 2;
-    private const bool D3D_DEBUG = true;
+    private const bool D3D_DEBUG = false;
     private const bool USE_WARP = false;
     public string Name { get; private init; }
 
@@ -66,6 +70,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     }
 
     public NativeResources Native;
+    public DescriptorHeap BufferDescriptorHeap { get; private init; }
 
     private readonly Window Window;
     private readonly uint RTVDescriptorSize;
@@ -84,20 +89,36 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     private bool SizeChanged = false;
     private bool KeepGoing = true;
 
-    private TutorialModeNew Mode;
+    public NoteFinderCommon NoteFinder { get; private init; }
+    public IVisualizer Source { get; private set; }
+    private Thread? WindowThread;
+    private readonly ID3D12DisplayMode? Mode;
 
     public DisplayD3D12(string name, Dictionary<string, object> config)
     {
         this.Name = name;
-        this.Window = new() { WindowTitle = this.Name };
+        this.Window = new() { WindowTitle = "ColorChord.NET (D3D12): " + this.Name };
+
+        IVisualizer? Visualizer = Configurer.FindVisualizer(config) ?? throw new InvalidOperationException($"{GetType().Name} cannot find visualizer to attach to");
+        this.Source = Visualizer;
         Configurer.Configure(this, config);
-        this.Window.Create();
-        this.Window.OnResize += OnResize;
-        this.Window.OnClose += (sender, evt) => { this.KeepGoing = false; };
+        this.NoteFinder = Configurer.FindNoteFinder(config) ?? this.Source.NoteFinder ?? throw new Exception($"{nameof(DisplayD3D12)} {this.Name} could not find NoteFinder to get data from.");
+
+
+        AutoResetEvent WindowCreatedEvent = new(false);
+        this.WindowThread = new(() =>
+        {
+            this.Window.Create();
+            WindowCreatedEvent.Set();
+            this.Window.OnResize += OnResize;
+            this.Window.OnClose += (sender, evt) => { this.KeepGoing = false; };
+            this.Window.RunMessageLoop();
+        })
+        { Name = $"{nameof(DisplayD3D12)} {this.Name} Native Window" };
+        this.WindowThread.Start();
+
         this.Native = new();
         this.Native.ClearColour = new(0x81 / 255F, 0x14 / 255F, 0x26 / 255F, 1.0F);
-
-        this.Mode = new(this, null, new());
 
         ID3D12Debug* DebugLayer = null;
         if (D3D_DEBUG)
@@ -232,6 +253,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                 Flags = SwapChainFlags.FrameLatencyWaitableObject
             };
 
+            WindowCreatedEvent.WaitOne();
             IDXGISwapChain1* Swapchain1 = null;
             ThrowIfFailed(DXGIFactory->CreateSwapChainForHwnd((IUnknown*)nthis->CommandQueue, this.Window.Handle, &SwapChainDesc, null, null, &Swapchain1));
             ThrowIfFailed(DXGIFactory->MakeWindowAssociation(this.Window.Handle, WindowAssociationFlags.NoAltEnter)); // Disable the Alt+Enter fullscreen toggle feature. Switching to fullscreen will be handled manually.
@@ -243,6 +265,30 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             this.RTVDescriptorSize = nthis->Device->GetDescriptorHandleIncrementSize(DescriptorHeapType.Rtv);
             UpdateRenderTargetViews(nthis->Device, nthis->Swapchain, nthis->DescriptorHeapRTV, &nthis->BufferRTV0, &nthis->BufferRTV1);
 
+            this.BufferDescriptorHeap = new(nthis->Device, DescriptorHeapType.CbvSrvUav);
+
+            ThrowIfFailed(nthis->Device->CreateFence(0, FenceFlags.None, __uuidof<ID3D12Fence>(), (void**)&nthis->FrameFence));
+        }
+
+        this.FrameFenceEventHandle = GCHandle.Alloc(this.FrameFenceEvent);
+        this.CopyQueue = new(this.Native.Device, CommandListType.Copy);
+
+        if (config.TryGetValue("Modes", out object? ModesObj)) // Make sure that everything else is configured before creating the modes!
+        {
+            List<object> ModesList = ModesObj as List<object> ?? throw new Exception("\"Modes\" must be an array of objects");
+            for (int i = 0; i < 1/*ModeList.Length*/; i++) // TODO: Add support for multiple modes.
+            {
+                Dictionary<string, object> ThisMode = ModesList[i] as Dictionary<string, object> ?? throw new Exception($"Mode number {i + 1} was not a valid object");
+                if (!ThisMode.TryGetValue(ConfigNames.TYPE, out object? TypeObj) || TypeObj is not string TypeName) { Log.Error($"Mode number {i + 1} is missing a valid \"{ConfigNames.TYPE}\" specification."); continue; }
+                this.Mode = CreateMode(TypeName.StartsWith('#') ? TypeName : "ColorChord.NET.Outputs.DisplayD3D12Modes." + TypeName, ThisMode);
+                if (this.Mode == null) { Log.Error($"Failed to create display of type \"{TypeName}\" under \"{this.Name}\"."); }
+            }
+            if (ModesList.Count > 1) { Log.Warn("Config specifies multiple modes. This is not yet supported, so only the first one will be used."); }
+            Log.Info($"Finished reading display modes under \"{this.Name}\".");
+        }
+
+        fixed (NativeResources* nthis = &this.Native)
+        {
             if (this.HasDepth)
             {
                 this.OptimizedDepthClearValue = new()
@@ -266,15 +312,28 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 
                 nthis->DescriptorHeapDSV = CreateDescriptorHeap(nthis->Device, DescriptorHeapType.Dsv, 1);
             }
-
-            ThrowIfFailed(nthis->Device->CreateFence(0, FenceFlags.None, __uuidof<ID3D12Fence>(), (void**)&nthis->FrameFence));
         }
 
-        this.FrameFenceEventHandle = GCHandle.Alloc(this.FrameFenceEvent);
-        this.CopyQueue = new(this.Native.Device, CommandListType.Copy);
         HandleResize();
-        this.Mode.Load(this.Native.Device, this.CopyQueue);
 
+        uint BufferIndex = this.Native.Swapchain->GetCurrentBackBufferIndex();
+        this.CurrentBackBuffer = BufferIndex;
+        ID3D12CommandAllocator* CommandAllocator = BufferIndex == 0 ? this.Native.CommandAllocator0 : this.Native.CommandAllocator1;
+        ID3D12Resource* BackBuffer = BufferIndex == 0 ? this.Native.BufferRTV0 : this.Native.BufferRTV1;
+        ID3D12GraphicsCommandList* CommandList = this.Native.CommandList;
+        CommandAllocator->Reset();
+        CommandList->Reset(CommandAllocator, null);
+
+        this.Mode?.Load(this.Native.Device, this.CopyQueue, this.Native.CommandList);
+
+        CommandList->Close();
+        ID3D12CommandList* CommandListGeneric = COMCast<ID3D12GraphicsCommandList, ID3D12CommandList>(CommandList);
+        this.Native.CommandQueue->ExecuteCommandLists(1, &CommandListGeneric);
+        COMRelease(&CommandListGeneric);
+        Flush(this.Native.CommandQueue, this.Native.FrameFence, ref this.FrameFenceValue, this.FrameFenceEvent);
+        this.CurrentBackBuffer = this.Native.Swapchain->GetCurrentBackBufferIndex();
+
+        this.Source.AttachOutput(this);
         COMRelease(&DXGIFactory);
     }
 
@@ -312,6 +371,35 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         ThrowIfFailed(device->CreateCommandList(0, type, commandAllocator, null, __uuidof<ID3D12GraphicsCommandList>(), (void**)&Result));
         ThrowIfFailed(Result->Close());
         return Result;
+    }
+
+    private ID3D12DisplayMode? CreateMode(string fullName, Dictionary<string, object> config)
+    {
+        Type? ObjType;
+        if (fullName.StartsWith('#'))
+        {
+            fullName = fullName.Substring(1);
+            ObjType = ExtensionHandler.FindType(fullName);
+        }
+        else { ObjType = Type.GetType(fullName); }
+        if (ObjType == null) { Log.Error($"Cannot find display mode type {fullName}!"); return null; }
+        if (!typeof(ID3D12DisplayMode).IsAssignableFrom(ObjType)) { Log.Error($"Requested display mode {fullName} is not a valid display mode (must be ID3D12DisplayMode)."); return null; }
+
+        bool IsConfigurable = typeof(IConfigurableAttr).IsAssignableFrom(ObjType);
+
+        object? Instance = null;
+        try
+        {
+            if (IsConfigurable) { Instance = Activator.CreateInstance(ObjType, this, this.Source, config); }
+            else { Instance = Activator.CreateInstance(ObjType, this, this.Source); }
+        }
+        catch (MissingMethodException exc)
+        {
+            Log.Error("Could not create an instance of \"" + fullName + "\".");
+            Console.WriteLine(exc);
+        }
+
+        return Instance == null ? null : (ID3D12DisplayMode)Instance;
     }
 
     ulong AddSignalToQueue(ID3D12CommandQueue* commandQueue, ID3D12Fence* fence, ref ulong fenceValue)
@@ -384,7 +472,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             fixed (Rect* ScissorPtr = &this.ScissorRect) { CommandList->RSSetScissorRects(1, ScissorPtr); }
             CommandList->OMSetRenderTargets(1, &RTV, false, this.HasDepth ? &DSV : null);
 
-            this.Mode.Render(CommandList);
+            this.Mode?.Render(nthis->Device, CommandList);
 
             // Present
             {
@@ -448,7 +536,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             fixed (DepthStencilViewDescription* DSVDescPtr = &this.DSVDesc) { this.Native.Device->CreateDepthStencilView(NewDepthBuffer, DSVDescPtr, this.Native.DescriptorHeapDSV->GetCPUDescriptorHandleForHeapStart()); }
             this.Native.DepthBuffer = NewDepthBuffer;
         }
-        this.Mode.Resize(NewWidth, NewHeight);
+        this.Mode?.Resize(NewWidth, NewHeight);
         this.PreviousHeight = NewHeight;
         this.PreviousWidth = NewWidth;
     }
@@ -460,14 +548,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 
     public void Start()
     {
-        this.Stopwatch.Start();
-        while (this.KeepGoing)
-        {
-            Win32API.WaitForSingleObjectEx(this.Native.SwapchainWaitHandle, 1000, true);
-            Update();
-            Render();
-        }
-        ColorChord.Stop();
+        
     }
 
     public void Stop()
@@ -486,7 +567,15 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 
     public void InstThreadPostInit()
     {
-        this.Window.RunMessageLoop();
+        this.Stopwatch.Start();
+        while (this.KeepGoing)
+        {
+            Win32API.WaitForSingleObjectEx(this.Native.SwapchainWaitHandle, 1000, true);
+            Update();
+            Render();
+        }
+        ColorChord.Stop();
+        this.WindowThread?.Join();
     }
 
     internal static void UpdateBufferResource<T>(ID3D12Device2* device, ID3D12GraphicsCommandList2* commandList, ReadOnlySpan<T> data, ResourceFlags flags, out ID3D12Resource* intermediateResource, out ID3D12Resource* destinationResource) where T : unmanaged

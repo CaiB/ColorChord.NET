@@ -11,6 +11,6 @@ struct VertexShaderOutput
 VertexShaderOutput Main(VertexPos IN)
 {
     VertexShaderOutput OUT;
-    OUT.Position = float4(IN.Position, 0.0, 0.0);
+    OUT.Position = float4(IN.Position, 0.0, 1.0);
     return OUT;
 }
