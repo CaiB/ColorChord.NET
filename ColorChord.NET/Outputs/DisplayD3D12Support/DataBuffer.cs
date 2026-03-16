@@ -16,6 +16,7 @@ public unsafe class DataBuffer<T> : IDisposable where T : unmanaged
     private ResourceDescription Description;
     private readonly uint ElementSize;
     private uint Count;
+    private string? Name;
     private bool IsDisposed;
 
     public bool IsByteAddressable { get; private init; }
@@ -24,9 +25,10 @@ public unsafe class DataBuffer<T> : IDisposable where T : unmanaged
     public GpuDescriptorHandle GPUHandleSRV { get; private set; }
     public GpuDescriptorHandle GPUHandleUAV { get; private set; }
 
-    public DataBuffer(bool isByteAddressable, Format formatOverride = Format.Unknown, uint elementSizeOverride = 0)
+    public DataBuffer(bool isByteAddressable, Format formatOverride = Format.Unknown, uint elementSizeOverride = 0, string? name = null)
     {
         this.IsByteAddressable = isByteAddressable;
+        this.Name = name;
         this.ElementSize = elementSizeOverride == 0 ? (uint)sizeof(T) : elementSizeOverride;
 
         if (isByteAddressable) { this.Format = Format.R32Typeless; }
@@ -45,6 +47,28 @@ public unsafe class DataBuffer<T> : IDisposable where T : unmanaged
                 _ => throw new Exception($"{nameof(DataBuffer<T>)} could not automatically determine the buffer format for type {typeof(T).FullName}. Override it manually using {nameof(formatOverride)}.")
             };
         }
+    }
+
+    /// <summary>Prepares the data buffer, but doesn't create descriptors on a heap. Use this if descriptors are being placed directly into the root signature, rather than on a descriptor heap.</summary>
+    public void Create(ID3D12Device2* device, DataHeap dataHeap, uint dataCount)
+    {
+        if (dataCount == 0) { throw new ArgumentException("Must be greater than 0", nameof(dataCount)); }
+        this.Count = dataCount;
+        this.Description = new()
+        {
+            Alignment = 0,
+            DepthOrArraySize = 1,
+            Dimension = ResourceDimension.Buffer,
+            Flags = ResourceFlags.AllowUnorderedAccess,
+            Format = Format.Unknown,
+            Height = 1,
+            Layout = TextureLayout.RowMajor,
+            MipLevels = 1,
+            SampleDesc = new() { Count = 1, Quality = 0 },
+            Width = dataCount * this.ElementSize // TODO: Is this right?
+        };
+        fixed (ResourceDescription* DescPtr = &this.Description) { this.BF_Buffer = dataHeap.AllocateBuffer(device, DescPtr, this.ElementSize * dataCount); }
+        if (this.Name != null) { this.BF_Buffer->SetName(this.Name); }
     }
 
     public void Create(ID3D12Device2* device, DataHeap dataHeap, DescriptorHeap descriptorHeap, uint dataCount)
@@ -67,6 +91,7 @@ public unsafe class DataBuffer<T> : IDisposable where T : unmanaged
             Width = dataCount * this.ElementSize // TODO: Is this right?
         };
         fixed (ResourceDescription* DescPtr = &this.Description) { this.BF_Buffer = dataHeap.AllocateBuffer(device, DescPtr, this.ElementSize * dataCount); }
+        if (this.Name != null) { this.BF_Buffer->SetName(this.Name); }
 
         {
             ShaderResourceViewDescription SRVDesc = new()
@@ -107,7 +132,7 @@ public unsafe class DataBuffer<T> : IDisposable where T : unmanaged
         }
     }
 
-    public void Load(ID3D12Device2* device, ID3D12GraphicsCommandList2* copyCommandList, out ID3D12Resource* intermediateBuffer, ReadOnlySpan<T> data)
+    public void Load(ID3D12Device2* device, CommandList copyCommandList, out ID3D12Resource* intermediateBuffer, ReadOnlySpan<T> data)
     {
         if (this.Count != data.Length) { throw new Exception($"{nameof(DataBuffer<T>)} was created with size {this.Count}, but an attempt was made to load {data.Length} items. These must match."); }
 
@@ -122,7 +147,7 @@ public unsafe class DataBuffer<T> : IDisposable where T : unmanaged
             RowPitch = (nint)BufferSize,
             SlicePitch = (nint)BufferSize
         };
-        UpdateSubresources((ID3D12GraphicsCommandList*)copyCommandList, this.Buffer, IntermediateResource, 0, 0, 1, &Subresource);
+        UpdateSubresources((ID3D12GraphicsCommandList*)copyCommandList.NativeList, this.Buffer, IntermediateResource, 0, 0, 1, &Subresource);
         intermediateBuffer = IntermediateResource;
     }
 

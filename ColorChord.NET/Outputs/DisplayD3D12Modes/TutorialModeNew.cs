@@ -66,11 +66,10 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode, IConfigurableAttr
 
     public bool SupportsFormat(IVisualizerFormat format) => true;
 
-    public void Load(ID3D12Device2* device, CommandQueue copyQueue, ID3D12GraphicsCommandList* directCommandList)
+    public void Load(ID3D12Device2* device, CommandList copyCommandList, CommandList directCommandList)
     {
-        ID3D12GraphicsCommandList2* CopyCommandList = copyQueue.GetCommandList();
-        this.VertexBuffer = new(device, CopyCommandList, this.Vertices);
-        this.IndexBuffer = new(device, CopyCommandList, this.CubeIndices);
+        this.VertexBuffer = new(device, copyCommandList, this.Vertices);
+        this.IndexBuffer = new(device, copyCommandList, this.CubeIndices);
         InputElementDescription[] VertexInputs =
         [
             new()
@@ -98,17 +97,16 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode, IConfigurableAttr
         RootParameter1[] RootParameters = [MatrixParameter];
         this.Shader = new(device, VertexInputs, "VS_Tutorial.cso", "PS_Tutorial.cso", rootParameters: RootParameters, useDepth: this.Host.HasDepth);
 
-        ulong FenceValue = copyQueue.ExecuteCommandList(CopyCommandList);
+        ulong FenceValue = copyCommandList.Execute();
 
         float AspectRatio = this.Host.WindowWidth / (float)this.Host.WindowHeight;
         this.ProjectionMatrix = Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(45F / 180F * MathF.PI, AspectRatio, 0.1F, 100F);
 
-        copyQueue.WaitForFenceValue(FenceValue);
+        copyCommandList.WaitForFenceValue(FenceValue);
         this.Ready = true;
-        COMRelease(&CopyCommandList);
     }
 
-    public void Render(ID3D12Device2* device, ID3D12GraphicsCommandList* directCommandList)
+    public void Render(ID3D12Device2* device, CommandList directCommandList)
     {
         if (!this.Ready) { return; }
         this.Time += 0.04F;
@@ -121,17 +119,17 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode, IConfigurableAttr
         this.ViewMatrix = Matrix4x4.CreateLookAtLeftHanded(EyePosition, FocusPoint, UpDirection);
 
         this.Shader.Use(directCommandList);
-        directCommandList->IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        directCommandList.NativeList->IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         this.VertexBuffer.Use(directCommandList);
         this.IndexBuffer.Use(directCommandList);
 
         Matrix4x4 MVPMatrix = this.ModelMatrix * this.ViewMatrix * this.ProjectionMatrix;
-        directCommandList->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(Matrix4x4) / sizeof(float)), &MVPMatrix, 0);
+        directCommandList.NativeList->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(Matrix4x4) / sizeof(float)), &MVPMatrix, 0);
 
-        directCommandList->DrawIndexedInstanced((uint)(this.CubeIndices.Length), 1, 0, 0, 0);
+        directCommandList.NativeList->DrawIndexedInstanced((uint)(this.CubeIndices.Length), 1, 0, 0, 0);
     }
 
-    public void Dispatch()
+    public void Dispatch(ID3D12Device2* device, CommandList copyCommandList)
     {
         
     }

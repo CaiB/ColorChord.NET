@@ -2,19 +2,16 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using System.Threading;
 using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
-using ColorChord.NET.API.Outputs.Display;
 using ColorChord.NET.API.Utility;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.Config;
 using ColorChord.NET.Extensions;
-using ColorChord.NET.Outputs.DisplayD3D12Modes;
 using ColorChord.NET.Outputs.DisplayD3D12Support;
 using Vortice.Win32;
 using Vortice.Win32.Graphics.Direct3D;
@@ -32,7 +29,7 @@ namespace ColorChord.NET.Outputs;
 public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 {
     private const int NUM_FRAMEBUFFERS = 2;
-    private const bool D3D_DEBUG = false;
+    private const bool D3D_DEBUG = true;
     private const bool USE_WARP = false;
     public string Name { get; private init; }
 
@@ -55,11 +52,8 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         public ID3D12DescriptorHeap* DescriptorHeapRTV;
         public ID3D12Resource* BufferRTV0;
         public ID3D12Resource* BufferRTV1;
-        public ID3D12Fence* FrameFence;
-        public ID3D12CommandQueue* CommandQueue;
-        public ID3D12CommandAllocator* CommandAllocator0;
-        public ID3D12CommandAllocator* CommandAllocator1;
-        public ID3D12GraphicsCommandList* CommandList;
+        public ID3D12CommandQueue* CommandQueueDirect;
+        public ID3D12CommandQueue* CommandQueueCopy;
         public Vector4 ClearColour;
 
         // These are only available if this.HasDepth = true
@@ -71,14 +65,12 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 
     public NativeResources Native;
     public DescriptorHeap BufferDescriptorHeap { get; private init; }
+    public readonly object Interlock = new();
 
     private readonly Window Window;
     private readonly uint RTVDescriptorSize;
-    private readonly CommandQueue CopyQueue;
-    private readonly AutoResetEvent FrameFenceEvent = new(false);
-    private readonly GCHandle FrameFenceEventHandle;
-    private readonly ulong[] FrameFenceValues = new ulong[NUM_FRAMEBUFFERS];
-    private ulong FrameFenceValue = 0;
+    private readonly CommandList CommandListDirect0, CommandListDirect1, CommandListCopy;
+    private CommandList CurrentCommandListDirect { get => this.CurrentBackBuffer == 0 ? this.CommandListDirect0 : this.CommandListDirect1; }
     private readonly Rect ScissorRect = new(0, 0, int.MaxValue, int.MaxValue);
     private Viewport Viewport = new();
     private ClearValue OptimizedDepthClearValue;
@@ -90,9 +82,11 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     private bool KeepGoing = true;
 
     public NoteFinderCommon NoteFinder { get; private init; }
-    public IVisualizer Source { get; private set; }
-    private Thread? WindowThread;
+    public IVisualizer Source { get; private init; }
+    private readonly Thread? WindowThread;
     private readonly ID3D12DisplayMode? Mode;
+    private readonly Thread DispatchThread;
+    private readonly AutoResetEvent DispatchTrigger;
 
     public DisplayD3D12(string name, Dictionary<string, object> config)
     {
@@ -103,7 +97,6 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         this.Source = Visualizer;
         Configurer.Configure(this, config);
         this.NoteFinder = Configurer.FindNoteFinder(config) ?? this.Source.NoteFinder ?? throw new Exception($"{nameof(DisplayD3D12)} {this.Name} could not find NoteFinder to get data from.");
-
 
         AutoResetEvent WindowCreatedEvent = new(false);
         this.WindowThread = new(() =>
@@ -226,17 +219,11 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                 }
             }
 
-            CommandQueueDescription DirectQueueDesc = new()
-            {
-                Type = CommandListType.Direct,
-                Priority = (int)CommandQueuePriority.Normal,
-                Flags = CommandQueueFlags.None,
-                NodeMask = 0
-            };
-            ThrowIfFailed(nthis->Device->CreateCommandQueue(&DirectQueueDesc, __uuidof<ID3D12CommandQueue>(), (void**)&nthis->CommandQueue));
-            nthis->CommandAllocator0 = CreateCommandAllocator(nthis->Device, CommandListType.Direct);
-            nthis->CommandAllocator1 = CreateCommandAllocator(nthis->Device, CommandListType.Direct);
-            nthis->CommandList = CreateCommandList(nthis->Device, this.CurrentBackBuffer == 0 ? nthis->CommandAllocator0 : nthis->CommandAllocator1, CommandListType.Direct);
+            nthis->CommandQueueDirect = CommandList.CreateParentQueue(CommandListType.Direct, nthis->Device, "Main Direct Queue");
+            nthis->CommandQueueCopy = CommandList.CreateParentQueue(CommandListType.Copy, nthis->Device, "Main Copy Queue");
+            this.CommandListDirect0 = new(CommandListType.Direct, nthis->Device, nthis->CommandQueueDirect, "Main Direct List 0");
+            this.CommandListDirect1 = new(CommandListType.Direct, nthis->Device, nthis->CommandQueueDirect, "Main Direct List 1");
+            this.CommandListCopy = new(CommandListType.Copy, nthis->Device, nthis->CommandQueueCopy, "Main Copy List");
 
             SwapChainDescription1 SwapChainDesc = new()
             {
@@ -250,12 +237,12 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                 Scaling = Scaling.Stretch,
                 SwapEffect = SwapEffect.FlipDiscard,
                 AlphaMode = AlphaMode.Unspecified,
-                Flags = SwapChainFlags.FrameLatencyWaitableObject
+                Flags = SwapChainFlags.FrameLatencyWaitableObject | SwapChainFlags.AllowTearing
             };
 
             WindowCreatedEvent.WaitOne();
             IDXGISwapChain1* Swapchain1 = null;
-            ThrowIfFailed(DXGIFactory->CreateSwapChainForHwnd((IUnknown*)nthis->CommandQueue, this.Window.Handle, &SwapChainDesc, null, null, &Swapchain1));
+            ThrowIfFailed(DXGIFactory->CreateSwapChainForHwnd((IUnknown*)nthis->CommandQueueDirect, this.Window.Handle, &SwapChainDesc, null, null, &Swapchain1));
             ThrowIfFailed(DXGIFactory->MakeWindowAssociation(this.Window.Handle, WindowAssociationFlags.NoAltEnter)); // Disable the Alt+Enter fullscreen toggle feature. Switching to fullscreen will be handled manually.
             nthis->Swapchain = COMCastAndReleaseOld<IDXGISwapChain1, IDXGISwapChain3>(&Swapchain1);
             ThrowIfFailed(nthis->Swapchain->SetMaximumFrameLatency(1));
@@ -266,12 +253,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             UpdateRenderTargetViews(nthis->Device, nthis->Swapchain, nthis->DescriptorHeapRTV, &nthis->BufferRTV0, &nthis->BufferRTV1);
 
             this.BufferDescriptorHeap = new(nthis->Device, DescriptorHeapType.CbvSrvUav);
-
-            ThrowIfFailed(nthis->Device->CreateFence(0, FenceFlags.None, __uuidof<ID3D12Fence>(), (void**)&nthis->FrameFence));
         }
-
-        this.FrameFenceEventHandle = GCHandle.Alloc(this.FrameFenceEvent);
-        this.CopyQueue = new(this.Native.Device, CommandListType.Copy);
 
         if (config.TryGetValue("Modes", out object? ModesObj)) // Make sure that everything else is configured before creating the modes!
         {
@@ -316,23 +298,15 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 
         HandleResize();
 
-        uint BufferIndex = this.Native.Swapchain->GetCurrentBackBufferIndex();
-        this.CurrentBackBuffer = BufferIndex;
-        ID3D12CommandAllocator* CommandAllocator = BufferIndex == 0 ? this.Native.CommandAllocator0 : this.Native.CommandAllocator1;
-        ID3D12Resource* BackBuffer = BufferIndex == 0 ? this.Native.BufferRTV0 : this.Native.BufferRTV1;
-        ID3D12GraphicsCommandList* CommandList = this.Native.CommandList;
-        CommandAllocator->Reset();
-        CommandList->Reset(CommandAllocator, null);
-
-        this.Mode?.Load(this.Native.Device, this.CopyQueue, this.Native.CommandList);
-
-        CommandList->Close();
-        ID3D12CommandList* CommandListGeneric = COMCast<ID3D12GraphicsCommandList, ID3D12CommandList>(CommandList);
-        this.Native.CommandQueue->ExecuteCommandLists(1, &CommandListGeneric);
-        COMRelease(&CommandListGeneric);
-        Flush(this.Native.CommandQueue, this.Native.FrameFence, ref this.FrameFenceValue, this.FrameFenceEvent);
         this.CurrentBackBuffer = this.Native.Swapchain->GetCurrentBackBufferIndex();
+        this.CommandListCopy.Reset();
+        this.CurrentCommandListDirect.Reset();
+        this.Mode?.Load(this.Native.Device, this.CommandListCopy, this.CurrentCommandListDirect);
+        this.CurrentCommandListDirect.ExecuteAndWait();
 
+        this.DispatchTrigger = new(false);
+        this.DispatchThread = new(DoDispatch) { Name = $"{nameof(DisplayD3D12)} '{this.Name}' Dispatch" };
+        this.DispatchThread.Start();
         this.Source.AttachOutput(this);
         COMRelease(&DXGIFactory);
     }
@@ -356,21 +330,6 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         COMRelease(bufferRTV1);
         ThrowIfFailed(swapChain->GetBuffer(1, __uuidof<ID3D12Resource>(), (void**)bufferRTV1));
         device->CreateRenderTargetView(*bufferRTV1, null, RTVHandle);
-    }
-
-    ID3D12CommandAllocator* CreateCommandAllocator(ID3D12Device2* device, CommandListType type)
-    {
-        ID3D12CommandAllocator* Result;
-        ThrowIfFailed(device->CreateCommandAllocator(type, __uuidof<ID3D12CommandAllocator>(), (void**)&Result));
-        return Result;
-    }
-
-    ID3D12GraphicsCommandList* CreateCommandList(ID3D12Device2* device, ID3D12CommandAllocator* commandAllocator, CommandListType type)
-    {
-        ID3D12GraphicsCommandList* Result;
-        ThrowIfFailed(device->CreateCommandList(0, type, commandAllocator, null, __uuidof<ID3D12GraphicsCommandList>(), (void**)&Result));
-        ThrowIfFailed(Result->Close());
-        return Result;
     }
 
     private ID3D12DisplayMode? CreateMode(string fullName, Dictionary<string, object> config)
@@ -402,29 +361,8 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         return Instance == null ? null : (ID3D12DisplayMode)Instance;
     }
 
-    ulong AddSignalToQueue(ID3D12CommandQueue* commandQueue, ID3D12Fence* fence, ref ulong fenceValue)
-    {
-        ulong FenceValueForSignal = ++fenceValue;
-        ThrowIfFailed(commandQueue->Signal(fence, FenceValueForSignal));
-        return FenceValueForSignal;
-    }
-
-    void WaitForFenceValue(ID3D12Fence* fence, ulong fenceValue, AutoResetEvent fenceEvent)
-    {
-        while (fence->GetCompletedValue() < fenceValue)
-        {
-            ThrowIfFailed(fence->SetEventOnCompletion(fenceValue, (Handle)fenceEvent.SafeWaitHandle.DangerousGetHandle())); // TODO: is a GCHandle on the event sufficient to ensure this doesn't explode?
-            fenceEvent.WaitOne();
-        }
-    }
-
-    public void Flush(ID3D12CommandQueue* commandQueue, ID3D12Fence* fence, ref ulong fenceValue, AutoResetEvent fenceEvent)
-    {
-        ulong fenceValueForSignal = AddSignalToQueue(commandQueue, fence, ref fenceValue);
-        WaitForFenceValue(fence, fenceValueForSignal, fenceEvent);
-    }
-
-    public void Flush() => Flush(this.Native.CommandQueue, this.Native.FrameFence, ref this.FrameFenceValue, this.FrameFenceEvent);
+    public void PauseUntilRenderFinished() => this.CurrentCommandListDirect.Wait();
+    public void PauseUntilCopyFinished() => this.CommandListCopy.Wait();
 
     private ulong FrameCounterForFPS = 0;
     private readonly Stopwatch Stopwatch = new();
@@ -445,11 +383,9 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         if (this.SizeChanged) { HandleResize(); }
 
         uint BufferIndex = this.CurrentBackBuffer;
-        ID3D12CommandAllocator* CommandAllocator = BufferIndex == 0 ? this.Native.CommandAllocator0 : this.Native.CommandAllocator1;
+        CommandList CommandListD = this.CurrentCommandListDirect;
         ID3D12Resource* BackBuffer = BufferIndex == 0 ? this.Native.BufferRTV0 : this.Native.BufferRTV1;
-        ID3D12GraphicsCommandList* CommandList = this.Native.CommandList;
-        CommandAllocator->Reset();
-        CommandList->Reset(CommandAllocator, null);
+        CommandListD.Reset();
 
         CpuDescriptorHandle RTV = this.Native.DescriptorHeapRTV->GetCPUDescriptorHandleForHeapStart();
         RTV.Offset((int)BufferIndex, this.RTVDescriptorSize);
@@ -459,40 +395,35 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             // Clear the render target.
             {
                 ResourceBarrier Barrier = ResourceBarrier.InitTransition(BackBuffer, ResourceStates.Present, ResourceStates.RenderTarget);
-                CommandList->ResourceBarrier(1, &Barrier);
-                CommandList->ClearRenderTargetView(RTV, (float*)&nthis->ClearColour, 0, null);
-            }
-            if (this.HasDepth)
-            {
-                DSV = this.Native.DescriptorHeapDSV->GetCPUDescriptorHandleForHeapStart();
-                CommandList->ClearDepthStencilView(DSV, ClearFlags.Depth, 1F, 0, 0, null);
+                CommandListD.NativeList->ResourceBarrier(1, &Barrier);
+                CommandListD.NativeList->ClearRenderTargetView(RTV, (float*)&nthis->ClearColour, 0, null);
+                if (this.HasDepth)
+                {
+                    DSV = this.Native.DescriptorHeapDSV->GetCPUDescriptorHandleForHeapStart();
+                    CommandListD.NativeList->ClearDepthStencilView(DSV, ClearFlags.Depth, 1F, 0, 0, null);
+                }
             }
             
-            fixed (Viewport* ViewportPtr = &this.Viewport) { CommandList->RSSetViewports(1, ViewportPtr); }
-            fixed (Rect* ScissorPtr = &this.ScissorRect) { CommandList->RSSetScissorRects(1, ScissorPtr); }
-            CommandList->OMSetRenderTargets(1, &RTV, false, this.HasDepth ? &DSV : null);
+            // Prep state
+            fixed (Viewport* ViewportPtr = &this.Viewport) { CommandListD.NativeList->RSSetViewports(1, ViewportPtr); }
+            fixed (Rect* ScissorPtr = &this.ScissorRect) { CommandListD.NativeList->RSSetScissorRects(1, ScissorPtr); }
+            CommandListD.NativeList->OMSetRenderTargets(1, &RTV, false, this.HasDepth ? &DSV : null);
 
-            this.Mode?.Render(nthis->Device, CommandList);
-
-            // Present
+            lock (this.Interlock)
             {
-                ResourceBarrier Barrier = ResourceBarrier.InitTransition(BackBuffer, ResourceStates.RenderTarget, ResourceStates.Present);
-                CommandList->ResourceBarrier(1, &Barrier);
-                ThrowIfFailed(CommandList->Close());
 
-                ID3D12CommandList* CommandListGeneric = COMCast<ID3D12GraphicsCommandList, ID3D12CommandList>(CommandList);
-                nthis->CommandQueue->ExecuteCommandLists(1, &CommandListGeneric);
-                COMRelease(&CommandListGeneric);
+                // Actually render
+                this.Mode?.Render(nthis->Device, CommandListD);
 
-                ThrowIfFailed(nthis->Swapchain->Present(1, 0));
+                // Present
+                {
+                    ResourceBarrier Barrier = ResourceBarrier.InitTransition(BackBuffer, ResourceStates.RenderTarget, ResourceStates.Present);
+                    CommandListD.NativeList->ResourceBarrier(1, &Barrier);
+                    ulong RenderFenceValue = CommandListD.Present(nthis->Swapchain);
 
-                // TODO: Here https://www.3dgep.com/learning-directx-12-1/#present it's after the Present
-                // But here https://github.com/jpvanoosten/LearningDirectX12/blob/v0.0.1/Tutorial1/src/main.cpp#L516 it's before the Present
-                // Which one is correct???
-                this.FrameFenceValues[BufferIndex] = AddSignalToQueue(nthis->CommandQueue, nthis->FrameFence, ref this.FrameFenceValue);
-                this.CurrentBackBuffer = nthis->Swapchain->GetCurrentBackBufferIndex();
-
-                WaitForFenceValue(nthis->FrameFence, this.FrameFenceValues[BufferIndex], this.FrameFenceEvent);
+                    CommandListD.WaitForFenceValue(RenderFenceValue);
+                    this.CurrentBackBuffer = nthis->Swapchain->GetCurrentBackBufferIndex();
+                }
             }
         }
     }
@@ -506,14 +437,13 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         int NewHeight = Math.Max(1, this.Window.Height);
         if (NewHeight == this.PreviousHeight && NewWidth == this.PreviousWidth) { return; }
 
-        Flush(this.Native.CommandQueue, this.Native.FrameFence, ref this.FrameFenceValue, this.FrameFenceEvent);
-        this.Viewport = new(0F, 0F, NewWidth, NewHeight);
+        this.CurrentCommandListDirect.Flush();
 
         // Any references to the back buffers must be released before the swap chain can be resized.
         COMRelease(ref this.Native.BufferRTV0);
         COMRelease(ref this.Native.BufferRTV1);
-        this.FrameFenceValues[0] = this.FrameFenceValues[this.CurrentBackBuffer];
-        this.FrameFenceValues[1] = this.FrameFenceValues[this.CurrentBackBuffer];
+
+        this.Viewport = new(0F, 0F, NewWidth, NewHeight);
 
         SwapChainDescription1 SwapchainDesc = default;
         ThrowIfFailed(this.Native.Swapchain->GetDesc1(&SwapchainDesc));
@@ -541,9 +471,17 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         this.PreviousWidth = NewWidth;
     }
 
-    public void Dispatch()
+    public void Dispatch() => this.DispatchTrigger.Set();
+
+    private void DoDispatch()
     {
-        
+        while (true)
+        {
+            this.DispatchTrigger.WaitOne();
+            if (!this.KeepGoing) { break; }
+            this.CommandListCopy.Reset();
+            this.Mode?.Dispatch(this.Native.Device, this.CommandListCopy);
+        }
     }
 
     public void Start()
@@ -553,6 +491,8 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
 
     public void Stop()
     {
+        this.KeepGoing = false;
+        this.DispatchTrigger.Set();
         if (D3D_DEBUG)
         {
             Debug.WriteLine("Live object report:");
@@ -563,6 +503,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                 COMRelease(&DXGIDebug);
             }
         }
+        this.DispatchThread.Join();
     }
 
     public void InstThreadPostInit()
@@ -578,7 +519,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         this.WindowThread?.Join();
     }
 
-    internal static void UpdateBufferResource<T>(ID3D12Device2* device, ID3D12GraphicsCommandList2* commandList, ReadOnlySpan<T> data, ResourceFlags flags, out ID3D12Resource* intermediateResource, out ID3D12Resource* destinationResource) where T : unmanaged
+    internal static void UpdateBufferResource<T>(ID3D12Device2* device, CommandList commandList, ReadOnlySpan<T> data, ResourceFlags flags, out ID3D12Resource* intermediateResource, out ID3D12Resource* destinationResource) where T : unmanaged
     {
         ulong BufferSize = (ulong)(sizeof(T) * data.Length);
         HeapProperties HeapPropertiesDest = new() { Type = HeapType.Default };
@@ -598,7 +539,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                 RowPitch = (nint)BufferSize,
                 SlicePitch = (nint)BufferSize
             };
-            UpdateSubresources((ID3D12GraphicsCommandList*)commandList, destinationResource, intermediateResource, 0, 0, 1, &Subresource);
+            UpdateSubresources((ID3D12GraphicsCommandList*)commandList.NativeList, destinationResource, intermediateResource, 0, 0, 1, &Subresource);
         }
     }
 }

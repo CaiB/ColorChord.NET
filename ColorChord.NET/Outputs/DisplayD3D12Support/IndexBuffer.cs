@@ -15,10 +15,10 @@ public unsafe class IndexBuffer<T> : IDisposable where T : unmanaged
     public ID3D12Resource* Buffer { get => this.BF_Buffer; }
     public IndexBufferView View { get => this.BF_View; }
 
-    public IndexBuffer(ID3D12Device2* device, ID3D12GraphicsCommandList2* copyCommandList, ReadOnlySpan<T> data) => Load(device, copyCommandList, data);
+    public IndexBuffer(ID3D12Device2* device, CommandList copyCommandList, ReadOnlySpan<T> data) => Load(device, copyCommandList, data);
 
     /// <summary>Copies new index data to the GPU, automatically freeing the old data if it was previously loaded</summary>
-    public void Load(ID3D12Device2* device, ID3D12GraphicsCommandList2* copyCommandList, ReadOnlySpan<T> data)
+    public void Load(ID3D12Device2* device, CommandList copyCommandList, ReadOnlySpan<T> data)
     {
         COMRelease(ref this.BF_Buffer);
         DisplayD3D12.UpdateBufferResource(device, copyCommandList, data, ResourceFlags.None, out ID3D12Resource* IntermediateIndexBuffer, out this.BF_Buffer);
@@ -36,10 +36,10 @@ public unsafe class IndexBuffer<T> : IDisposable where T : unmanaged
         };
     }
 
-    public void Use(ID3D12GraphicsCommandList* directCommandList)
+    public void Use(CommandList directCommandList)
     {
         Debug.Assert(this.Buffer != null);
-        fixed (IndexBufferView* IndexViewPtr = &this.BF_View) { directCommandList->IASetIndexBuffer(IndexViewPtr); }
+        fixed (IndexBufferView* IndexViewPtr = &this.BF_View) { directCommandList.NativeList->IASetIndexBuffer(IndexViewPtr); }
     }
 
     protected virtual void Dispose(bool disposing)

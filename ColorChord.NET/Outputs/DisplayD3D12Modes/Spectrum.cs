@@ -96,17 +96,16 @@ public class Spectrum : ID3D12DisplayMode, IConfigurableAttr
     };
 
     public bool SupportsFormat(IVisualizerFormat format) => true;
-    public unsafe void Load(ID3D12Device2* device, CommandQueue copyQueue, ID3D12GraphicsCommandList* directCommandList)
+    public unsafe void Load(ID3D12Device2* device, CommandList copyCommandList, CommandList directCommandList)
     {
-        ID3D12GraphicsCommandList2* CopyCommandList = copyQueue.GetCommandList();
-        this.VertexBuffer = new(device, CopyCommandList, this.Vertices);
+        this.VertexBuffer = new(device, copyCommandList, this.Vertices);
 
         long DataSize = Math.Min(65536, (this.NoteFinder.AllBinValues.Length * sizeof(float)) + ((int)MathF.Ceiling(this.NoteFinder.AllBinValues.Length / 32F) * 2));
         this.DataHeap = new(device, (ulong)DataSize);
         this.BinValues = new(true);
         this.BinValues.Create(device, this.DataHeap, this.Host.BufferDescriptorHeap, (uint)this.NoteFinder.AllBinValues.Length);
 
-        ulong FenceValue = copyQueue.ExecuteCommandList(CopyCommandList);
+        ulong FenceValue = copyCommandList.Execute();
 
         InputElementDescription[] VertexInputs =
         [
@@ -129,51 +128,48 @@ public class Spectrum : ID3D12DisplayMode, IConfigurableAttr
         RootParameter1[] RootParameters = [RootDataParameter, BinValuesParameter];
 
         Span<nint> DescriptorHeaps = [(nint)this.Host.BufferDescriptorHeap.Heap];
-        directCommandList->SetDescriptorHeaps((uint)DescriptorHeaps.Length, (ID3D12DescriptorHeap**)DescriptorHeaps.GetPointer());
+        directCommandList.NativeList->SetDescriptorHeaps((uint)DescriptorHeaps.Length, (ID3D12DescriptorHeap**)DescriptorHeaps.GetPointer());
         
         this.Shader = new(device, VertexInputs, "VS_Passthrough2.cso", "PS_Spectrum.cso", rootParameters: RootParameters);
 
         this.Host.Native.ClearColour = new(0F, 0F, 0F, 1F);
 
-        copyQueue.WaitForFenceValue(FenceValue);
-        this.CopyQueue = copyQueue;
+        copyCommandList.WaitForFenceValue(FenceValue);
         this.Ready = true;
-        COMRelease(&CopyCommandList);
     }
 
-    public void Dispatch()
-    {
-        
-    }
-
-    private CommandQueue CopyQueue;
-    public unsafe void Render(ID3D12Device2* device, ID3D12GraphicsCommandList* directCommandList)
+    public unsafe void Dispatch(ID3D12Device2* device, CommandList copyCommandList)
     {
         if (!this.Ready) { return; }
-
         this.NoteFinder.UpdateOutputs();
-        ID3D12GraphicsCommandList2* CopyCommandList = CopyQueue.GetCommandList();
         ID3D12Resource* IntermediateCopyBuffer = default;
-        if (this.G2NoteFinder != null) { this.BinValues.Load(device, CopyCommandList, out IntermediateCopyBuffer, this.G2NoteFinder.AllBinValuesScaled); }
-        else { this.BinValues.Load(device, CopyCommandList, out IntermediateCopyBuffer, this.NoteFinder.AllBinValues); } // TODO: needs to be pinned
-        // TODO: The above uses CommittedResource, which creates and then destroys a whole heap just for this one temp object. It probably makes more sense to use a permanent heap instead
-        ulong FenceValue = CopyQueue.ExecuteCommandList(CopyCommandList);
-        CopyQueue.WaitForFenceValue(FenceValue);
+        lock (this.Host.Interlock)
+        {
+            if (this.G2NoteFinder != null) { this.BinValues.Load(device, copyCommandList, out IntermediateCopyBuffer, this.G2NoteFinder.AllBinValuesScaled); }
+            else { this.BinValues.Load(device, copyCommandList, out IntermediateCopyBuffer, this.NoteFinder.AllBinValues); } // TODO: needs to be pinned
+            // TODO: The above uses CommittedResource, which creates and then destroys a whole heap just for this one temp object. It probably makes more sense to use a permanent heap instead
+            copyCommandList.ExecuteAndWait();
+        }
         COMRelease(&IntermediateCopyBuffer);
+    }
+
+    public unsafe void Render(ID3D12Device2* device, CommandList directCommandList)
+    {
+        if (!this.Ready) { return; }
 
         this.Shader.Use(directCommandList);
         
         Span<nint> DescriptorHeaps = [(nint)(this.Host.BufferDescriptorHeap.Heap)];
-        directCommandList->SetDescriptorHeaps((uint)DescriptorHeaps.Length, (ID3D12DescriptorHeap**)DescriptorHeaps.GetPointer());
-        directCommandList->SetGraphicsRootDescriptorTable(1, this.Host.BufferDescriptorHeap.GPUHandle);
+        directCommandList.NativeList->SetDescriptorHeaps((uint)DescriptorHeaps.Length, (ID3D12DescriptorHeap**)DescriptorHeaps.GetPointer());
+        directCommandList.NativeList->SetGraphicsRootDescriptorTable(1, this.Host.BufferDescriptorHeap.GPUHandle);
 
-        directCommandList->IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        directCommandList.NativeList->IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         this.VertexBuffer.Use(directCommandList);
 
         // TODO: this doesn't need to happen every frame
         UpdateConfig();
-        fixed (RootData* ConfigPtr = &this.ShaderConfig) { directCommandList->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(RootData) / sizeof(float)), ConfigPtr, 0); }
-        directCommandList->DrawInstanced(3, 1, 0, 0);
+        fixed (RootData* ConfigPtr = &this.ShaderConfig) { directCommandList.NativeList->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(RootData) / sizeof(float)), ConfigPtr, 0); }
+        directCommandList.NativeList->DrawInstanced(3, 1, 0, 0);
     }
 
     public void Resize(int width, int height) { }

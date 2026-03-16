@@ -108,10 +108,10 @@ public sealed unsafe class Shader : IDisposable
         COMRelease(&ErrorBlob);
     }
 
-    public void Use(ID3D12GraphicsCommandList* commandList)
+    public void Use(CommandList commandList)
     {
-        commandList->SetPipelineState(this.PipelineState);
-        commandList->SetGraphicsRootSignature(this.RootSignature);
+        commandList.NativeList->SetPipelineState(this.PipelineState);
+        commandList.NativeList->SetGraphicsRootSignature(this.RootSignature);
     }
 
     private void Dispose(bool disposing) // TODO: a bunch of things are created in the constructor which I don't currently clean up. Figure out when they can be cleaned and do so

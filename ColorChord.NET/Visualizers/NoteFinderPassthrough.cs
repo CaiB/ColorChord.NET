@@ -17,8 +17,8 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
 
     public NoteFinderCommon NoteFinder { get; private init; }
 
-    [ConfigFloat("TimePeriod", -1000000, 1000000, 100)]
-    private float TimePeriod = 100F;
+    [ConfigFloat("TimePeriod", -1000000, 1000000, -960)]
+    private float TimePeriod = -960F;
 
     [ConfigFloat("SaturationAmplifier", 0, 1000, 4.5F)]
     private float SaturationAmplifier = 4.5F;

@@ -9,13 +9,13 @@ internal unsafe interface ID3D12DisplayMode
     bool SupportsFormat(IVisualizerFormat format);
 
     /// <summary> Called once D3D is ready. </summary>
-    void Load(ID3D12Device2* device, CommandQueue copyQueue, ID3D12GraphicsCommandList* directCommandList);
+    void Load(ID3D12Device2* device, CommandList copyCommandList, CommandList directCommandList);
 
     /// <summary> Called to render a frame on the screen. </summary>
-    void Render(ID3D12Device2* device, ID3D12GraphicsCommandList* directCommandList);
+    void Render(ID3D12Device2* device, CommandList directCommandList);
 
     /// <summary> Passed through from the visualizer. </summary>
-    void Dispatch();
+    void Dispatch(ID3D12Device2* device, CommandList copyCommandList);
 
     /// <summary> Called when the window gets resized. </summary>
     void Resize(int width, int height);

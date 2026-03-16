@@ -1,3 +1,12 @@
+static const float PI      = 3.1415926536;
+static const float TAU     = 6.2831853072;
+static const float HALF_PI = 1.5707963268;
+static const float ROOT_2  = 1.4142135624;
+
+static const float REC_PI      = 0.3183098862;
+static const float REC_TAU     = 0.1591549431;
+static const float REC_HALF_PI = 0.6366197724;
+static const float REC_ROOT_2  = 0.7071067812;
 
 float3 HSVToRGB(float3 c)
 {
