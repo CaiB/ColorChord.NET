@@ -303,43 +303,50 @@ public class WASAPILoopback : IAudioSource
             if (this.CaptureClient == null) { Log.Warn("Capture client was not ready when an audio event was received."); continue; }
             if (this.NoteFinder == null) { Log.Warn("NoteFinder was not attached when an audio event was received."); continue; }
 
-            ErrorCode = this.CaptureClient.GetNextPacketSize(out uint PacketLength);
-            if (IsErrorAndOut(ErrorCode, "Failed to get audio packet size.")) { continue; }
-
-            ErrorCode = this.CaptureClient.GetBuffer(out IntPtr DataBuffer, out uint FramesAvailable, out AUDCLNT_BUFFERFLAGS BufferStatus, out ulong DevicePosition, out ulong CounterPosition);
-            if (IsErrorAndOut(ErrorCode, "Failed to get audio buffer.")) { continue; }
-
-            if (BufferStatus.HasFlag(AUDCLNT_BUFFERFLAGS.AUDCLNT_BUFFERFLAGS_SILENT))
+            while (this.CaptureClient.GetNextPacketSize(out uint PacketLength) >= 0 && PacketLength > 0)
             {
-                // TODO: Clear the buffer, as the device is not currently playing audio.
-            }
-            else if (FramesAvailable > 0)
-            {
-                int BytesPerSample = this.MixFormat.BitsPerSample / 8;
-                int ChannelCount = this.MixFormat.ChannelCount;
-                bool IsPCM = this.FormatIsPCM;
+                ErrorCode = this.CaptureClient.GetBuffer(out IntPtr DataBuffer, out uint FramesAvailable, out AUDCLNT_BUFFERFLAGS BufferStatus, out ulong DevicePosition, out ulong CounterPosition);
+                if (IsErrorAndOut(ErrorCode, "Failed to get audio buffer.")) { continue; }
 
-                short[]? ProcessedData = this.NoteFinder.GetBufferToWrite(out int NFBufferRef);
-                if (ProcessedData == null) { goto SkipBuffer; }
-                Debug.Assert(FramesAvailable <= ProcessedData.Length); // TODO: Handle this properly (if needed?)
+                if (BufferStatus.HasFlag(AUDCLNT_BUFFERFLAGS.AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY)) { Log.Debug("WASAPI reported audio discontinuity"); }
 
-                if (IsPCM && BytesPerSample == 2)
+                if (BufferStatus.HasFlag(AUDCLNT_BUFFERFLAGS.AUDCLNT_BUFFERFLAGS_SILENT))
                 {
-                    SampleConverter.ShortToShortMixdown(ChannelCount, FramesAvailable, (byte*)DataBuffer, ProcessedData);
+                    short[]? ProcessedData = this.NoteFinder.GetBufferToWrite(out int NFBufferRef);
+                    if (ProcessedData == null) { goto SkipBuffer; }
+                    Debug.Assert(FramesAvailable <= ProcessedData.Length); // TODO: Handle this properly (if needed?)
+                    new Span<short>(ProcessedData, 0, (int)FramesAvailable).Clear(); // TODO: Can probably optimize this with the DFT to skip most processing
+                    this.NoteFinder.FinishBufferWrite(NFBufferRef, FramesAvailable);
+                    this.NoteFinder.InputDataEvent.Set();
                 }
-                else if (!IsPCM && BytesPerSample == 4)
+                else if (FramesAvailable > 0)
                 {
-                    SampleConverter.FloatToShortMixdown(ChannelCount, FramesAvailable, (byte*)DataBuffer, ProcessedData);
+                    int BytesPerSample = this.MixFormat.BitsPerSample / 8;
+                    int ChannelCount = this.MixFormat.ChannelCount;
+                    bool IsPCM = this.FormatIsPCM;
+
+                    short[]? ProcessedData = this.NoteFinder.GetBufferToWrite(out int NFBufferRef);
+                    if (ProcessedData == null) { goto SkipBuffer; }
+                    Debug.Assert(FramesAvailable <= ProcessedData.Length); // TODO: Handle this properly (if needed?)
+
+                    if (IsPCM && BytesPerSample == 2)
+                    {
+                        SampleConverter.ShortToShortMixdown(ChannelCount, FramesAvailable, (byte*)DataBuffer, ProcessedData);
+                    }
+                    else if (!IsPCM && BytesPerSample == 4)
+                    {
+                        SampleConverter.FloatToShortMixdown(ChannelCount, FramesAvailable, (byte*)DataBuffer, ProcessedData);
+                    }
+                    else { throw new InvalidDataException($"{nameof(WASAPILoopback)} cannot handle the current audio format: Channels={ChannelCount} BytesPerSample={BytesPerSample} IsPCM={IsPCM}"); }
+
+                    this.NoteFinder.FinishBufferWrite(NFBufferRef, FramesAvailable);
+                    this.NoteFinder.InputDataEvent.Set();
                 }
-                else { throw new InvalidDataException($"{nameof(WASAPILoopback)} cannot handle the current audio format: Channels={ChannelCount} BytesPerSample={BytesPerSample} IsPCM={IsPCM}"); }
 
-                this.NoteFinder.FinishBufferWrite(NFBufferRef, FramesAvailable);
-                this.NoteFinder.InputDataEvent.Set();
+                SkipBuffer:
+                ErrorCode = this.CaptureClient.ReleaseBuffer(FramesAvailable);
+                if (IsErrorAndOut(ErrorCode, "Failed to release audio buffer.")) { continue; }
             }
-
-            SkipBuffer:
-            ErrorCode = this.CaptureClient.ReleaseBuffer(FramesAvailable);
-            if (IsErrorAndOut(ErrorCode, "Failed to release audio buffer.")) { continue; }
         }
 
         ErrorCode = this.Client == null ? -1 : this.Client.Stop();
