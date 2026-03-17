@@ -49,6 +49,8 @@ public unsafe class DataBuffer<T> : IDisposable where T : unmanaged
         }
     }
 
+    // TODO: Need to review ResourceFlags and ResourceStates below, probably not correct
+
     /// <summary>Prepares the data buffer, but doesn't create descriptors on a heap. Use this if descriptors are being placed directly into the root signature, rather than on a descriptor heap.</summary>
     public void Create(ID3D12Device2* device, DataHeap dataHeap, uint dataCount)
     {
@@ -67,7 +69,7 @@ public unsafe class DataBuffer<T> : IDisposable where T : unmanaged
             SampleDesc = new() { Count = 1, Quality = 0 },
             Width = dataCount * this.ElementSize // TODO: Is this right?
         };
-        fixed (ResourceDescription* DescPtr = &this.Description) { this.BF_Buffer = dataHeap.AllocateBuffer(device, DescPtr, this.ElementSize * dataCount); }
+        fixed (ResourceDescription* DescPtr = &this.Description) { this.BF_Buffer = dataHeap.AllocateBuffer(device, DescPtr, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource, this.ElementSize * dataCount); }
         if (this.Name != null) { this.BF_Buffer->SetName(this.Name); }
     }
 
@@ -90,7 +92,7 @@ public unsafe class DataBuffer<T> : IDisposable where T : unmanaged
             SampleDesc = new() { Count = 1, Quality = 0 },
             Width = dataCount * this.ElementSize // TODO: Is this right?
         };
-        fixed (ResourceDescription* DescPtr = &this.Description) { this.BF_Buffer = dataHeap.AllocateBuffer(device, DescPtr, this.ElementSize * dataCount); }
+        fixed (ResourceDescription* DescPtr = &this.Description) { this.BF_Buffer = dataHeap.AllocateBuffer(device, DescPtr, ResourceStates.PixelShaderResource | ResourceStates.NonPixelShaderResource, this.ElementSize * dataCount); }
         if (this.Name != null) { this.BF_Buffer->SetName(this.Name); }
 
         {

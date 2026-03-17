@@ -39,11 +39,11 @@ public unsafe class DataHeap : IDisposable
         this.Capacity = sizeInBytes;
     }
 
-    public ID3D12Resource* AllocateBuffer(ID3D12Device2* device, ResourceDescription* resourceDesc, uint sizeInBytes)
+    public ID3D12Resource* AllocateBuffer(ID3D12Device2* device, ResourceDescription* resourceDesc, ResourceStates resourceState, uint sizeInBytes)
     {
         if (this.CurrentOffset + sizeInBytes > this.Capacity) { throw new Exception($"{nameof(DataHeap)} is size {this.Capacity}, and {this.CurrentOffset} bytes are used. There is insufficient space for an allocation of size {sizeInBytes}."); }
         ID3D12Resource* Result;
-        ThrowIfFailed(device->CreatePlacedResource(this.Heap, this.CurrentOffset, resourceDesc, ResourceStates.UnorderedAccess, null, __uuidof<ID3D12Resource>(), (void**)&Result));
+        ThrowIfFailed(device->CreatePlacedResource(this.Heap, this.CurrentOffset, resourceDesc, resourceState, null, __uuidof<ID3D12Resource>(), (void**)&Result));
         this.CurrentOffset += sizeInBytes;
         return Result;
     }
