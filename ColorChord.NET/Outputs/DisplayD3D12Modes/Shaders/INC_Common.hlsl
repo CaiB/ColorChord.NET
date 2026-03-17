@@ -23,3 +23,5 @@ float3 AngleToRGB(float angle, float sat, float val)
     Hue += step(8.0 / 12.0, angle) * ((2.0 / 3.0) - (1.5 * (angle - (2.0 / 3.0)))); // Blue -> Yellow
     return HSVToRGB(float3(Hue, sat, val));
 }
+
+float GoodMod(float x, float y) { return x - y * floor(x / y); }

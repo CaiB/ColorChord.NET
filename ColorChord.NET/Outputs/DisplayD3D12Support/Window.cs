@@ -79,7 +79,7 @@ public class Window
             BackgroundBrush = this.BackgroundBrush,
             ClassMenuResourceName = null,
             ClassName = "ColorChord.NET_D3D12",
-            Cursor = Win32API.LoadCursor(NativeCursorIndex.AppStarting),
+            Cursor = Win32API.LoadCursor(NativeCursorIndex.Arrow),
             Icon = IntPtr.Zero,
             Instance = this.Instance,
             SmallIcon = IntPtr.Zero,
@@ -145,14 +145,11 @@ public class Window
                 this.OnResize?.Invoke(this, new()); // TODO: remove new
                 break;
             case MessageID.WM_MOVE:
-                Console.WriteLine($"Window was moved!");
                 break;
             case MessageID.WM_CLOSE:
                 this.OnClose?.Invoke(this, new());
-                Console.WriteLine("Closed.");
                 break;
             case MessageID.WM_DESTROY:
-                Console.WriteLine("Destroyed.");
                 Win32API.PostQuitMessage(0);
                 break;
 

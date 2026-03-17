@@ -57,7 +57,7 @@ public class RadialPoles : DisplayModeBase2D
         Width = (uint)this.Host.WindowWidth,
         Height = (uint)this.Host.WindowHeight,
         PoleCount = (uint)this.RawDataIn.Length,
-        Advance = 0F,
+        Advance = -MathF.PI / 2F,
         ScaleFactor = this.ScaleFactor,
         Exponent = this.ScaleExponent,
         FeatureBits = 0U
@@ -75,8 +75,7 @@ public class RadialPoles : DisplayModeBase2D
 
         RootParameter1.InitAsConstants(out RootParameter1 RootDataParameter, (uint)(sizeof(RootData) / sizeof(float)), 0, visibility: ShaderVisibility.Pixel);
         RootParameter1.InitAsShaderResourceView(out RootParameter1 SRVParam, 1, visibility: ShaderVisibility.Pixel);
-        //RootParameter1.InitAsUnorderedAccessView(out RootParameter1 UAVParam, 1, visibility: ShaderVisibility.Pixel);
-        RootParameter1[] RootParameters = [RootDataParameter, SRVParam];//, UAVParam];
+        RootParameter1[] RootParameters = [RootDataParameter, SRVParam];
 
         this.Shader = new(device, VertexInputs, "VS_Passthrough2.cso", "PS_RadialPoles.cso", rootParameters: RootParameters);
 
@@ -108,14 +107,11 @@ public class RadialPoles : DisplayModeBase2D
     public override unsafe void Render(ID3D12Device2* device, CommandList directCommandList)
     {
         if (!this.Ready) { return; }
-        this.Shader.Use(directCommandList);
-        //directCommandList.NativeList->ResourceBarrierTransition(this.BinValues.Buffer, ResourceStates.PixelShaderResource, ResourceStates.PixelShaderResource);
+        this.Shader!.Use(directCommandList);
         directCommandList.NativeList->SetGraphicsRootShaderResourceView(1, this.BinValues.Buffer->GetGPUVirtualAddress());
-        //directCommandList.NativeList->SetGraphicsRootUnorderedAccessView(1, this.BinValues.Buffer->GetGPUVirtualAddress());
         fixed (RootData* ConfigPtr = &this.ShaderConfig) { directCommandList.NativeList->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(RootData) / sizeof(float)), ConfigPtr, 0); }
 
         RenderGeometry(directCommandList);
-        //directCommandList.NativeList->ResourceBarrierTransition(this.BinValues.Buffer, ResourceStates.UnorderedAccess, ResourceStates.PixelShaderResource);
     }
 
     public override void Resize(int width, int height) => UpdateConfig();
