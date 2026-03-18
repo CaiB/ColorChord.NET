@@ -4,18 +4,25 @@ using namespace System.Text;
 using namespace System.Diagnostics;
 using namespace System.Linq;
 using namespace System.IO;
+$ErrorActionPreference = 'Stop';
 
 # Developed for a Rigol DS1054Z, but may work on other oscilloscopes with a few tweaks
 # Channel 1 is assumed to be the light sensor, channel 3 the audio
-
-$ErrorActionPreference = 'Stop';
+# Config:
 [string] $SCOPE_IP = '192.168.39.24';
 [ushort] $SCOPE_PORT = 5555;
-[byte] $NEWLINE_BYTE = [byte]([char]"`n");
+[int] $CYCLE_COUNT = 1000; # How many readings to take
+[int] $SAMPLE_COUNT = 60000; # How many samples the oscilloscope should capture
+[float] $EXPECTED_AUDIO_PEAK = 0.300; # The approximate peak voltage of the sine wave
+[float] $EXPECTED_MAX_LATENCY = 0.100; # The max latency we expect to see, used to set the horizontal timebase
+
 [int] $TIMEOUT_MS = 1000;
 [int] $WAIT_MS = 5000;
 [int] $MAX_BYTES = 100000;
-[int] $CYCLE_COUNT = 10;
+[int] $X_DIVS = 12;
+[int] $Y_DIVS = 8;
+
+[byte] $NEWLINE_BYTE = [byte]([char]"`n");
 
 [TcpClient] $Scope = [TcpClient]::new();
 $Scope.Connect([IPEndPoint]::new([IPAddress]::Parse($SCOPE_IP), $SCOPE_PORT));
@@ -155,8 +162,9 @@ function Wait-InstrTrigger
     [Stopwatch] $WaitTimer = [Stopwatch]::StartNew();
     while ($WaitTimer.ElapsedMilliseconds -LT $Timeout)
     {
+        Flush-Instr;
         Send-InstrCommand ':TRIG:STAT?';
-        if (Receive-InstrString -EQ 'STOP') { return $true; }
+        if ($(Receive-InstrString) -EQ 'STOP') { return $true; }
     }
     return $false;
 }
@@ -164,23 +172,53 @@ function Wait-InstrTrigger
 Send-InstrCommand '*IDN?';
 Write-Host "Instrument is: $(Receive-InstrString)";
 
+Stop-Instr;
+Start-InstrRun;
+
 Send-InstrCommand ':CHAN1:DISP ON';
 Send-InstrCommand ':CHAN2:DISP OFF';
 Send-InstrCommand ':CHAN3:DISP ON';
 Send-InstrCommand ':CHAN4:DISP OFF';
 
 Send-InstrCommand ':CHAN1:BWLimit 20M';
-Send-InstrCommand ':CHAN3:BWLimit 20M';
 Send-InstrCommand ':CHAN1:COUP DC';
-Send-InstrCommand ':CHAN3:COUP DC';
+# It is assumed that the vertical offset and range of the light sensor channel are pre-set manually.
+# Can do automatically with:
+Send-InstrCommand ':CHAN1:OFFS -9.160';
+Send-InstrCommand ':CHAN1:SCAL 0.500';
+
+Send-InstrCommand ':CHAN3:BWLimit 20M';
+Send-InstrCommand ':CHAN3:COUP AC';
+Send-InstrCommand ':CHAN3:OFFS 0.000';
+[float] $AudioVerticalScale = ($EXPECTED_AUDIO_PEAK * 2.2) / $Y_DIVS;
+$VerticalScaleVals = 0.010, 0.020, 0.050, 0.100, 0.200, 0.500, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0;
+foreach ($PossibleValue in $VerticalScaleVals)
+{
+    if ($AudioVerticalScale -LT $PossibleValue) { $AudioVerticalScale = $PossibleValue; break; }
+}
+Send-InstrCommand ":CHAN3:SCAL $AudioVerticalScale";
+
+Send-InstrCommand ':TIM:MODE MAIN';
+[float] $TimebaseScale = ($EXPECTED_MAX_LATENCY / $X_DIVS);
+$TimebaseScaleVals = 0.001, 0.002, 0.005, 0.010, 0.020, 0.050, 0.100, 0.200, 0.500, 1.0;
+foreach ($PossibleValue in $TimebaseScaleVals)
+{
+    if ($TimebaseScale -LT $PossibleValue) { $TimebaseScale = $PossibleValue; break; }
+}
+Write-Host "Timebase scale $TimebaseScale";
+Send-InstrCommand ":TIM:MAIN:SCAL $TimebaseScale";
+[float] $TimebaseOffset = $TimebaseScale * $X_DIVS / 2.0 * 0.8;
+Send-InstrCommand ":TIM:MAIN:OFFS $TimebaseOffset";
 
 Send-InstrCommand ':TRIG:MODE EDGE';
 Send-InstrCommand ':TRIG:SWE SING';
+Send-InstrCommand ':TRIG:COUP HFReject';
 Send-InstrCommand ':TRIG:EDG:SOUR CHAN3';
-# Note: the trigger level needs to be manually set
-# Could do with: Send-InstrCommand ':TRIG:EDG:LEV (num)';
+Send-InstrCommand ':TRIG:EDG:SLOP POS';
+Send-InstrCommand ":TRIG:EDG:LEV $($EXPECTED_AUDIO_PEAK / 3.0)";
+
 Wait-InstrReady | Out-Null;
-Set-InstrMemDepth 60000;
+Set-InstrMemDepth $SAMPLE_COUNT;
 
 [string] $DataPath = Join-Path $PSScriptRoot 'Data/';
 if (!(Test-Path $DataPath)) { New-Item -ItemType 'Container' $DataPath; }
@@ -188,9 +226,9 @@ if (!(Test-Path $DataPath)) { New-Item -ItemType 'Container' $DataPath; }
 Write-Host 'Starting in 5 seconds...';
 Start-Sleep 5;
 
-for ($Cycle = 0; $Cycle -LT $CYCLE_COUNT; $Cycle++)
+for ($Cycle = 1; $Cycle -LE $CYCLE_COUNT; $Cycle++)
 {
-    Write-Host -NoNewLine ('Cyc {0:D5} of {1:D5} ' -F ($Cycle + 1), $CYCLE_COUNT); 
+    Write-Host -NoNewLine ('Cyc {0:D5} of {1:D5} ' -F $Cycle, $CYCLE_COUNT); 
     Wait-InstrReady | Out-Null;
     Flush-Instr;
     Start-InstrSingle;
@@ -206,23 +244,61 @@ for ($Cycle = 0; $Cycle -LT $CYCLE_COUNT; $Cycle++)
         [List[byte]] $Channel1Data, [PSCustomObject] $Channel1Meta = Receive-InstrWaveformData 1;
         [List[byte]] $Channel3Data, [PSCustomObject] $Channel3Meta = Receive-InstrWaveformData 3;
 
-        Write-Host -NoNewLine '| Save';
+        Write-Host -NoNewLine '| Save ';
         [StreamWriter] $CSV = [StreamWriter]::new($(Join-Path $DataPath $('{0:D5}.csv' -F $Cycle)));
         $CSV.WriteLine('Time,Audio,Display');
+
+        # NOTE: this assumes light sensor voltage goes up with increased brightness
+        [int] $IdleCutoff = $Channel1Data.Count / 20;
+        [float] $IdleAudioSum = 0.0;
+        [float] $IdleDisplaySum = 0.0;
+        [float] $IdleAudioMax = -1000;
+        [float] $IdleAudioAvg = -1000;
+        [float] $AudioThreshold = -1000;
+        [float] $IdleDisplayMax = -1000;
+        [float] $IdleDisplayAvg = -1000;
+        [float] $DisplayThreshold = -1000;
+        [float] $AudioTime = 1000;
+        [float] $DisplayTime = 1000;
+
         for ($Sample = 0; $Sample -LT $Channel1Data.Count; $Sample++)
         {
             [float] $Time = $Channel1Meta.XOrigin + ($Channel1Meta.XIncrement * $Sample);
             [float] $AudioLevel = $Channel3Meta.YIncrement * ($Channel3Data[$Sample] - $Channel3Meta.YOrigin - $Channel3Meta.YReference);
             [float] $DisplayLevel = $Channel1Meta.YIncrement * ($Channel1Data[$Sample] - $Channel1Meta.YOrigin - $Channel1Meta.YReference);
             $CSV.WriteLine([string]::Format('{0},{1},{2}', $Time, $AudioLevel, $DisplayLevel));
+            if ($Sample -LT $IdleCutoff)
+            {
+                $IdleAudioSum += $AudioLevel;
+                $IdleAudioMax = [MathF]::Max([MathF]::Abs($AudioLevel), $IdleAudioMax);
+                $IdleDisplaySum += $DisplayLevel;
+                $IdleDisplayMax = [MathF]::Max($DisplayLevel, $IdleDisplayMax);
+            }
+            elseif ($Sample -EQ $IdleCutoff)
+            {
+                $IdleAudioAvg = $IdleAudioSum / $IdleCutoff;
+                $IdleDisplayAvg = $IdleDisplaySum / $IdleCutoff;
+                $AudioThreshold = $IdleAudioAvg + (($IdleAudioMax - $IdleAudioAvg) * 5.0);
+                $DisplayThreshold = $IdleDisplayAvg + (($IdleDisplayMax - $IdleDisplayAvg) * 5.0);
+            }
+            else
+            {
+                if ($AudioLevel -GT $AudioThreshold) { $AudioTime = [MathF]::Min($AudioTime, $Time); }
+                if ($DisplayLevel -GT $DisplayThreshold) { $DisplayTime = [MathF]::Min($DisplayTime, $Time); }
+            }
         }
+        [float] $MeasuredLatency = $DisplayTime - $AudioTime;
+
+        $CSV.WriteLine();
+        $CSV.WriteLine('AudioTrig,DisplayTrig,Latency');
+        $CSV.WriteLine([string]::Format('{0},{1},{2}', $AudioTime, $DisplayTime, $MeasuredLatency));
         $CSV.Close();
-        Write-Host ' | Done!';
+        Write-Host ('| Done: {0:F2}ms' -F ($MeasuredLatency * 1000));
     }
     else
     {
         Stop-Instr;
-        Write-Host 'FAIL';
+        Write-Host '| FAIL';
         Write-Host 'Did not trigger. Check the trigger settings and connections.';
     }
 }
