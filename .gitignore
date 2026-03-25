@@ -262,5 +262,9 @@ __pycache__/
 /ColorChord.NET/Properties/launchSettings.json
 /ColorChord.NET/Config/DefaultConfigInfo.cs
 *.cso
+**/Thumbs.db
 Tests/LatencyTest/**/*.csv
 Tests/LatencyTest/**/*.wav
+Tests/LatencyTest/**/*.xlsx
+Tests/LatencyTest/**/*.png
+Tests/LatencyTest/**/*.txt
