@@ -74,3 +74,22 @@ public sealed class ConfigStringListAttribute : ConfigAttribute
 {
     public ConfigStringListAttribute(string name) : base(name) { }
 }
+
+/// <summary>Used to get a time source definition from the config, or create a generic timer-based fallback.</summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public sealed class ConfigTimeSourceAttribute : ConfigAttribute
+{
+    public bool UseGenericDefault = false;
+    public float GenericDefaultTime = 0F;
+    public bool IsSynchronous = false;
+
+    public ConfigTimeSourceAttribute(string configName = ConfigNames.TIME_SOURCE, float genericDefaultTime = -1F, bool isSynchronous = false) : base(configName)
+    {
+        this.IsSynchronous = isSynchronous;
+        if (genericDefaultTime > 0F)
+        {
+            this.UseGenericDefault = true;
+            this.GenericDefaultTime = genericDefaultTime;
+        }
+    }
+}

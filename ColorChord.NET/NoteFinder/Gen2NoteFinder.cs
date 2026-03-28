@@ -2,6 +2,7 @@
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Sources;
+using ColorChord.NET.API.Timing;
 using ColorChord.NET.Config;
 using System;
 using System.Collections.Generic;
@@ -65,6 +66,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
     private float[] PreviousBinValues;
     public float[] RecentBinChanges;
 
+    private readonly TimingSource TimingSource;
     private Thread? ProcessThread;
     private bool KeepGoing = true;
 
@@ -72,8 +74,6 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
     private float CycleTimeTicks;
     private uint CycleCount = 0;
 
-    private bool IsTimingSource = false;
-    private TimingReceiverData[] TimingReceivers = Array.Empty<TimingReceiverData>();
 
     public Gen2NoteFinder(string name, Dictionary<string, object> config)
     {
@@ -81,6 +81,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
         P_PersistentNoteIDs = new int[NOTE_QTY];
         this.Name = name;
         Configurer.Configure(this, config);
+        this.TimingSource = new(this, ConvertPeriod);
         this.AudioSource = Configurer.FindSource(config) ?? throw new Exception($"{nameof(Gen2NoteFinder)} \"{name}\" could not find the audio source to get data from.");
         this.AudioSource.AttachNoteFinder(this);
 
@@ -117,13 +118,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
         this.SampleRate = (uint)sampleRate;
         this.DFT = new(this.OctaveCount, this.BPO, this.SampleRate, this.StartFreq, this.LoudnessCorrectionAmount, this.TargetBinRange, RunTimingReceivers);
         Reconfigure();
-        Log.Debug($"There are {TimingReceivers.Length} timing receivers");
-        for (int i = 0; i < TimingReceivers.Length; i++)
-        {
-            float OriginalPeriod = TimingReceivers[i].OriginalPeriod;
-            TimingReceivers[i].Period = (OriginalPeriod <= 0) ? (uint)MathF.Round(-OriginalPeriod) : (uint)MathF.Round(OriginalPeriod * this.SampleRate);
-            Log.Debug($"{nameof(Gen2NoteFinder)} timing receiver [{i}] now has period {TimingReceivers[i].Period} (requested {OriginalPeriod}).");
-        }
+        this.TimingSource.RecalculatePeriods();
     }
 
     public override void Start()
@@ -272,84 +267,25 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
         ProcessThread?.Join();
     }
 
-    public void AddTimingReceiver(TimingReceiver receiver, float period)
+    public void AddTimingReceiver(TimingConnection receiver)
     {
-        lock (TimingReceivers)
-        {
-            TimingReceiverData[] OldData = TimingReceivers;
-            TimingReceiverData[] NewData = new TimingReceiverData[OldData.Length + 1];
-            Array.Copy(OldData, NewData, OldData.Length);
-            NewData[^1] = new()
-            {
-                Receiver = receiver,
-                OriginalPeriod = period,
-                Period = (period <= 0) ? (uint)MathF.Round(-period) : (uint)MathF.Round(period * this.SampleRate)
-            };
-
-            TimingReceivers = NewData;
-            IsTimingSource = true;
-        }
+        lock (this.TimingSource) { this.TimingSource.AddReceiver(receiver); }
     }
 
-    public void RemoveTimingReceiver(TimingReceiver receiver)
+    public void RemoveTimingReceiver(TimingConnection receiver)
     {
-        lock (TimingReceivers)
-        {
-            int Index = Array.FindIndex(TimingReceivers, x => x.Receiver == receiver);
-            if (Index < 0) { return; }
-
-            if (TimingReceivers.Length == 1) // Last receiver
-            {
-                TimingReceivers = Array.Empty<TimingReceiverData>();
-                IsTimingSource = false;
-                return;
-            }
-
-            TimingReceiverData[] OldData = TimingReceivers;
-            TimingReceiverData[] NewData = new TimingReceiverData[OldData.Length - 1];
-            if (Index > 0) { Array.Copy(OldData, 0, NewData, 0, Index); } // Copy items on the left of the removed item
-            else if (Index < OldData.Length - 1) { Array.Copy(OldData, Index + 1, NewData, Index, OldData.Length - Index - 1); } // Copy items on the right of the removed item
-
-            TimingReceivers = NewData;
-        }
+        lock (this.TimingSource) { this.TimingSource.RemoveReceiver(receiver); }
     }
 
-    internal void RunTimingReceivers(uint samplesProcessed)
+    private void RunTimingReceivers(uint samplesAdded)
     {
-        if (!this.IsTimingSource) { return; }
-        bool CalculatedOutput = false;
-        lock (this.TimingReceivers)
-        {
-            for (int i = 0; i < this.TimingReceivers.Length; i++)
-            {
-                ref TimingReceiverData Receiver = ref this.TimingReceivers[i];
-                Receiver.CurrentIncrement += samplesProcessed;
-                if (Receiver.CurrentIncrement >= Receiver.Period)
-                {
-                    if (!CalculatedOutput) { this.DFT.CalculateOutput(); CalculatedOutput = true; }
-                    Receiver.Receiver.Invoke();
-                    Receiver.CurrentIncrement -= Receiver.Period;
-                    if (Receiver.Period != 0 && Receiver.CurrentIncrement > Receiver.Period * 16)
-                    {
-                        Log.Warn($"{nameof(Gen2NoteFinder)} has timing receiver that is falling behind, the receiver {Receiver.Receiver} has a period of {Receiver.Period} samples which is too short to effectively call.");
-                    }
-                }
-            }
-        }
+        lock (this.TimingSource) { this.TimingSource.Increment(samplesAdded, this.DFT.CalculateOutput); }
     }
 
-    private struct TimingReceiverData
+    private TimePeriod ConvertPeriod(TimePeriod input)
     {
-        /// <summary> The receiver to call whenever this event occurs. </summary>
-        public TimingReceiver Receiver { get; init; }
-
-        /// <summary> The original request from the receiver. If a period in seconds was requested, the internal period in samples needs to be updated if the sample rate changes. </summary>
-        public float OriginalPeriod { get; init; }
-
-        /// <summary> The period on which to send this event, in samples. </summary>
-        public uint Period { get; set; }
-
-        /// <summary> How many samples have been processed since this callback was last dispatched. </summary>
-        public uint CurrentIncrement { get; set; }
+        if (input.Unit == TimeUnit.Minimum || input.Unit == TimeUnit.Sample) { return input; }
+        else if (input.Unit == TimeUnit.Millisecond) { return new(input.Quantity * this.SampleRate / 1000F, TimeUnit.Sample); }
+        else { throw new Exception($"{nameof(Gen2NoteFinder)} only supports timing requests in units of Minimum, Samples, or Milliseconds"); }
     }
 }

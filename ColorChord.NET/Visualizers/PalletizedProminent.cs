@@ -2,18 +2,16 @@
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
-using ColorChord.NET.API.Sources;
-using ColorChord.NET.API.Utility;
+using ColorChord.NET.API.Timing;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
-using ColorChord.NET.Config;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 
 namespace ColorChord.NET.Visualizers;
 
-public class PalletizedProminent : IVisualizer, IDiscrete1D
+public class PalletizedProminent : IVisualizer, IDiscrete1D, ITimingReceiver
 {
     public string Name { get; private init; }
     public NoteFinderCommon NoteFinder { get; private init; }
@@ -25,14 +23,8 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
 
     public List<uint> PaletteRGB { get; private set; } = new();
 
-    [ConfigString("TimeSource", "this")]
-    private string TimeSource { get; set; } = "this";
-
-    [ConfigFloat("TimePeriod", -1000000, 1000000, 100)]
-    private float TimePeriod = 100F;
-
-    private bool IsOwnTimeSource = true;
-    private ITimingSource? ConnectedTimingSource { get; set; } = null;
+    [ConfigTimeSource(genericDefaultTime: 1000 / 60F)]
+    private TimingConnection? TimeSource { get; set; }
 
     private uint[] Data = new uint[1];
 
@@ -41,8 +33,8 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
     public PalletizedProminent(string name, Dictionary<string, object> config)
     {
         this.Name = name;
-        Configurer.Configure(this, config);
-        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(PalletizedProminent)} could not find NoteFinder to attach to.");
+        ColorChordAPI.Configurer.Configure(this, config);
+        this.NoteFinder = ColorChordAPI.Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(PalletizedProminent)} could not find NoteFinder to attach to.");
         ParsePalette();
     }
 
@@ -82,25 +74,7 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
         }
     }
 
-    private void HookTimeSource()
-    {
-        ITimingSource? NewSource;
-        if (this.TimeSource.ToLower() == "this") { NewSource = new GenericTimingSourceSingle(); }
-        else { NewSource = ColorChord.GetInstanceFromPath(this.TimeSource) as ITimingSource; }
-        this.IsOwnTimeSource = this.TimeSource.ToLower() == "this";
-
-        this.ConnectedTimingSource?.RemoveTimingReceiver(Update);
-        NewSource?.AddTimingReceiver(Update, this.TimePeriod);
-        this.ConnectedTimingSource = NewSource;
-    }
-
-    private void UnhookTimeSource()
-    {
-        this.ConnectedTimingSource?.RemoveTimingReceiver(Update);
-        this.ConnectedTimingSource = null;
-    }
-
-    public void Start() => HookTimeSource();
+    public void Start() { }
 
     public void AttachOutput(IOutput output) => this.Outputs.Add(output);
 
@@ -108,9 +82,9 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
 
     public uint[] GetDataDiscrete() => this.Data;
 
-    public void Update()
+    public void TimingCallback(object? sender)
     {
-        if (this.IsOwnTimeSource) { this.NoteFinder.UpdateOutputs(); }
+        if (this.TimeSource?.IsOwnGeneric ?? true) { this.NoteFinder.UpdateOutputs(); }
 
         float MaxValue = 0F;
         int MaxIndex = 0;
@@ -156,5 +130,5 @@ public class PalletizedProminent : IVisualizer, IDiscrete1D
         foreach (IOutput Output in this.Outputs) { Output.Dispatch(); }
     }
 
-    public void Stop() => UnhookTimeSource();
+    public void Stop() => this.TimeSource?.Remove();
 }

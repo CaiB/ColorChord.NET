@@ -1,24 +1,23 @@
-﻿using ColorChord.NET.API.Config;
+﻿using System;
+using System.Collections.Generic;
+using ColorChord.NET.API.Config;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
+using ColorChord.NET.API.Timing;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
 using ColorChord.NET.Config;
-using ColorChord.NET.NoteFinder;
-using ColorChord.NET.Outputs;
-using System;
-using System.Collections.Generic;
 
 namespace ColorChord.NET.Visualizers;
 
-public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
+public class NoteFinderPassthrough : IVisualizer, IDiscrete1D, ITimingReceiver
 {
     public string Name { get; private init; }
 
     public NoteFinderCommon NoteFinder { get; private init; }
 
-    [ConfigFloat("TimePeriod", -1000000, 1000000, -960)]
-    private float TimePeriod = -960F;
+    [ConfigTimeSource]
+    private TimingConnection? TimeSource { get; set; }
 
     [ConfigFloat("SaturationAmplifier", 0, 1000, 4.5F)]
     private float SaturationAmplifier = 4.5F;
@@ -40,10 +39,10 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
 
     public void Start()
     {
-        if (this.NoteFinder is Gen2NoteFinder G2NF) { G2NF.AddTimingReceiver(GetData, this.TimePeriod); } // TODO: Generalize
+        if (this.TimeSource == null && this.NoteFinder is ITimingSource NoteFinderAsTiming) { this.TimeSource = new(NoteFinderAsTiming, TimePeriod.Minimum, this); }
     }
 
-    public void GetData()
+    public void TimingCallback(object? sender)
     {
         ReadOnlySpan<float> RawData = this.NoteFinder.AllBinValues;
         if (this.Data.Length != RawData.Length) { this.Data = new uint[RawData.Length]; }
@@ -54,12 +53,11 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D
     public void AttachOutput(IOutput output)
     {
         this.Outputs.Add(output);
-        if (this.NoteFinder is not Gen2NoteFinder && output is DisplayOpenGL DOGL) { DOGL.AddTimingReceiver(GetData, 1); }
     }
 
     public int GetCountDiscrete() => this.Data.Length;
 
     public uint[] GetDataDiscrete() => this.Data;
 
-    public void Stop() { }
+    public void Stop() => this.TimeSource?.Remove();
 }

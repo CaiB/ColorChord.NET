@@ -1,10 +1,14 @@
-﻿using ColorChord.NET.API;
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Outputs.Display;
-using ColorChord.NET.API.Sources;
+using ColorChord.NET.API.Timing;
 using ColorChord.NET.API.Utility;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.Config;
@@ -14,10 +18,6 @@ using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Runtime.InteropServices;
 
 namespace ColorChord.NET.Outputs
 {
@@ -60,14 +60,15 @@ namespace ColorChord.NET.Outputs
 
         private readonly IDisplayMode? Display;
         private bool Stopping = false;
-        private readonly List<TimingReceiver> TimingReceivers = new(4);
-        
+        private readonly TimingSource TimingSource;
+
         public DisplayOpenGL(string name, Dictionary<string, object> config) : base(GameWindowSettings.Default, SetupNativeWindow())
         {
             this.Name = name;
             this.Title = "ColorChord.NET (OpenGL): " + this.Name;
             IVisualizer? Visualizer = Configurer.FindVisualizer(config) ?? throw new InvalidOperationException($"{GetType().Name} cannot find visualizer to attach to");
             this.Source = Visualizer;
+            this.TimingSource = new(this, ConvertPeriod);
 
             Configurer.Configure(this, config);
             this.NoteFinder = Configurer.FindNoteFinder(config) ?? this.Source.NoteFinder ?? throw new Exception($"{nameof(DisplayOpenGL)} {this.Name} could not find NoteFinder to get data from.");
@@ -158,10 +159,7 @@ namespace ColorChord.NET.Outputs
         protected override void OnRenderFrame(FrameEventArgs evt)
         {
             if (this.Stopping) { this.Display?.Close(); return; }
-            lock (this.TimingReceivers)
-            {
-                foreach (TimingReceiver Receiver in this.TimingReceivers) { Receiver.Invoke(); }
-            }
+            lock (this.TimingSource) { this.TimingSource.Increment(1F); }
             this.NoteFinder.UpdateOutputs();
             GL.Clear(ClearBufferMask.ColorBufferBit);
 
@@ -226,15 +224,20 @@ namespace ColorChord.NET.Outputs
 
         public void Dispatch() => this.Display?.Dispatch();
 
-        // Period is ignored
-        public void AddTimingReceiver(TimingReceiver receiver, float period)
+        public void AddTimingReceiver(TimingConnection receiver)
         {
-            lock (this.TimingReceivers) { this.TimingReceivers.Add(receiver); }
+            lock (this.TimingSource) { this.TimingSource.AddReceiver(receiver); }
         }
 
-        public void RemoveTimingReceiver(TimingReceiver receiver)
+        public void RemoveTimingReceiver(TimingConnection receiver)
         {
-            lock (this.TimingReceivers) { this.TimingReceivers.Remove(receiver); }
+            lock (this.TimingSource) { this.TimingSource.RemoveReceiver(receiver); }
+        }
+
+        private TimePeriod ConvertPeriod(TimePeriod input)
+        {
+            if (input.Unit == TimeUnit.Minimum || input.Unit == TimeUnit.Frame) { return input; }
+            else { throw new Exception($"{nameof(DisplayOpenGL)} only supports timing requests in units of Minimum or Frames"); }
         }
     }
 }

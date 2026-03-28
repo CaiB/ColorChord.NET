@@ -4,6 +4,7 @@ using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
 using ColorChord.NET.API.Sources;
+using ColorChord.NET.API.Timing;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
 using System;
@@ -119,6 +120,14 @@ public static class Configurer
 
                 config.Remove(ListAttr.Name);
             }
+            else if (Attr is ConfigTimeSourceAttribute TimeSourceAttr)
+            {
+                ITimingReceiver Receiver = targetObj as ITimingReceiver ?? throw new Exception($"Field {TimeSourceAttr.Name} in {TargetType.FullName} used {nameof(TimeSourceAttr)} but the parent object is not a {nameof(ITimingReceiver)}.");
+                TimingConnection? Value = CheckTimeSource(config, TimeSourceAttr, Receiver);
+
+                if (Field.FieldType == typeof(TimingConnection)) { Field.SetValue(targetObj, Value); }
+                else { throw new InvalidOperationException($"Field {TimeSourceAttr.Name} in {TargetType.FullName} used {nameof(TimeSourceAttr)} but is not a {nameof(TimingConnection)} type."); }
+            }
             else { throw new NotImplementedException("Unsupported config type encountered: " + Attr?.GetType()?.FullName); }
         }
 
@@ -156,7 +165,7 @@ public static class Configurer
                 bool Value = CheckBool(config, BoolAttr);
 
                 if (Prop.PropertyType == typeof(bool)) { Prop.SetValue(targetObj, Value); }
-                else { throw new InvalidOperationException($"Field {BoolAttr.Name} in {TargetType.FullName} used {nameof(ConfigBoolAttribute)} but is not a bool type."); }
+                else { throw new InvalidOperationException($"Property {BoolAttr.Name} in {TargetType.FullName} used {nameof(ConfigBoolAttribute)} but is not a bool type."); }
 
                 config.Remove(BoolAttr.Name);
             }
@@ -167,7 +176,7 @@ public static class Configurer
                 if      (Prop.PropertyType == typeof(float))   { Prop.SetValue(targetObj, Value); }
                 else if (Prop.PropertyType == typeof(double))  { Prop.SetValue(targetObj, (double)Value); }
                 else if (Prop.PropertyType == typeof(decimal)) { Prop.SetValue(targetObj, (decimal)Value); }
-                else { throw new InvalidOperationException($"Field {FltAttr.Name} in {TargetType.FullName} used {nameof(ConfigFloatAttribute)} but is not a float type."); }
+                else { throw new InvalidOperationException($"Property {FltAttr.Name} in {TargetType.FullName} used {nameof(ConfigFloatAttribute)} but is not a float type."); }
 
                 config.Remove(FltAttr.Name);
             }
@@ -179,6 +188,14 @@ public static class Configurer
                 else { throw new InvalidOperationException($"Property {ListAttr.Name} in {TargetType.FullName} used {nameof(ConfigStringListAttribute)} but is not a List<string> type."); }
 
                 config.Remove(ListAttr.Name);
+            }
+            else if (Attr is ConfigTimeSourceAttribute TimeSourceAttr)
+            {
+                ITimingReceiver Receiver = targetObj as ITimingReceiver ?? throw new Exception($"Property {TimeSourceAttr.Name} in {TargetType.FullName} used {nameof(TimeSourceAttr)} but the parent object is not a {nameof(ITimingReceiver)}.");
+                TimingConnection? Value = CheckTimeSource(config, TimeSourceAttr, Receiver);
+
+                if (Prop.PropertyType == typeof(TimingConnection)) { Prop.SetValue(targetObj, Value); }
+                else { throw new InvalidOperationException($"Property {TimeSourceAttr.Name} in {TargetType.FullName} used {nameof(TimeSourceAttr)} but is not a {nameof(TimingConnection)} type."); }
             }
             else { throw new NotImplementedException("Unsupported config type encountered: " + Attr.GetType().FullName); }
         }
@@ -379,5 +396,29 @@ public static class Configurer
     {
         if (!config.ContainsKey(strListAttr.Name) || config[strListAttr.Name] is not string[] Value) { return new(); }
         return new(Value);
+    }
+
+    private static TimingConnection? CheckTimeSource(Dictionary<string, object> config, ConfigTimeSourceAttribute timeSrcAttr, ITimingReceiver receiver)
+    {
+        if (!config.TryGetValue(timeSrcAttr.Name, out object? ConfigSectionObj))
+        {
+            if (timeSrcAttr.UseGenericDefault)
+            {
+                GenericTimingSourceSingle TimeSource = new();
+                return new(TimeSource, new TimePeriod(timeSrcAttr.GenericDefaultTime, TimeUnit.Millisecond), receiver, isSynchronous: timeSrcAttr.IsSynchronous);
+            }
+        }
+        else
+        {
+            if (ConfigSectionObj is not Dictionary<string, object> ConfigSection) { throw new Exception($"Config entry '{timeSrcAttr.Name}' needs to be an object defining a TimeSource"); }
+            if (!ConfigSection.TryGetValue("Source", out object? SourcePathObj) || SourcePathObj is not string SourcePath) { throw new Exception($"Config entry '{timeSrcAttr.Name}' needs a valid 'Source' string"); }
+            object? SourceObj = ColorChord.GetInstanceFromPath(SourcePath);
+            ITimingSource Source = SourceObj as ITimingSource ?? throw new Exception($"Config entry '{timeSrcAttr.Name}' refers to a component that is not a timing source");
+            if (!ConfigSection.TryGetValue("Period", out object? PeriodObj) || PeriodObj is not string PeriodStr) { throw new Exception($"Config entry '{timeSrcAttr.Name}' needs a valid 'Period' string"); }
+            ConfigSection.TryGetValue("IsSynchronous", out object? IsSynchronousObj);
+            bool IsSynchronous = (IsSynchronousObj as bool?) ?? timeSrcAttr.IsSynchronous;
+            return new(Source, PeriodStr, receiver, IsSynchronous);
+        }
+        return null;
     }
 }

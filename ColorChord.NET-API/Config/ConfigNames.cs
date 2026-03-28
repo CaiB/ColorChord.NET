@@ -20,6 +20,7 @@ public static class ConfigNames
     public const string ENABLE = "Enable";
     public const string TARGET = "Target";
     public const string LED_COUNT = "LEDCount";
+    public const string TIME_SOURCE = "TimeSource";
 
     /// <summary>Used as the key for when a component needs to know the name of a <see cref="ColorChord.NET.API.Sources.IAudioSource"/> to reference.</summary>
     public const string SOURCE_NAME = "SourceName";
