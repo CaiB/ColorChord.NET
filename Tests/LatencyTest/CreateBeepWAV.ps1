@@ -1,9 +1,9 @@
 using namespace System.IO;
 
 [string] $FILE_NAME = 'sine.wav';
-[float] $FREQUENCY = 440.0;
+[float] $FREQUENCY = 1760.0;
 [uint] $SAMPLE_RATE = 48000;
-[float] $LENGTH_SEC = 0.5;
+[float] $LENGTH_SEC = 0.3;
 [float] $AMPLITUDE = 0.7;
 
 [int] $LengthSamples = [MathF]::Round($SAMPLE_RATE * $LENGTH_SEC);
@@ -14,7 +14,7 @@ for ($i = 0; $i -LT $LengthSamples; $i++)
     $SoundData[$i] = [short][MathF]::Round(32767 * $Sample);
 }
 
-[FileStream] $File = [FileStream]::new($FILE_NAME, [FileMode]::Create, [FileAccess]::Write, [FileShare]::ReadWrite -BOR [FileShare]::Delete);
+[FileStream] $File = [FileStream]::new((Join-Path $PSScriptRoot $FILE_NAME), [FileMode]::Create, [FileAccess]::Write, [FileShare]::ReadWrite -BOR [FileShare]::Delete);
 [uint] $DataSize = $LengthSamples * 2;
 [uint] $TopChunkSize = $DataSize + 36;
 $File.Write(@(0x52,0x49,0x46,0x46), 0, 4); # "RIFF"

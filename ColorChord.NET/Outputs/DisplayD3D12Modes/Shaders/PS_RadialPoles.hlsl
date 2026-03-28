@@ -9,8 +9,7 @@ struct RadialPolesConfig
     float ScaleFactor;
     float Exponent;
     float CenterBlank;
-    
-    uint FeatureBits; // unused
+    uint Repetitions;
 };
 
 ConstantBuffer<RadialPolesConfig> Config : register(b0);
@@ -27,7 +26,7 @@ float4 Main(PixelShaderInput inVal) : SV_Target
     float2 Dimensions = float2(Config.Width, Config.Height);
     float SmallerDim = min(Config.Width, Config.Height);
     float2 Pos = (inVal.Position.xy - (Dimensions * 0.5)) * (2.0 / SmallerDim); // transforms X,Y to (-1~1), except if one dimension is larger
-    float Angle = GoodMod(((atan2(-Pos.y, -Pos.x) + Config.Advance) * REC_TAU), 1.0);
+    float Angle = GoodMod(((atan2(-Pos.y, -Pos.x) + Config.Advance) * REC_TAU * Config.Repetitions), 1.0);
     float Radius = distance(0, Pos) * 0.7;
 
     int SectionHere = (int)floor(Angle * Config.PoleCount);

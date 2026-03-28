@@ -11,10 +11,10 @@ $ErrorActionPreference = 'Stop';
 # Config:
 [string] $SCOPE_IP = '192.168.39.24';
 [ushort] $SCOPE_PORT = 5555;
-[int] $CYCLE_COUNT = 1000; # How many readings to take
+[int] $CYCLE_COUNT = 6000; # How many readings to take
 [int] $SAMPLE_COUNT = 60000; # How many samples the oscilloscope should capture
-[float] $EXPECTED_AUDIO_PEAK = 0.300; # The approximate peak voltage of the sine wave
-[float] $EXPECTED_MAX_LATENCY = 0.100; # The max latency we expect to see, used to set the horizontal timebase
+[float] $EXPECTED_AUDIO_PEAK = 0.700; # The approximate peak voltage of the sine wave
+[float] $EXPECTED_MAX_LATENCY = 0.060; # The max latency we expect to see, used to set the horizontal timebase
 
 [int] $TIMEOUT_MS = 1000;
 [int] $WAIT_MS = 5000;
@@ -220,85 +220,98 @@ Send-InstrCommand ":TRIG:EDG:LEV $($EXPECTED_AUDIO_PEAK / 3.0)";
 Wait-InstrReady | Out-Null;
 Set-InstrMemDepth $SAMPLE_COUNT;
 
-[string] $DataPath = Join-Path $PSScriptRoot 'Data/';
+[string] $StartTimeFormatted = ([DateTime]::Now.ToString('yyyy-MM-dd_HH-mm-ss'));
+[string] $DataPath = Join-Path $PSScriptRoot "Data_$StartTimeFormatted/";
 if (!(Test-Path $DataPath)) { New-Item -ItemType 'Container' $DataPath; }
+[StreamWriter] $SummaryCSV = [StreamWriter]::new($(Join-Path $DataPath $('Run.csv' -F $Cycle)));
+$SummaryCSV.WriteLine('RunID,DetectedLatency');
 
 Write-Host 'Starting in 5 seconds...';
 Start-Sleep 5;
 
-for ($Cycle = 1; $Cycle -LE $CYCLE_COUNT; $Cycle++)
+try
 {
-    Write-Host -NoNewLine ('Cyc {0:D5} of {1:D5} ' -F $Cycle, $CYCLE_COUNT); 
-    Wait-InstrReady | Out-Null;
-    Flush-Instr;
-    Start-InstrSingle;
-
-    Write-Host -NoNewLine '| Play ';
-    [System.Media.SoundPlayer]::new('./sine.wav').PlaySync();
-
-    Write-Host -NoNewLine '| Capture ';
-    [bool] $Triggered = Wait-InstrTrigger -Timeout 1000;
-    if ($Triggered)
+    [Stopwatch] $CycleTimer = [Stopwatch]::StartNew();
+    for ($Cycle = 1; $Cycle -LE $CYCLE_COUNT; $Cycle++)
     {
-        Write-Host -NoNewLine '| Download ';
-        [List[byte]] $Channel1Data, [PSCustomObject] $Channel1Meta = Receive-InstrWaveformData 1;
-        [List[byte]] $Channel3Data, [PSCustomObject] $Channel3Meta = Receive-InstrWaveformData 3;
+        $CycleTimer.Restart();
+        Write-Host -NoNewLine ('Cyc {0:D5} of {1:D5} ' -F $Cycle, $CYCLE_COUNT); 
+        Wait-InstrReady | Out-Null;
+        Flush-Instr;
+        Start-InstrSingle;
+        Wait-InstrReady | Out-Null;
 
-        Write-Host -NoNewLine '| Save ';
-        [StreamWriter] $CSV = [StreamWriter]::new($(Join-Path $DataPath $('{0:D5}.csv' -F $Cycle)));
-        $CSV.WriteLine('Time,Audio,Display');
+        Write-Host -NoNewLine '| Play ';
+        [System.Media.SoundPlayer]::new('./sine.wav').PlaySync();
 
-        # NOTE: this assumes light sensor voltage goes up with increased brightness
-        [int] $IdleCutoff = $Channel1Data.Count / 20;
-        [float] $IdleAudioSum = 0.0;
-        [float] $IdleDisplaySum = 0.0;
-        [float] $IdleAudioMax = -1000;
-        [float] $IdleAudioAvg = -1000;
-        [float] $AudioThreshold = -1000;
-        [float] $IdleDisplayMax = -1000;
-        [float] $IdleDisplayAvg = -1000;
-        [float] $DisplayThreshold = -1000;
-        [float] $AudioTime = 1000;
-        [float] $DisplayTime = 1000;
-
-        for ($Sample = 0; $Sample -LT $Channel1Data.Count; $Sample++)
+        Write-Host -NoNewLine '| Capture ';
+        [bool] $Triggered = Wait-InstrTrigger -Timeout 1000;
+        if ($Triggered)
         {
-            [float] $Time = $Channel1Meta.XOrigin + ($Channel1Meta.XIncrement * $Sample);
-            [float] $AudioLevel = $Channel3Meta.YIncrement * ($Channel3Data[$Sample] - $Channel3Meta.YOrigin - $Channel3Meta.YReference);
-            [float] $DisplayLevel = $Channel1Meta.YIncrement * ($Channel1Data[$Sample] - $Channel1Meta.YOrigin - $Channel1Meta.YReference);
-            $CSV.WriteLine([string]::Format('{0},{1},{2}', $Time, $AudioLevel, $DisplayLevel));
-            if ($Sample -LT $IdleCutoff)
-            {
-                $IdleAudioSum += $AudioLevel;
-                $IdleAudioMax = [MathF]::Max([MathF]::Abs($AudioLevel), $IdleAudioMax);
-                $IdleDisplaySum += $DisplayLevel;
-                $IdleDisplayMax = [MathF]::Max($DisplayLevel, $IdleDisplayMax);
-            }
-            elseif ($Sample -EQ $IdleCutoff)
-            {
-                $IdleAudioAvg = $IdleAudioSum / $IdleCutoff;
-                $IdleDisplayAvg = $IdleDisplaySum / $IdleCutoff;
-                $AudioThreshold = $IdleAudioAvg + (($IdleAudioMax - $IdleAudioAvg) * 5.0);
-                $DisplayThreshold = $IdleDisplayAvg + (($IdleDisplayMax - $IdleDisplayAvg) * 5.0);
-            }
-            else
-            {
-                if ($AudioLevel -GT $AudioThreshold) { $AudioTime = [MathF]::Min($AudioTime, $Time); }
-                if ($DisplayLevel -GT $DisplayThreshold) { $DisplayTime = [MathF]::Min($DisplayTime, $Time); }
-            }
-        }
-        [float] $MeasuredLatency = $DisplayTime - $AudioTime;
+            Write-Host -NoNewLine '| Download ';
+            Flush-Instr;
+            [List[byte]] $Channel1Data, [PSCustomObject] $Channel1Meta = Receive-InstrWaveformData 1;
+            [List[byte]] $Channel3Data, [PSCustomObject] $Channel3Meta = Receive-InstrWaveformData 3;
 
-        $CSV.WriteLine();
-        $CSV.WriteLine('AudioTrig,DisplayTrig,Latency');
-        $CSV.WriteLine([string]::Format('{0},{1},{2}', $AudioTime, $DisplayTime, $MeasuredLatency));
-        $CSV.Close();
-        Write-Host ('| Done: {0:F2}ms' -F ($MeasuredLatency * 1000));
-    }
-    else
-    {
-        Stop-Instr;
-        Write-Host '| FAIL';
-        Write-Host 'Did not trigger. Check the trigger settings and connections.';
+            Write-Host -NoNewLine '| Save ';
+            [StreamWriter] $CSV = [StreamWriter]::new($(Join-Path $DataPath $('{0:D5}.csv' -F $Cycle)));
+            $CSV.WriteLine('Time,Audio,Display');
+
+            # NOTE: this assumes light sensor voltage goes up with increased brightness
+            [int] $IdleCutoff = $Channel1Data.Count / 20;
+            [float] $IdleAudioSum = 0.0;
+            [float] $IdleDisplaySum = 0.0;
+            [float] $IdleAudioMax = -1000;
+            [float] $IdleAudioAvg = -1000;
+            [float] $AudioThreshold = -1000;
+            [float] $IdleDisplayMax = -1000;
+            [float] $IdleDisplayAvg = -1000;
+            [float] $DisplayThreshold = -1000;
+            [float] $AudioTime = 1000;
+            [float] $DisplayTime = 1000;
+
+            for ($Sample = 0; $Sample -LT $Channel1Data.Count; $Sample++)
+            {
+                [float] $Time = $Channel1Meta.XOrigin + ($Channel1Meta.XIncrement * $Sample);
+                [float] $AudioLevel = $Channel3Meta.YIncrement * ($Channel3Data[$Sample] - $Channel3Meta.YOrigin - $Channel3Meta.YReference);
+                [float] $DisplayLevel = $Channel1Meta.YIncrement * ($Channel1Data[$Sample] - $Channel1Meta.YOrigin - $Channel1Meta.YReference);
+                $CSV.WriteLine([string]::Format('{0},{1},{2}', $Time, $AudioLevel, $DisplayLevel));
+                if ($Sample -LT $IdleCutoff)
+                {
+                    $IdleAudioSum += $AudioLevel;
+                    $IdleAudioMax = [MathF]::Max([MathF]::Abs($AudioLevel), $IdleAudioMax);
+                    $IdleDisplaySum += $DisplayLevel;
+                    $IdleDisplayMax = [MathF]::Max($DisplayLevel, $IdleDisplayMax);
+                }
+                elseif ($Sample -EQ $IdleCutoff)
+                {
+                    $IdleAudioAvg = $IdleAudioSum / $IdleCutoff;
+                    $IdleDisplayAvg = $IdleDisplaySum / $IdleCutoff;
+                    $AudioThreshold = $IdleAudioAvg + (($IdleAudioMax - $IdleAudioAvg) * 5.0);
+                    $DisplayThreshold = $IdleDisplayAvg + (($IdleDisplayMax - $IdleDisplayAvg) * 5.0);
+                }
+                else
+                {
+                    if ($AudioLevel -GT $AudioThreshold) { $AudioTime = [MathF]::Min($AudioTime, $Time); }
+                    if ($DisplayLevel -GT $DisplayThreshold) { $DisplayTime = [MathF]::Min($DisplayTime, $Time); }
+                }
+            }
+            [float] $MeasuredLatency = $DisplayTime - $AudioTime;
+
+            $CSV.WriteLine();
+            $CSV.WriteLine('AudioTrig,DisplayTrig,Latency');
+            $CSV.WriteLine([string]::Format('{0},{1},{2}', $AudioTime, $DisplayTime, $MeasuredLatency));
+            $CSV.Close();
+            $SummaryCSV.WriteLine([string]::Format('{0:D5},{1}', $Cycle, $MeasuredLatency));
+            Write-Host -NoNewLine ('| Done: {0:F2}ms' -F ($MeasuredLatency * 1000.0));
+            Write-Host (', {0:F3}s' -F ($CycleTimer.ElapsedMilliseconds / 1000.0));
+        }
+        else
+        {
+            Stop-Instr;
+            Write-Host '| FAIL';
+            Write-Host 'Did not trigger. Check the trigger settings and connections.';
+        }
     }
 }
+finally { $SummaryCSV.Close(); }

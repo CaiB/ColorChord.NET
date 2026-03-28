@@ -32,8 +32,7 @@ public class RadialPoles : DisplayModeBase2D
         public float ScaleFactor;
         public float Exponent;
         public float CenterBlank;
-        
-        public uint FeatureBits; // unused
+        public uint Repetitions;
     };
 
     private Shader? Shader;
@@ -57,10 +56,10 @@ public class RadialPoles : DisplayModeBase2D
         Width = (uint)this.Host.WindowWidth,
         Height = (uint)this.Host.WindowHeight,
         PoleCount = (uint)this.RawDataIn.Length,
-        Advance = -MathF.PI / 2F,
+        Advance = MathF.PI / 2F,
         ScaleFactor = this.ScaleFactor,
         Exponent = this.ScaleExponent,
-        FeatureBits = 0U
+        Repetitions = 1
     };
 
     public override unsafe void Load(ID3D12Device2* device, CommandList copyCommandList, CommandList directCommandList)

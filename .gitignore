@@ -264,3 +264,4 @@ __pycache__/
 *.cso
 Tests/LatencyTest/**/*.csv
 Tests/LatencyTest/**/*.wav
+Tests/LatencyTest/**/*.xlsx
