@@ -1,4 +1,5 @@
-﻿using ColorChord.NET.API.Config;
+﻿using ColorChord.NET.API;
+using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
@@ -88,8 +89,8 @@ public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
     public Cells(string name, Dictionary<string, object> config)
     {
         this.Name = name;
-        Configurer.Configure(this, config);
-        this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(Cells)} could not find NoteFinder to attach to.");
+        ColorChordAPI.Configurer.Configure(this, config);
+        this.NoteFinder = ColorChordAPI.Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(Cells)} could not find NoteFinder to attach to.");
         this.OutputData = new uint[this.LEDCount];
         this.LEDBinMapping = new int[this.LEDCount];
         this.LastChangeTime = new double[this.LEDCount];
@@ -159,7 +160,7 @@ public class Cells : IVisualizer, IDiscrete1D, IControllableAttr
     private double[] LastChangeTime; // When each LED last changed state.
     private int LastChangeIndex = 0; // Where we last made changes, only used in snakey mode.
 
-    private void Update()
+    public void Update()
     {
         lock (this.SettingUpdateLock)
         {
