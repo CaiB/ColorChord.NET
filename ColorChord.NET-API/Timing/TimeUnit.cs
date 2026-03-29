@@ -18,7 +18,7 @@ public struct TimePeriod(float quantity, TimeUnit unit)
     public static bool TryParse(ReadOnlySpan<char> input, out TimePeriod result)
     {
         result = new();
-        if (MemoryExtensions.Equals(input, nameof(TimeUnit.Minimum), StringComparison.Ordinal))
+        if (MemoryExtensions.Equals(input, nameof(TimeUnit.Minimum), StringComparison.OrdinalIgnoreCase))
         {
             result.Quantity = 1;
             result.Unit = TimeUnit.Minimum;

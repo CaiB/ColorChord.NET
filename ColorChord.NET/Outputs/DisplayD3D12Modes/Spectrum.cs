@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Numerics;
 using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
@@ -67,7 +68,7 @@ public class Spectrum : ID3D12DisplayMode, IConfigurableAttr
     private RootData ShaderConfig;
 
     private DataHeap DataHeap;
-    private DataBuffer<float> BinValues;
+    private PingPongBuffer<float> BinValues;
 
     private bool Ready;
 
@@ -102,8 +103,8 @@ public class Spectrum : ID3D12DisplayMode, IConfigurableAttr
 
         long DataSize = Math.Min(65536, (this.NoteFinder.AllBinValues.Length * sizeof(float)) + ((int)MathF.Ceiling(this.NoteFinder.AllBinValues.Length / 32F) * 2));
         this.DataHeap = new(device, (ulong)DataSize);
-        this.BinValues = new(true);
-        this.BinValues.Create(device, this.DataHeap, this.Host.BufferDescriptorHeap, (uint)this.NoteFinder.AllBinValues.Length);
+        this.BinValues = new(name: "Spectrum BinValues");
+        this.BinValues.Create(device, this.NoteFinder.AllBinValues.Length);
 
         ulong FenceValue = copyCommandList.Execute();
 
@@ -121,11 +122,8 @@ public class Spectrum : ID3D12DisplayMode, IConfigurableAttr
             }
         ];
         RootParameter1.InitAsConstants(out RootParameter1 RootDataParameter, (uint)(sizeof(RootData) / sizeof(float)), 0, visibility: ShaderVisibility.Pixel);
-        DescriptorRange1.Init(out DescriptorRange1 SRVRange, DescriptorRangeType.Srv, 1, 1, offsetInDescriptorsFromTableStart: 0);
-        DescriptorRange1.Init(out DescriptorRange1 UAVRange, DescriptorRangeType.Uav, 1, 1, offsetInDescriptorsFromTableStart: 1);
-        ReadOnlySpan<DescriptorRange1> DescriptorRanges = [SRVRange, UAVRange];
-        RootParameter1.InitAsDescriptorTable(out RootParameter1 BinValuesParameter, (uint)DescriptorRanges.Length, DescriptorRanges.GetPointer(), ShaderVisibility.Pixel);
-        RootParameter1[] RootParameters = [RootDataParameter, BinValuesParameter];
+        RootParameter1.InitAsShaderResourceView(out RootParameter1 SRVParam, 1, visibility: ShaderVisibility.Pixel);
+        RootParameter1[] RootParameters = [RootDataParameter, SRVParam];
 
         Span<nint> DescriptorHeaps = [(nint)this.Host.BufferDescriptorHeap.Heap];
         directCommandList.NativeList->SetDescriptorHeaps((uint)DescriptorHeaps.Length, (ID3D12DescriptorHeap**)DescriptorHeaps.GetPointer());
@@ -142,15 +140,12 @@ public class Spectrum : ID3D12DisplayMode, IConfigurableAttr
     {
         if (!this.Ready) { return; }
         this.NoteFinder.UpdateOutputs();
-        ID3D12Resource* IntermediateCopyBuffer = default;
         lock (this.Host.Interlock)
         {
-            if (this.G2NoteFinder != null) { this.BinValues.Load(device, copyCommandList, out IntermediateCopyBuffer, this.G2NoteFinder.AllBinValuesScaled); }
-            else { this.BinValues.Load(device, copyCommandList, out IntermediateCopyBuffer, this.NoteFinder.AllBinValues); } // TODO: needs to be pinned
-            // TODO: The above uses CommittedResource, which creates and then destroys a whole heap just for this one temp object. It probably makes more sense to use a permanent heap instead
+            if (this.G2NoteFinder != null) { this.BinValues.Load(this.G2NoteFinder.AllBinValuesScaled); }
+            else { this.BinValues.Load(this.NoteFinder.AllBinValues); } // TODO: Fix this API so this isn't necessary
             copyCommandList.ExecuteAndWait();
         }
-        COMRelease(&IntermediateCopyBuffer);
     }
 
     public unsafe void Render(ID3D12Device2* device, CommandList directCommandList)
@@ -158,18 +153,19 @@ public class Spectrum : ID3D12DisplayMode, IConfigurableAttr
         if (!this.Ready) { return; }
 
         this.Shader.Use(directCommandList);
-        
-        Span<nint> DescriptorHeaps = [(nint)(this.Host.BufferDescriptorHeap.Heap)];
-        directCommandList.NativeList->SetDescriptorHeaps((uint)DescriptorHeaps.Length, (ID3D12DescriptorHeap**)DescriptorHeaps.GetPointer());
-        directCommandList.NativeList->SetGraphicsRootDescriptorTable(1, this.Host.BufferDescriptorHeap.GPUHandle);
 
-        directCommandList.NativeList->IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-        this.VertexBuffer.Use(directCommandList);
+        lock (this.BinValues) // TODO: Lock and release after all rendering rather than only partway
+        {
+            directCommandList.NativeList->SetGraphicsRootShaderResourceView(1, this.BinValues.RenderBuffer->GetGPUVirtualAddress());
 
-        // TODO: this doesn't need to happen every frame
-        UpdateConfig();
-        fixed (RootData* ConfigPtr = &this.ShaderConfig) { directCommandList.NativeList->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(RootData) / sizeof(float)), ConfigPtr, 0); }
-        directCommandList.NativeList->DrawInstanced(3, 1, 0, 0);
+            directCommandList.NativeList->IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+            this.VertexBuffer.Use(directCommandList);
+
+            // TODO: this doesn't need to happen every frame
+            UpdateConfig();
+            fixed (RootData* ConfigPtr = &this.ShaderConfig) { directCommandList.NativeList->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(RootData) / sizeof(float)), ConfigPtr, 0); }
+            directCommandList.NativeList->DrawInstanced(3, 1, 0, 0);
+        }
     }
 
     public void Resize(int width, int height) { }
