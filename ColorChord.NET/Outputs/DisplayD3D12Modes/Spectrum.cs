@@ -154,18 +154,22 @@ public class Spectrum : ID3D12DisplayMode, IConfigurableAttr
 
         this.Shader.Use(directCommandList);
 
-        lock (this.BinValues) // TODO: Lock and release after all rendering rather than only partway
-        {
-            directCommandList.NativeList->SetGraphicsRootShaderResourceView(1, this.BinValues.RenderBuffer->GetGPUVirtualAddress());
+        this.BinValues.StartRender();
+        directCommandList.NativeList->SetGraphicsRootShaderResourceView(1, this.BinValues.RenderBuffer->GetGPUVirtualAddress());
 
-            directCommandList.NativeList->IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
-            this.VertexBuffer.Use(directCommandList);
+        directCommandList.NativeList->IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        this.VertexBuffer.Use(directCommandList);
 
-            // TODO: this doesn't need to happen every frame
-            UpdateConfig();
-            fixed (RootData* ConfigPtr = &this.ShaderConfig) { directCommandList.NativeList->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(RootData) / sizeof(float)), ConfigPtr, 0); }
-            directCommandList.NativeList->DrawInstanced(3, 1, 0, 0);
-        }
+        // TODO: this doesn't need to happen every frame
+        UpdateConfig();
+        fixed (RootData* ConfigPtr = &this.ShaderConfig) { directCommandList.NativeList->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(RootData) / sizeof(float)), ConfigPtr, 0); }
+        directCommandList.NativeList->DrawInstanced(3, 1, 0, 0);
+    }
+
+    public unsafe void PostRender(ID3D12Device2* device)
+    {
+        if (!this.Ready) { return; }
+        this.BinValues.FinishRender();
     }
 
     public void Resize(int width, int height) { }

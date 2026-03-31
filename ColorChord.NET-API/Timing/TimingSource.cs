@@ -20,6 +20,7 @@ public class TimingSource(object parent, Converter<TimePeriod, TimePeriod> conve
             InternalPeriod = this.Converter(receiver.RequestedPeriod),
             CurrentIncrement = 0F
         };
+        Log.Debug($"{this.Parent.GetType()} has new timing receiver {receiver.Receiver.GetType()} at {receiver.RequestedPeriod} ({NewData[^1].InternalPeriod})");
 
         this.TimingReceivers = NewData;
     }

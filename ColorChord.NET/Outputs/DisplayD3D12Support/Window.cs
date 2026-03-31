@@ -66,6 +66,8 @@ public class Window
 
     public readonly IntPtr BackgroundBrush;
     private ushort ClassAtom;
+    private Win32API.WindowProcedure WindowProcObj;
+    private GCHandle WindowProcHandle;
 
     public event EventHandler? OnResize, OnClose;
 
@@ -73,6 +75,7 @@ public class Window
     {
         this.Instance = Process.GetCurrentProcess().MainModule!.BaseAddress; // TODO: See if we can just get this passed in somehow - or use GetModuleHandleW
         this.BackgroundBrush = Win32API.CreateSolidBrush(this.BackgroundColour >>> 8);
+        this.WindowProcObj = BaseWindowProcedure;
 
         WindowClass Class = new()
         {
@@ -84,11 +87,12 @@ public class Window
             Instance = this.Instance,
             SmallIcon = IntPtr.Zero,
             Style = WindowClassStyle.HorizontalRedraw | WindowClassStyle.VerticalRedraw | WindowClassStyle.DoubleClicks,
-            WindowProcedure = BaseWindowProcedure
+            WindowProcedure = this.WindowProcObj
         };
 
         this.ClassAtom = Win32API.RegisterClassEx(Class);
         if (ClassAtom == 0) { throw new Exception($"Registering the window class resulted in error 0x{Marshal.GetLastWin32Error():X8}"); }
+        this.WindowProcHandle = GCHandle.Alloc(this.WindowProcObj);
     }
 
     public void Create()
@@ -127,6 +131,7 @@ public class Window
         }
         while (ResultCode != 0);
         Debug.WriteLine("Main message pump has terminated.");
+        this.WindowProcHandle.Free();
 
         return;
     }

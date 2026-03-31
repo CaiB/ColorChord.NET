@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using Vortice.Win32.Graphics.Direct3D12;
 using Vortice.Win32.Graphics.Dxgi.Common;
 using static ColorChord.NET.Outputs.DisplayD3D12Support.COMUtils;
@@ -86,8 +87,15 @@ public unsafe class PingPongBuffer<T> : IDisposable where T : unmanaged
             ThrowIfFailed(CopyTarget->Map(0, null, (void**)&UploadBufferPtr));
             data.CopyTo(new(UploadBufferPtr, (int)this.BufferSize));
             CopyTarget->Unmap(0, null);
-            this.CopyingToA = !this.CopyingToA; // TODO: this should happen on the render side, not copy
         }
+    }
+
+    public void StartRender() => Monitor.Enter(this);
+
+    public void FinishRender()
+    {
+        this.CopyingToA = !this.CopyingToA;
+        Monitor.Exit(this);
     }
 
     protected virtual void Dispose(bool disposing)

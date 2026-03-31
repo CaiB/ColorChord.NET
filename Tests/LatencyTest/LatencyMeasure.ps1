@@ -112,10 +112,11 @@ function Receive-InstrWaveformData
         [int] $EndPos = [Math]::Min($PointCount, $Pos + $MAX_BYTES);
         Send-InstrCommand ":WAV:STAR $Pos";
         Send-InstrCommand ":WAV:STOP $EndPos";
+        Flush-Instr;
         #Write-Host "$Pos to $EndPos";
         Send-InstrCommand ':WAV:DATA?';
         [List[byte]] $WaveData = Receive-InstrRaw;
-        if ($WaveData[0] -NE [byte]([char]'#')) { throw "Expected data first byte to be '#' char, instead got '$([char]$WaveData[0])'"; }
+        if ($WaveData[0] -NE [byte]([char]'#')) { throw "Expected data first byte to be '#' char, instead got '$([char]$WaveData[0])'"; } # TODO: This sometimes triggers if the light sensor reading is off-scale at the bottom?
         [int] $DataLenLen = $WaveData[1] - 48;
         [int] $DataLen = [int][Encoding]::UTF8.GetString([Enumerable]::Take([Enumerable]::Skip($WaveData, 2), $DataLenLen));
         $Data.AddRange([Enumerable]::Take([Enumerable]::Skip($WaveData, 2 + $DataLenLen), $DataLen));
@@ -184,8 +185,8 @@ Send-InstrCommand ':CHAN1:BWLimit 20M';
 Send-InstrCommand ':CHAN1:COUP DC';
 # It is assumed that the vertical offset and range of the light sensor channel are pre-set manually.
 # Can do automatically with:
-Send-InstrCommand ':CHAN1:OFFS -9.160';
-Send-InstrCommand ':CHAN1:SCAL 0.500';
+Send-InstrCommand ':CHAN1:SCAL 1.000';
+Send-InstrCommand ':CHAN1:OFFS -7.200';
 
 Send-InstrCommand ':CHAN3:BWLimit 20M';
 Send-InstrCommand ':CHAN3:COUP AC';

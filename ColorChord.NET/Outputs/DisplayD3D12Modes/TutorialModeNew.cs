@@ -129,6 +129,8 @@ public unsafe class TutorialModeNew : ID3D12DisplayMode, IConfigurableAttr
         directCommandList.NativeList->DrawIndexedInstanced((uint)(this.CubeIndices.Length), 1, 0, 0, 0);
     }
 
+    public unsafe void PostRender(ID3D12Device2* device) { }
+
     public void Dispatch(ID3D12Device2* device, CommandList copyCommandList)
     {
         

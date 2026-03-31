@@ -424,6 +424,8 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                     CommandListD.WaitForFenceValue(RenderFenceValue);
                     this.CurrentBackBuffer = nthis->Swapchain->GetCurrentBackBufferIndex();
                 }
+
+                this.Mode?.PostRender(nthis->Device);
             }
         }
     }

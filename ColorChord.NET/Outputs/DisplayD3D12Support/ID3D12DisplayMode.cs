@@ -14,6 +14,8 @@ internal unsafe interface ID3D12DisplayMode
     /// <summary> Called to render a frame on the screen. </summary>
     void Render(ID3D12Device2* device, CommandList directCommandList);
 
+    void PostRender(ID3D12Device2* device);
+
     /// <summary> Passed through from the visualizer. </summary>
     void Dispatch(ID3D12Device2* device, CommandList copyCommandList);
 

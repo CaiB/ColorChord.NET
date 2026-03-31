@@ -113,5 +113,7 @@ public class RadialPoles : DisplayModeBase2D
         RenderGeometry(directCommandList);
     }
 
+    public override unsafe void PostRender(ID3D12Device2* device) { }
+
     public override void Resize(int width, int height) => UpdateConfig();
 }

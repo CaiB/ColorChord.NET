@@ -70,4 +70,5 @@ public abstract class DisplayModeBase2D : ID3D12DisplayMode, IConfigurableAttr
     public abstract unsafe void Dispatch(ID3D12Device2* device, CommandList copyCommandList);
     public abstract void Resize(int width, int height);
     public abstract unsafe void Render(ID3D12Device2* device, CommandList directCommandList);
+    public abstract unsafe void PostRender(ID3D12Device2* device);
 }
