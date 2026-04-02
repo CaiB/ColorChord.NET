@@ -37,6 +37,8 @@ namespace ColorChord.NET
         private static readonly List<Thread> InstanceThreads = new();
         private static readonly ManualResetEventSlim StopSignal = new();
 
+        public static event Action? OnStopping, OnStopped;
+
         public static void Main(string[] args)
         {
             for(int i = 0; i < args.Length; i++)
@@ -71,6 +73,7 @@ namespace ColorChord.NET
             ExtensionHandler.PostInitExtensions();
 
             StopSignal.Wait(); // The main thread will pause here until something requests application termination.
+            OnStopping?.Invoke();
             Log.Info("Exiting...");
             ExtensionHandler.StopExtensions();
             foreach (IAudioSource Source in SourceInsts.Values) { Source.Stop(); }
@@ -79,6 +82,7 @@ namespace ColorChord.NET
             foreach (IOutput Output in OutputInsts.Values) { Output.Stop(); }
             foreach (Controller Controller in ControllerInsts.Values) { Controller.Stop(); }
             foreach (Thread Thread in InstanceThreads) { Thread.Join(); }
+            OnStopped?.Invoke();
         }
 
         private static void WriteHelp()

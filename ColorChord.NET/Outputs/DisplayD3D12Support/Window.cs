@@ -68,6 +68,7 @@ public class Window
     private ushort ClassAtom;
     private Win32API.WindowProcedure WindowProcObj;
     private GCHandle WindowProcHandle;
+    private bool Destroying = false;
 
     public event EventHandler? OnResize, OnClose;
 
@@ -99,6 +100,13 @@ public class Window
     {
         this.Handle = Win32API.CreateWindowEx(WindowStyleEx.NoRedirectionBitmap, ClassAtom, this.WindowTitle, WindowStyle.OverlappedWindow | WindowStyle.Visible, 0, 0, InitialWidth, InitialHeight, IntPtr.Zero, IntPtr.Zero, this.Instance, IntPtr.Zero);
         if (this.Handle == IntPtr.Zero) { throw new Exception($"Creating the window resulted in error 0x{Marshal.GetLastWin32Error():X8}"); }
+        ColorChord.OnStopped += DoDestroy;
+    }
+
+    public void DoDestroy()
+    {
+        this.Destroying = true;
+        Win32API.PostMessage(this.Handle, MessageID.WM_NULL, 0, 0);
     }
 
     public void RunMessageLoop()
@@ -109,6 +117,9 @@ public class Window
             ResultCode = Win32API.GetMessage(out Message Message, IntPtr.Zero, 0, 0);
             if (ResultCode >= 0) // Normal message
             {
+                if (Message.MessageID == MessageID.WM_QUIT) { break; }
+                if (this.Destroying && Message.MessageID == MessageID.WM_NULL) { Win32API.DestroyWindow(this.Handle); }
+
                 Win32API.TranslateMessage(Message);
                 Win32API.DispatchMessage(Message); // TODO: This seems wasteful, since it'll only ever go to this window's proc
 
@@ -116,8 +127,6 @@ public class Window
                 switch (Message.MessageID)
                 {
                     case MessageID.WM_NULL: continue;
-                    case MessageID.WM_QUIT:
-                        break;
                     case MessageID.WM_QUERYENDSESSION:
                         // TODO: Handle this
                         break;
@@ -153,7 +162,7 @@ public class Window
                 break;
             case MessageID.WM_CLOSE:
                 this.OnClose?.Invoke(this, new());
-                break;
+                return 0;
             case MessageID.WM_DESTROY:
                 Win32API.PostQuitMessage(0);
                 break;

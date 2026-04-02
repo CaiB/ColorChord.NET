@@ -73,3 +73,56 @@ public readonly struct WindowClass
 
     public WindowClass() { }
 }
+
+public struct DWMUnsignedRatio
+{
+    public uint Numerator;
+    public uint Denominator;
+
+    public override readonly string ToString() => $"({Numerator} / {Denominator})";
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
+public struct DWMTimingInfo
+{
+    public uint cbSize;
+    public DWMUnsignedRatio rateRefresh;
+    public ulong qpcRefreshPeriod;
+    public DWMUnsignedRatio rateCompose;
+    public ulong qpcVBlank;
+    public ulong cRefresh;
+    public uint cDXRefresh;
+    public ulong qpcCompose;
+    public ulong cFrame;
+    public uint cDXPresent;
+    public ulong cRefreshFrame;
+    public ulong cFrameSubmitted;
+    public uint cDXPresentSubmitted;
+    public ulong cFrameConfirmed;
+    public uint cDXPresentConfirmed;
+    public ulong cRefreshConfirmed;
+    public uint cDXRefreshConfirmed;
+    public ulong cFramesLate;
+    public uint cFramesOutstanding;
+    public ulong cFrameDisplayed;
+    public ulong qpcFrameDisplayed;
+    public ulong cRefreshFrameDisplayed;
+    public ulong cFrameComplete;
+    public ulong qpcFrameComplete;
+    public ulong cFramePending;
+    public ulong qpcFramePending;
+    public ulong cFramesDisplayed;
+    public ulong cFramesComplete;
+    public ulong cFramesPending;
+    public ulong cFramesAvailable;
+    public ulong cFramesDropped;
+    public ulong cFramesMissed;
+    public ulong cRefreshNextDisplayed;
+    public ulong cRefreshNextPresented;
+    public ulong cRefreshesDisplayed;
+    public ulong cRefreshesPresented;
+    public ulong cRefreshStarted;
+    public ulong cPixelsReceived;
+    public ulong cPixelsDrawn;
+    public ulong cBuffersEmpty;
+}

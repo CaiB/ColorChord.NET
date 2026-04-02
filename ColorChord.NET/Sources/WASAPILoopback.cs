@@ -4,12 +4,14 @@ using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Sources;
 using ColorChord.NET.API.Utility;
 using ColorChord.NET.Config;
+using ColorChord.NET.Outputs.DisplayD3D12Support;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Vannatech.CoreAudio.Constants;
 using Vannatech.CoreAudio.Enumerations;
 using Vannatech.CoreAudio.Externals;
@@ -34,20 +36,21 @@ public class WASAPILoopback : IAudioSource
     [ConfigBool("ShowDeviceInfo", true)]
     private readonly bool PrintDeviceInfo = true;
 
-    private const ulong BufferLength = 50 * 10000; // 50 ms, in ticks
-    private ulong SystemBufferLength;
-    private ulong ActualBufferDuration;
-    private int BytesPerFrame;
+    public ulong LastBufferArrivalTime;
+    public ulong BufferPeriodTimerTicks;
+    private uint SystemBufferLength;
     
     private bool KeepGoing = true;
     private Thread? ProcessThread;
 
     private IMMDeviceEnumerator? DeviceEnumerator;
+    private IMMNotificationClient? NotificationClientInst;
+    protected bool DeviceIsCapture;
     private IAudioClient3? Client;
     private IAudioCaptureClient? CaptureClient;
     private WaveFormatExtensible MixFormat;
     private bool FormatIsPCM;
-    private readonly AutoResetEvent AudioEvent = new(false);
+    private AutoResetEvent? AudioEvent;
     private GCHandle AudioEventHandle;
 
     public WASAPILoopback(string name, Dictionary<string, object> config)
@@ -58,37 +61,43 @@ public class WASAPILoopback : IAudioSource
 
     public void AttachNoteFinder(NoteFinderCommon noteFinder) => this.NoteFinder = noteFinder;
 
-    public void Start()
+    public void Start() => Start(false);
+    public void Start(bool restarting)
     {
-        if (!OperatingSystem.IsWindows()) { throw new InvalidOperationException($"{nameof(WASAPILoopback)} is only supported on Windows. Use another audio source type, such as {nameof(CNFABinding)}, on other platforms."); }
-        int ErrorCode;
-        Type? DeviceEnumeratorType = Type.GetTypeFromCLSID(new Guid(ComCLSIDs.MMDeviceEnumeratorCLSID));
-        if (DeviceEnumeratorType == null) { Log.Error("Couldn't get device enumerator type info."); return; }
-        this.DeviceEnumerator = (IMMDeviceEnumerator?)Activator.CreateInstance(DeviceEnumeratorType);
-        if (this.DeviceEnumerator == null) { Log.Error("Couldn't create device enumerator."); return; }
+        if (!restarting)
+        {
+            if (!OperatingSystem.IsWindows()) { throw new InvalidOperationException($"{nameof(WASAPILoopback)} is only supported on Windows. Use another audio source type, such as {nameof(CNFABinding)}, on other platforms."); }
+            Type? DeviceEnumeratorType = Type.GetTypeFromCLSID(new Guid(ComCLSIDs.MMDeviceEnumeratorCLSID));
+            if (DeviceEnumeratorType == null) { Log.Error("Couldn't get device enumerator type info."); return; }
+            this.DeviceEnumerator = (IMMDeviceEnumerator?)Activator.CreateInstance(DeviceEnumeratorType);
+            if (this.DeviceEnumerator == null) { Log.Error("Couldn't create device enumerator."); return; }
+            this.NotificationClientInst = new NotificationClient(this);
 
-        if (this.PrintDeviceInfo) { PrintDeviceList(); }
+            if (this.PrintDeviceInfo) { PrintDeviceList(); }
+        }
 
         // Selecting audio device
         IMMDevice? Device;
         bool? DeviceIsCapture = null; // null if we don't know because the device was specified by ID.
+        int ErrorCode;
 
         if (this.DesiredDevice == "default")
         {
             Log.Info("Using default render device.");
-            Device = GetDefaultDevice(this.DeviceEnumerator, false);
+            Device = GetDefaultDevice(this.DeviceEnumerator!, false);
             DeviceIsCapture = false;
+            this.DeviceEnumerator!.RegisterEndpointNotificationCallback(this.NotificationClientInst);
         }
         else if (this.DesiredDevice == "defaultInput")
         {
             Log.Info("Using default capture device.");
-            Device = GetDefaultDevice(this.DeviceEnumerator, true);
+            Device = GetDefaultDevice(this.DeviceEnumerator!, true);
             DeviceIsCapture = true;
+            this.DeviceEnumerator!.RegisterEndpointNotificationCallback(this.NotificationClientInst);
         }
-        // TODO: Implement "defaultTracking"
         else
         {
-            ErrorCode = this.DeviceEnumerator.GetDevice(this.DesiredDevice, out Device);
+            ErrorCode = this.DeviceEnumerator!.GetDevice(this.DesiredDevice, out Device);
             if (IsError(ErrorCode) || Device == null)
             {
                 Log.Warn("Given audio device does not exist on this system. Using default render device instead.");
@@ -118,34 +127,32 @@ public class WASAPILoopback : IAudioSource
 
             DeviceIsCapture = (DataFlow == EDataFlow.eCapture);
         }
+        this.DeviceIsCapture = DeviceIsCapture.Value;
 
         // Get a client on the selected device, and query the system for current settings
         ErrorCode = Device.Activate(new Guid(AdditionalComIIDs.IAudioClient3IID), (uint)CLSCTX_ALL, IntPtr.Zero, out object ClientObj);
         if (IsErrorAndOut(ErrorCode, "Could not get audio client.")) { return; }
         this.Client = (IAudioClient3)ClientObj;
+        
+        ErrorCode = this.Client.GetDevicePeriod(out ulong DefaultInterval, out ulong MinimumExclusiveInterval);
+        if (IsErrorAndOut(ErrorCode, "Could not get device timing info.")) { return; }
 
-        ErrorCode = this.Client.GetMixFormat(out IntPtr MixFormatPtr);
-        if (IsErrorAndOut(ErrorCode, "Could not get mix format.")) { return; }
+        ErrorCode = this.Client.GetCurrentSharedModeEnginePeriod(out IntPtr MixFormatPtr, out uint FramesPerBatch);
+        if (IsErrorAndOut(ErrorCode, "Could not get current engine periodicity info.")) { return; }
+
         WaveFormatExtensible? FormatEx = WaveFormatExtensible.FromPointer(MixFormatPtr, out WaveFormatEx? Format);
         if (FormatEx != null) { this.MixFormat = (WaveFormatExtensible)FormatEx; }
         else if (Format != null)
         {
             Log.Warn("WASAPI returned a non-EXTENSIBLE mix format for some reason. Please report this to the ColorChord.NET developer.");
             WaveFormatEx BasicFormat = (WaveFormatEx)Format;
-            
         }
         else { Log.Error("Mix format was null"); return; }
 
         Log.Info($"Default audio format is {this.MixFormat.Format} {WaveFormatGUIDs.GetNameFromGUID(this.MixFormat.SubFormat)}, {this.MixFormat.ChannelCount} channel, {this.MixFormat.SampleRate}Hz sample rate, {this.MixFormat.BitsPerSample}b per sample.");
         this.FormatIsPCM = (this.MixFormat.IsExtensible() && this.MixFormat.SubFormat == WaveFormatGUIDs.PCM) || (!this.MixFormat.IsExtensible() && this.MixFormat.Format == WaveFormatBasic.PCM);
 
-        ErrorCode = this.Client.GetDevicePeriod(out ulong DefaultInterval, out ulong MinimumInterval);
-        if (IsErrorAndOut(ErrorCode, "Could not get device timing info.")) { return; }
-
-        ErrorCode = this.Client.GetCurrentSharedModeEnginePeriod(out IntPtr MixFormatPtr2, out uint FramesPerBatch); // TODO: Automatically scale this based on the framerate of the outputs
-        if (IsErrorAndOut(ErrorCode, "Could not get current engine periodicity info.")) { return; }
-
-        // Check if we can get PCM data directly (default is usually float)
+        // Request PCM data directly
         WaveFormatExtensible RequestedFormat = new()
         {
             Format = WaveFormatBasic.Extensible,
@@ -164,7 +171,12 @@ public class WASAPILoopback : IAudioSource
         Marshal.StructureToPtr(RequestedFormat, RequestedFormatPtr, false);
         int IsRequestSupportedRaw = this.Client.IsFormatSupported(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, RequestedFormatPtr, out IntPtr ResponseFormatPtr);
         bool IsRequestSupported = !FORCE_DEFAULT_FORMAT && IsRequestSupportedRaw == 0;
-        if (!IsRequestSupported)
+        if (IsRequestSupported)
+        {
+            this.MixFormat = RequestedFormat;
+            this.FormatIsPCM = true;
+        }
+        else
         {
             Marshal.FreeCoTaskMem(RequestedFormatPtr);
             RequestedFormatPtr = IntPtr.Zero;
@@ -175,12 +187,23 @@ public class WASAPILoopback : IAudioSource
             else { Log.Warn($"WASAPI responded with 0x{IsRequestSupportedRaw:X8} when PCM was requested, falling back to using its format instead."); }
 #pragma warning restore CS0162 // Unreachable code detected
 
-            this.FormatIsPCM = (this.MixFormat.IsExtensible() && this.MixFormat.SubFormat == WaveFormatGUIDs.PCM) || (!this.MixFormat.IsExtensible() && this.MixFormat.Format == WaveFormatBasic.PCM);
-        }
-        else
-        {
-            this.MixFormat = RequestedFormat;
-            this.FormatIsPCM = true;
+            if (( this.MixFormat.IsExtensible() && this.MixFormat.SubFormat == WaveFormatGUIDs.PCM) ||
+                (!this.MixFormat.IsExtensible() && this.MixFormat.Format == WaveFormatBasic.PCM))
+            {
+                this.FormatIsPCM = true;
+                if (this.MixFormat.BitsPerSample != 16) { Log.Error($"WASAPI format is {this.MixFormat.BitsPerSample}-bit PCM, which we don't support."); return; }
+            }
+            else if (( this.MixFormat.IsExtensible() && this.MixFormat.SubFormat == WaveFormatGUIDs.Float) ||
+                     (!this.MixFormat.IsExtensible() && this.MixFormat.Format == WaveFormatBasic.Float))
+            {
+                this.FormatIsPCM = false;
+                if (this.MixFormat.BitsPerSample != 32) { Log.Error($"WASAPI format is {this.MixFormat.BitsPerSample}-bit float, which we don't support."); return; }
+            }
+            else
+            {
+                Log.Error($"WASAPI format is {this.MixFormat.Format}, subformat {this.MixFormat.SubFormat}, which is neither PCM nor float, and hence is unsupported.");
+                return;
+            }
         }
 
         ErrorCode = this.Client.GetSharedModeEnginePeriod(IsRequestSupported ? RequestedFormatPtr : MixFormatPtr, out uint DefaultPeriodFrames, out uint FundamentalPeriodFrames, out uint MinimumPeriodFrames, out uint MaximumPeriodFrames);
@@ -188,23 +211,26 @@ public class WASAPILoopback : IAudioSource
         Log.Debug($"WASAPI engine periodicities: default = {DefaultPeriodFrames}, fundamental = {FundamentalPeriodFrames}, min = {MinimumPeriodFrames}, max = {MaximumPeriodFrames} frames.");
 
         Log.Info($"Chosen audio format is {this.MixFormat.Format} {WaveFormatGUIDs.GetNameFromGUID(this.MixFormat.SubFormat)}, {this.MixFormat.ChannelCount} channel, {this.MixFormat.SampleRate}Hz sample rate, {this.MixFormat.BitsPerSample}b per sample.");
-        Log.Info($"Default transaction period is {DefaultInterval} ticks, minimum is {MinimumInterval} ticks. Current mode is {FramesPerBatch} frames per dispatch.");
-        this.BytesPerFrame = this.MixFormat.ChannelCount * (this.MixFormat.BitsPerSample / 8);
+        Log.Info($"Default transaction period is {DefaultInterval} ticks, minimum for exclusive mode is {MinimumExclusiveInterval} ticks. Current mode is {FramesPerBatch} frames per dispatch.");
 
+        Win32API.QueryPerformanceFrequency(out ulong TimerFrequency);
+        this.BufferPeriodTimerTicks = FramesPerBatch * TimerFrequency / this.MixFormat.SampleRate;
         this.NoteFinder?.SetSampleRate((int)this.MixFormat.SampleRate);
 
         // Set up the stream
-        uint StreamFlags;
-        if (DeviceIsCapture == true) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST | AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_EVENTCALLBACK; }
-        else if (DeviceIsCapture == false) { StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_EVENTCALLBACK; }
-        else { Log.Error("Device type was not determined!"); return; }
+        uint StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_EVENTCALLBACK | 0x80000000; // 0x80000000 = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+        StreamFlags |= (this.DeviceIsCapture == true) ? AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST : AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK;
 
-        ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, MinimumInterval, 0, IsRequestSupported ? RequestedFormatPtr : MixFormatPtr);
+        ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, DefaultInterval, 0, IsRequestSupported ? RequestedFormatPtr : MixFormatPtr);
         if (IsErrorAndOut(ErrorCode, "Could not init audio client.")) { return; }
 
-        this.AudioEventHandle = GCHandle.Alloc(this.AudioEvent);
+        Marshal.FreeCoTaskMem(RequestedFormatPtr);
+        RequestedFormatPtr = IntPtr.Zero;
 
+        this.AudioEvent = new(false);
+        this.AudioEventHandle = GCHandle.Alloc(this.AudioEvent);
         ErrorCode = this.Client.SetEventHandle(this.AudioEvent.SafeWaitHandle.DangerousGetHandle()); // DANGEROUS, OH NO
+        if (IsErrorAndOut(ErrorCode, "Could not set audio client event handle.")) { return; }
 
         ErrorCode = this.Client.GetBufferSize(out uint BufferFrameCount);
         if (IsErrorAndOut(ErrorCode, "Could not get audio client buffer size.")) { return; }
@@ -213,8 +239,6 @@ public class WASAPILoopback : IAudioSource
         ErrorCode = this.Client.GetService(new Guid(ComIIDs.IAudioCaptureClientIID), out object CaptureClientObj);
         if (IsErrorAndOut(ErrorCode, "Could not get audio capture client.")) { return; }
         this.CaptureClient = (IAudioCaptureClient)CaptureClientObj;
-
-        this.ActualBufferDuration = (ulong)((double)BufferLength * BufferFrameCount / this.MixFormat.SampleRate);
 
         // Begin streaming
         ErrorCode = this.Client.Start();
@@ -286,11 +310,13 @@ public class WASAPILoopback : IAudioSource
 
     public void Stop()
     {
+        this.DeviceEnumerator?.UnregisterEndpointNotificationCallback(this.NotificationClientInst);
         this.KeepGoing = false;
-        this.AudioEvent.Set();
+        this.AudioEvent?.Set();
         this.ProcessThread?.Join();
-        this.AudioEvent.Dispose();
         if (AudioEventHandle.IsAllocated) { AudioEventHandle.Free(); }
+        this.AudioEvent?.Dispose();
+        this.AudioEvent = null;
     }
 
     private unsafe void ProcessEventAudio()
@@ -298,7 +324,7 @@ public class WASAPILoopback : IAudioSource
         int ErrorCode;
         while (this.KeepGoing)
         {
-            this.AudioEvent.WaitOne();
+            this.AudioEvent!.WaitOne();
             if (!this.KeepGoing) { break; } // Early exit for when an event was used to break this loop
             if (this.CaptureClient == null) { Log.Warn("Capture client was not ready when an audio event was received."); continue; }
             if (this.NoteFinder == null) { Log.Warn("NoteFinder was not attached when an audio event was received."); continue; }
@@ -342,6 +368,7 @@ public class WASAPILoopback : IAudioSource
                     this.NoteFinder.FinishBufferWrite(NFBufferRef, FramesAvailable);
                     this.NoteFinder.InputDataEvent.Set();
                 }
+                Win32API.QueryPerformanceCounter(out this.LastBufferArrivalTime);
 
                 SkipBuffer:
                 ErrorCode = this.CaptureClient.ReleaseBuffer(FramesAvailable);
@@ -360,5 +387,33 @@ public class WASAPILoopback : IAudioSource
         bool Error = IsError(hresult);
         if (Error) { Log.Error(output + " HRESULT: 0x" + hresult.ToString("X8")); }
         return Error;
+    }
+
+    protected void HandleDeviceChange()
+    {
+        Log.Info("WASAPI default device has changed, switching to new one.");
+        lock (this)
+        {
+            Stop();
+            Start(true);
+        }
+    }
+
+    private class NotificationClient(WASAPILoopback parent) : IMMNotificationClient
+    {
+        private readonly WASAPILoopback Parent = parent;
+
+        public void OnDefaultDeviceChanged(EDataFlow dataFlow, ERole deviceRole, string defaultDeviceId)
+        {
+            if (deviceRole == ERole.eMultimedia && (dataFlow == EDataFlow.eAll || (dataFlow == EDataFlow.eRender && !this.Parent.DeviceIsCapture) || (dataFlow == EDataFlow.eCapture && this.Parent.DeviceIsCapture)))
+            {
+                Task.Run(this.Parent.HandleDeviceChange);
+            }
+        }
+
+        public void OnDeviceAdded(string deviceId) { }
+        public void OnDeviceRemoved(string deviceId) { }
+        public void OnDeviceStateChanged(string deviceId, uint newState) { }
+        public void OnPropertyValueChanged(string deviceId, PROPERTYKEY propertyKey) { }
     }
 }

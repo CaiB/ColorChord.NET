@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
@@ -25,7 +26,10 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D, ITimingReceiver
     [ConfigFloat("SaturationExponent", 0, 100, 2F)]
     private float SaturationExponent = 2F;
 
+    private readonly AutoResetEvent OutputDispatchTrigger;
+    private Thread? OutputDispatchThread;
     private List<IOutput> Outputs = new(4);
+    private bool KeepGoing;
 
     private uint[] Data;
 
@@ -35,11 +39,18 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D, ITimingReceiver
         Configurer.Configure(this, config);
         this.NoteFinder = Configurer.FindNoteFinder(config) ?? throw new Exception($"{nameof(NoteFinderPassthrough)} could not find NoteFinder to attach to.");
         this.Data = new uint[this.NoteFinder.AllBinValues.Length];
+        this.OutputDispatchTrigger = new(false);
     }
 
     public void Start()
     {
         if (this.TimeSource == null && this.NoteFinder is ITimingSource NoteFinderAsTiming) { this.TimeSource = new(NoteFinderAsTiming, TimePeriod.Minimum, this); }
+        this.KeepGoing = true;
+        if (this.TimeSource != null && !this.TimeSource.IsSynchronous)
+        {
+            this.OutputDispatchThread = new(RunOutputDispatch) { Name = $"{nameof(NoteFinderPassthrough)} '{this.Name}' Output Dispatch" };
+            this.OutputDispatchThread.Start();
+        }
     }
 
     public void TimingCallback(object? sender)
@@ -47,6 +58,21 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D, ITimingReceiver
         ReadOnlySpan<float> RawData = this.NoteFinder.AllBinValues;
         if (this.Data.Length != RawData.Length) { this.Data = new uint[RawData.Length]; }
         for (int i = 0; i < RawData.Length; i++) { this.Data[i] = VisualizerTools.CCToRGB((float)i / this.NoteFinder.BinsPerOctave, 1F, MathF.Pow(RawData[i] * this.SaturationAmplifier, this.SaturationExponent)); }
+        if (this.TimeSource!.IsSynchronous) { DoOutputDispatch(); }
+        else { this.OutputDispatchTrigger.Set(); }
+    }
+
+    private void RunOutputDispatch()
+    {
+        while (this.KeepGoing)
+        {
+            this.OutputDispatchTrigger.WaitOne();
+            DoOutputDispatch();
+        }
+    }
+
+    private void DoOutputDispatch()
+    {
         foreach (IOutput Out in this.Outputs) { Out.Dispatch(); }
     }
 
@@ -59,5 +85,11 @@ public class NoteFinderPassthrough : IVisualizer, IDiscrete1D, ITimingReceiver
 
     public uint[] GetDataDiscrete() => this.Data;
 
-    public void Stop() => this.TimeSource?.Remove();
+    public void Stop()
+    {
+        this.TimeSource?.Remove();
+        this.KeepGoing = false;
+        this.OutputDispatchTrigger.Set();
+        this.OutputDispatchThread?.Join();
+    }
 }

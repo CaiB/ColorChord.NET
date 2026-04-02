@@ -12,7 +12,9 @@ using ColorChord.NET.API.Utility;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.Config;
 using ColorChord.NET.Extensions;
+using ColorChord.NET.NoteFinder;
 using ColorChord.NET.Outputs.DisplayD3D12Support;
+using ColorChord.NET.Sources;
 using Vortice.Win32;
 using Vortice.Win32.Graphics.Direct3D;
 using Vortice.Win32.Graphics.Direct3D12;
@@ -41,6 +43,9 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     [Controllable("WindowHeight")]
     [ConfigInt("WindowHeight", 10, 4000, 720)]
     public int WindowHeight { get => this.Window.Height; set => this.Window.Height = value; }
+
+    [ConfigBool("ExperimentalLatencyReduction", false)]
+    private bool DoLatencyReduction = false;
 
     public bool HasDepth = false;
 
@@ -85,8 +90,11 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     public IVisualizer Source { get; private init; }
     private readonly Thread? WindowThread;
     private readonly ID3D12DisplayMode? Mode;
-    private readonly Thread DispatchThread;
-    private readonly AutoResetEvent DispatchTrigger;
+
+    private ulong TimerFrequency;
+    private readonly WASAPILoopback? SourceForRenderDelay;
+    private bool WaitingOnDispatch = false;
+    private readonly AutoResetEvent DispatchRenderGate;
 
     public DisplayD3D12(string name, Dictionary<string, object> config)
     {
@@ -97,6 +105,17 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         this.Source = Visualizer;
         Configurer.Configure(this, config);
         this.NoteFinder = Configurer.FindNoteFinder(config) ?? this.Source.NoteFinder ?? throw new Exception($"{nameof(DisplayD3D12)} {this.Name} could not find NoteFinder to get data from.");
+        if (this.DoLatencyReduction)
+        {
+            if (this.NoteFinder is not Gen2NoteFinder G2NF || G2NF.AudioSource is not WASAPILoopback WASAPI)
+            {
+                Log.Error($"{nameof(DisplayD3D12)} had 'ExperimentalLatencyReduction' on, but this is only supported when using a {nameof(Gen2NoteFinder)} and {nameof(WASAPILoopback)}.");
+                this.DoLatencyReduction = false;
+            }
+            else { this.SourceForRenderDelay = WASAPI; }
+            Win32API.QueryPerformanceFrequency(out this.TimerFrequency);
+        }
+        this.DispatchRenderGate = new(false);
 
         AutoResetEvent WindowCreatedEvent = new(false);
         this.WindowThread = new(() =>
@@ -104,10 +123,15 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
             this.Window.Create();
             WindowCreatedEvent.Set();
             this.Window.OnResize += OnResize;
-            this.Window.OnClose += (sender, evt) => { this.KeepGoing = false; };
+            this.Window.OnClose += (sender, evt) =>
+            {
+                this.KeepGoing = false;
+                ColorChord.Stop();
+            };
             this.Window.RunMessageLoop();
         })
         { Name = $"{nameof(DisplayD3D12)} {this.Name} Native Window" };
+        this.WindowThread.SetApartmentState(ApartmentState.STA);
         this.WindowThread.Start();
 
         this.Native = new();
@@ -304,9 +328,6 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         this.Mode?.Load(this.Native.Device, this.CommandListCopy, this.CurrentCommandListDirect);
         this.CurrentCommandListDirect.ExecuteAndWait();
 
-        this.DispatchTrigger = new(false);
-        this.DispatchThread = new(DoDispatch) { Name = $"{nameof(DisplayD3D12)} '{this.Name}' Dispatch" };
-        this.DispatchThread.Start();
         this.Source.AttachOutput(this);
         COMRelease(&DXGIFactory);
     }
@@ -426,6 +447,12 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                 }
 
                 this.Mode?.PostRender(nthis->Device);
+
+                DWMTimingInfo TimingInfo = new() { cbSize = (uint)sizeof(DWMTimingInfo) };
+                Win32API.QueryPerformanceCounter(out ulong QPC);
+                ThrowIfFailed(Win32API.DwmGetCompositionTimingInfo(0, ref TimingInfo));
+                //Console.WriteLine($"It is now {QPC}, previous audio was at {(this.SourceForRenderDelay?.LastBufferArrivalTime ?? 0)}, audio is at {this.SourceForRenderDelay?.BufferPeriodTimerTicks ?? 0}, next vsync is at {TimingInfo.qpcCompose}");
+                //Console.WriteLine($"It is now {QPC / (double)this.TimerFrequency}, previous audio was at {(this.SourceForRenderDelay?.LastBufferArrivalTime ?? 0) / (double)this.TimerFrequency}, next vsync is at {TimingInfo.qpcCompose / (double)this.TimerFrequency}");
             }
         }
     }
@@ -473,17 +500,13 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         this.PreviousWidth = NewWidth;
     }
 
-    public void Dispatch() => this.DispatchTrigger.Set();
-
-    private void DoDispatch()
+    public void Dispatch()
     {
-        while (true)
-        {
-            this.DispatchTrigger.WaitOne();
-            if (!this.KeepGoing) { break; }
-            this.CommandListCopy.Reset();
-            this.Mode?.Dispatch(this.Native.Device, this.CommandListCopy);
-        }
+        //Win32API.QueryPerformanceCounter(out ulong QPC);
+        //Console.WriteLine($"It is now {QPC / (double)this.TimerFrequency}");
+        this.CommandListCopy.Reset();
+        this.Mode?.Dispatch(this.Native.Device, this.CommandListCopy);
+        this.DispatchRenderGate.Set();
     }
 
     public void Start()
@@ -494,7 +517,6 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     public void Stop()
     {
         this.KeepGoing = false;
-        this.DispatchTrigger.Set();
         if (D3D_DEBUG)
         {
             Debug.WriteLine("Live object report:");
@@ -505,7 +527,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                 COMRelease(&DXGIDebug);
             }
         }
-        this.DispatchThread.Join();
+        //this.WindowThread?.Join();
     }
 
     public void InstThreadPostInit()
@@ -514,11 +536,28 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         while (this.KeepGoing)
         {
             Win32API.WaitForSingleObjectEx(this.Native.SwapchainWaitHandle, 1000, true);
+            if (this.DoLatencyReduction)
+            {
+                DWMTimingInfo TimingInfo = new() { cbSize = (uint)sizeof(DWMTimingInfo) };
+                ThrowIfFailed(Win32API.DwmGetCompositionTimingInfo(0, ref TimingInfo));
+                //Win32API.QueryPerformanceCounter(out ulong QPC);
+                ulong Margin = 20000;
+
+                this.DispatchRenderGate.Reset();
+                ulong NextRenderDeadline = TimingInfo.qpcCompose - Margin;
+                ulong NextAudioBuffer = this.SourceForRenderDelay!.LastBufferArrivalTime + this.SourceForRenderDelay.BufferPeriodTimerTicks;
+                if (NextRenderDeadline > NextAudioBuffer)
+                {
+                    //Console.WriteLine($"W {TimingInfo.qpcCompose} - {Margin} > {this.SourceForRenderDelay!.LastBufferArrivalTime} + {this.SourceForRenderDelay.BufferPeriodTimerTicks} (now {QPC})");
+                    this.DispatchRenderGate.WaitOne(2);
+                    //Win32API.QueryPerformanceCounter(out ulong QPCAfter);
+                    //Console.WriteLine($"Waited {(QPCAfter - QPC) / 10000.0}ms");
+                }
+                //else { Console.WriteLine($"N {TimingInfo.qpcCompose} - {Margin} < {this.SourceForRenderDelay!.LastBufferArrivalTime} + {this.SourceForRenderDelay.BufferPeriodTimerTicks} (now {QPC})"); }
+            }
             Update();
             Render();
         }
-        ColorChord.Stop();
-        this.WindowThread?.Join();
     }
 
     internal static void UpdateBufferResource<T>(ID3D12Device2* device, CommandList commandList, ReadOnlySpan<T> data, ResourceFlags flags, out ID3D12Resource* intermediateResource, out ID3D12Resource* destinationResource) where T : unmanaged

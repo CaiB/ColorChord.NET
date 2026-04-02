@@ -215,6 +215,14 @@ public static partial class Win32API
     [LibraryImport("user32.dll", EntryPoint = "GetWindowLongW")]
     public static partial int GetWindowLongW(IntPtr windowHandle, WindowMemoryOffset offset);
 
+    /// <summary>Destroys the specified window. The function sends WM_DESTROY and WM_NCDESTROY messages to the window to deactivate it and remove the keyboard focus from it.</summary>
+    /// <remarks>A thread cannot use <see cref="DestroyWindow(nint)"/> to destroy a window created by a different thread.</remarks>
+    /// <param name="windowHandle">A handle to the window to be destroyed.</param>
+    /// <returns>If the function fails, the return value is false. To get extended error information, call <see cref="Marshal.GetLastWin32Error"/>.</returns>
+    [LibraryImport("user32.dll", EntryPoint = "DestroyWindow")]
+    [return: MarshalAs(UnmanagedType.I4)]
+    public static partial bool DestroyWindow(IntPtr windowHandle);
+
     /// <summary>Waits until the specified object is in the signaled state, an I/O completion routine or asynchronous procedure call (APC) is queued to the thread, or the time-out interval elapses.</summary>
     /// <param name="handle">A handle to the object. If this handle is closed while the wait is still pending, the function's behavior is undefined. The handle must have the SYNCHRONIZE access right.</param>
     /// <param name="timeoutMillisec">The time-out interval, in milliseconds. If a nonzero value is specified, the function waits until the object is signaled, an I/O completion routine or APC is queued, or the interval elapses. If zero, the function does not enter a wait state if the criteria is not met; it always returns immediately. If <see cref="uint.MaxValue"/>, the function will return only when the object is signaled or an I/O completion routine or APC is queued.</param>
@@ -222,6 +230,28 @@ public static partial class Win32API
     /// <returns>If the function succeeds, the return value indicates the event that caused the function to return.</returns>
     [LibraryImport("kernel32.dll", EntryPoint = "WaitForSingleObjectEx")]
     public static partial WaitReturn WaitForSingleObjectEx(IntPtr handle, uint timeoutMillisec, [MarshalAs(UnmanagedType.I4)] bool alertable);
+
+    /// <summary>Retrieves the current composition timing information for a specified window.</summary>
+    /// <param name="windowHandle">The handle to the window for which the composition timing information should be retrieved. Starting with Windows 8.1, this parameter must be set to NULL.</param>
+    /// <param name="timingInfo">A pointer to a <see cref="DWMTimingInfo"/> structure that, when this function returns successfully, receives the current composition timing information for the window. <see cref="DWMTimingInfo.cbSize"/> must be set before this function is called.</param>
+    /// <returns>If this function succeeds, it returns S_OK. Otherwise, it returns an HRESULT error code.</returns>
+    [LibraryImport("dwmapi.dll", EntryPoint = "DwmGetCompositionTimingInfo")]
+    public static partial int DwmGetCompositionTimingInfo(IntPtr windowHandle, ref DWMTimingInfo timingInfo);
+
+    /// <summary>Retrieves the current value of the performance counter, which is a high resolution (<1us) time stamp that can be used for time-interval measurements.</summary>
+    /// <param name="parformanceCount">A variable that receives the current performance-counter value, in counts.</param>
+    /// <returns>The function will always succeed when given valid parameters.</returns>
+    [LibraryImport("kernel32.dll", EntryPoint = "QueryPerformanceCounter")]
+    [return: MarshalAs(UnmanagedType.I4)]
+    public static partial bool QueryPerformanceCounter(out ulong parformanceCount);
+
+    /// <summary>Retrieves the frequency of the performance counter.</summary>
+    /// <remarks>The frequency of the performance counter is fixed at system boot and is consistent across all processors. Therefore, the frequency need only be queried upon application initialization, and the result can be cached.</remarks>
+    /// <param name="frequency">The current performance-counter frequency, in counts per second.</param>
+    /// <returns>The function will always succeed when given valid parameters.</returns>
+    [LibraryImport("kernel32.dll", EntryPoint = "QueryPerformanceFrequency")]
+    [return: MarshalAs(UnmanagedType.I4)]
+    public static partial bool QueryPerformanceFrequency(out ulong frequency);
 
     /// <summary>A callback function, which you define in your application, that processes messages sent to a window.</summary>
     /// <param name="windowHandle">A handle to the window.</param>

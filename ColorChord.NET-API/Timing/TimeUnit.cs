@@ -5,7 +5,8 @@ public enum TimeUnit
     Minimum,
     Millisecond,
     Frame,
-    Sample
+    Sample,
+    Buffer
 }
 
 public struct TimePeriod(float quantity, TimeUnit unit)

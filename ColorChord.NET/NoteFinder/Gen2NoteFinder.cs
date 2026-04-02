@@ -19,7 +19,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
     private const int NOTE_QTY = 12;
 
     private Gen2NoteFinderDFT DFT;
-    private readonly IAudioSource AudioSource;
+    internal readonly IAudioSource AudioSource;
 
     public override string Name { get; protected init; }
 
@@ -66,7 +66,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
     private float[] PreviousBinValues;
     public float[] RecentBinChanges;
 
-    private readonly TimingSource TimingSource;
+    private readonly TimingSource TimingSourceTimeBased, TimingSourceBufferBased;
     private Thread? ProcessThread;
     private bool KeepGoing = true;
 
@@ -81,7 +81,8 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
         P_PersistentNoteIDs = new int[NOTE_QTY];
         this.Name = name;
         Configurer.Configure(this, config);
-        this.TimingSource = new(this, ConvertPeriod);
+        this.TimingSourceTimeBased = new(this, ConvertPeriod);
+        this.TimingSourceBufferBased = new(this, x => x);
         this.AudioSource = Configurer.FindSource(config) ?? throw new Exception($"{nameof(Gen2NoteFinder)} \"{name}\" could not find the audio source to get data from.");
         this.AudioSource.AttachNoteFinder(this);
 
@@ -118,7 +119,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
         this.SampleRate = (uint)sampleRate;
         this.DFT = new(this.OctaveCount, this.BPO, this.SampleRate, this.StartFreq, this.LoudnessCorrectionAmount, this.TargetBinRange, RunTimingReceivers);
         Reconfigure();
-        this.TimingSource.RecalculatePeriods();
+        this.TimingSourceTimeBased.RecalculatePeriods();
     }
 
     public override void Start()
@@ -150,6 +151,7 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
             CycleTimer.Stop();
 
             FinishBufferRead(NFBufferRef);
+            this.TimingSourceBufferBased.Increment(1);
 
             const float TIMER_IIR = 0.97F;
             if (BufferSize > 32) { CycleTimeTicks = (CycleTimeTicks * TIMER_IIR) + ((float)CycleTimer.ElapsedTicks / BufferSize * (1F - TIMER_IIR)); }
@@ -269,17 +271,31 @@ public sealed class Gen2NoteFinder : NoteFinderCommon, ITimingSource
 
     public void AddTimingReceiver(TimingConnection receiver)
     {
-        lock (this.TimingSource) { this.TimingSource.AddReceiver(receiver); }
+        if (receiver.RequestedPeriod.Unit == TimeUnit.Buffer)
+        {
+            lock (this.TimingSourceBufferBased) { this.TimingSourceBufferBased.AddReceiver(receiver); }
+        }
+        else
+        {
+            lock (this.TimingSourceTimeBased) { this.TimingSourceTimeBased.AddReceiver(receiver); }
+        }
     }
 
     public void RemoveTimingReceiver(TimingConnection receiver)
     {
-        lock (this.TimingSource) { this.TimingSource.RemoveReceiver(receiver); }
+        if (receiver.RequestedPeriod.Unit == TimeUnit.Buffer)
+        {
+            lock (this.TimingSourceBufferBased) { this.TimingSourceTimeBased.RemoveReceiver(receiver); }
+        }
+        else
+        {
+            lock (this.TimingSourceTimeBased) { this.TimingSourceTimeBased.RemoveReceiver(receiver); }
+        }
     }
 
     private void RunTimingReceivers(uint samplesAdded)
     {
-        lock (this.TimingSource) { this.TimingSource.Increment(samplesAdded, this.DFT.CalculateOutput); }
+        lock (this.TimingSourceTimeBased) { this.TimingSourceTimeBased.Increment(samplesAdded, this.DFT.CalculateOutput); }
     }
 
     private TimePeriod ConvertPeriod(TimePeriod input)
