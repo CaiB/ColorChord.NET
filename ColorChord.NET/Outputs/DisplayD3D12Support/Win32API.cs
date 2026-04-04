@@ -231,6 +231,13 @@ public static partial class Win32API
     [LibraryImport("kernel32.dll", EntryPoint = "WaitForSingleObjectEx")]
     public static partial WaitReturn WaitForSingleObjectEx(IntPtr handle, uint timeoutMillisec, [MarshalAs(UnmanagedType.I4)] bool alertable);
 
+    /// <summary>Sets the specified event object to the signaled state.</summary>
+    /// <param name="handle">A handle to the event object. The handle must have the EVENT_MODIFY_STATE access right.</param>
+    /// <returns>If the function fails, the return value is false. To get extended error information, call <see cref="Marshal.GetLastWin32Error"/>.</returns>
+    [LibraryImport("kernel32.dll", EntryPoint = "SetEvent")]
+    [return: MarshalAs(UnmanagedType.I4)]
+    public static partial bool SetEvent(IntPtr handle);
+
     /// <summary>Retrieves the current composition timing information for a specified window.</summary>
     /// <param name="windowHandle">The handle to the window for which the composition timing information should be retrieved. Starting with Windows 8.1, this parameter must be set to NULL.</param>
     /// <param name="timingInfo">A pointer to a <see cref="DWMTimingInfo"/> structure that, when this function returns successfully, receives the current composition timing information for the window. <see cref="DWMTimingInfo.cbSize"/> must be set before this function is called.</param>

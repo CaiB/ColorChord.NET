@@ -23,6 +23,9 @@ public class RadialPoles : DisplayModeBase2D
     [ConfigFloat("ScaleExponent", 0.0F, 10.0F, 1.6F)]
     public float ScaleExponent;
 
+    [ConfigInt("Repetitions", 1, 1000, 1)]
+    public uint Repetitions;
+
     private struct RootData
     {
         public uint Width;
@@ -37,8 +40,7 @@ public class RadialPoles : DisplayModeBase2D
 
     private Shader? Shader;
     private RootData ShaderConfig;
-    private DataHeap? DataHeap;
-    private DataBuffer<float>? BinValues;
+    private PingPongBuffer<float>? BinValues;
     private bool Ready;
     private uint InterQueueFenceValue;
 
@@ -59,7 +61,8 @@ public class RadialPoles : DisplayModeBase2D
         Advance = MathF.PI / 2F,
         ScaleFactor = this.ScaleFactor,
         Exponent = this.ScaleExponent,
-        Repetitions = 1
+        CenterBlank = this.CenterSize,
+        Repetitions = this.Repetitions
     };
 
     public override unsafe void Load(ID3D12Device2* device, CommandList copyCommandList, CommandList directCommandList)
@@ -67,10 +70,8 @@ public class RadialPoles : DisplayModeBase2D
         InputElementDescription[] VertexInputs = LoadGeometry(device, copyCommandList);
         ulong CopyFenceValue = copyCommandList.Execute();
 
-        long DataSize = Math.Min(65536, (this.RawDataIn.Length * sizeof(float)) + ((int)MathF.Ceiling(this.RawDataIn.Length / 32F) * 2));
-        this.DataHeap = new(device, (ulong)DataSize);
-        this.BinValues = new(true, name: $"{nameof(RadialPoles)} {nameof(BinValues)}");
-        this.BinValues.Create(device, this.DataHeap, (uint)this.RawDataIn.Length);
+        this.BinValues = new(name: $"{nameof(RadialPoles)} {nameof(BinValues)}");
+        this.BinValues.Create(device, this.RawDataIn.Length);
 
         RootParameter1.InitAsConstants(out RootParameter1 RootDataParameter, (uint)(sizeof(RootData) / sizeof(float)), 0, visibility: ShaderVisibility.Pixel);
         RootParameter1.InitAsShaderResourceView(out RootParameter1 SRVParam, 1, visibility: ShaderVisibility.Pixel);
@@ -92,12 +93,13 @@ public class RadialPoles : DisplayModeBase2D
             // TODO: Handle size change
             throw new Exception("can't handle size change");
         }
+        this.Host.NoteFinder.UpdateOutputs();
         this.Host.NoteFinder.OctaveBinValues.CopyTo(this.RawDataIn);
 
         ID3D12Resource* IntermediateCopyBuffer = default;
         lock (this.Host.Interlock)
         {
-            fixed (float* DataPtr = &this.RawDataIn[0]) { this.BinValues.Load(device, copyCommandList, out IntermediateCopyBuffer, new(DataPtr, this.RawDataIn.Length)); }
+            this.BinValues!.Load(this.RawDataIn);
             copyCommandList.ExecuteAndWait();
         }
         COMRelease(&IntermediateCopyBuffer);
@@ -107,13 +109,18 @@ public class RadialPoles : DisplayModeBase2D
     {
         if (!this.Ready) { return; }
         this.Shader!.Use(directCommandList);
-        directCommandList.NativeList->SetGraphicsRootShaderResourceView(1, this.BinValues.Buffer->GetGPUVirtualAddress());
+        this.BinValues!.StartRender();
+        directCommandList.NativeList->SetGraphicsRootShaderResourceView(1, this.BinValues.RenderBuffer->GetGPUVirtualAddress());
         fixed (RootData* ConfigPtr = &this.ShaderConfig) { directCommandList.NativeList->SetGraphicsRoot32BitConstants(0, (uint)(sizeof(RootData) / sizeof(float)), ConfigPtr, 0); }
 
         RenderGeometry(directCommandList);
     }
 
-    public override unsafe void PostRender(ID3D12Device2* device) { }
+    public override unsafe void PostRender(ID3D12Device2* device)
+    {
+        if (!this.Ready) { return; }
+        this.BinValues!.FinishRender();
+    }
 
     public override void Resize(int width, int height) => UpdateConfig();
 }

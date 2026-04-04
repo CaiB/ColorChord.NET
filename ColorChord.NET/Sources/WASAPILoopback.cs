@@ -221,6 +221,7 @@ public class WASAPILoopback : IAudioSource
         uint StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_EVENTCALLBACK | 0x80000000; // 0x80000000 = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
         StreamFlags |= (this.DeviceIsCapture == true) ? AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST : AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK;
 
+        // TODO: Use InitializeSharedAudioStream instead of Initialize when using a microphone (doesn't work on loopback), this can reduce latency significantly! (e.g. 10ms -> 2.66ms)
         ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, DefaultInterval, 0, IsRequestSupported ? RequestedFormatPtr : MixFormatPtr);
         if (IsErrorAndOut(ErrorCode, "Could not init audio client.")) { return; }
 

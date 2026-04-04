@@ -47,6 +47,9 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     [ConfigBool("ExperimentalLatencyReduction", false)]
     private bool DoLatencyReduction = false;
 
+    [ConfigFloat("LatencyReductionMargin", -100F, 1000F, 2F)]
+    private float LatencyReductionMargin;
+
     public bool HasDepth = false;
 
     public struct NativeResources
@@ -517,6 +520,7 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
     public void Stop()
     {
         this.KeepGoing = false;
+        Win32API.SetEvent(this.Native.SwapchainWaitHandle);
         if (D3D_DEBUG)
         {
             Debug.WriteLine("Live object report:");
@@ -536,24 +540,27 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
         while (this.KeepGoing)
         {
             Win32API.WaitForSingleObjectEx(this.Native.SwapchainWaitHandle, 1000, true);
-            if (this.DoLatencyReduction)
+            if (!this.KeepGoing) { break; }
+            while (this.DoLatencyReduction)
             {
                 DWMTimingInfo TimingInfo = new() { cbSize = (uint)sizeof(DWMTimingInfo) };
                 ThrowIfFailed(Win32API.DwmGetCompositionTimingInfo(0, ref TimingInfo));
-                //Win32API.QueryPerformanceCounter(out ulong QPC);
-                ulong Margin = 20000;
+                Win32API.QueryPerformanceCounter(out ulong QPC);
+                uint Margin = (uint)(this.LatencyReductionMargin * 10000); // TODO: Set this based on how long recent frames took to render
 
                 this.DispatchRenderGate.Reset();
-                ulong NextRenderDeadline = TimingInfo.qpcCompose - Margin;
+                ulong NextRenderDeadline = ((TimingInfo.qpcCompose > QPC) ? TimingInfo.qpcCompose : (TimingInfo.qpcCompose + TimingInfo.qpcRefreshPeriod)) - Margin;
                 ulong NextAudioBuffer = this.SourceForRenderDelay!.LastBufferArrivalTime + this.SourceForRenderDelay.BufferPeriodTimerTicks;
                 if (NextRenderDeadline > NextAudioBuffer)
                 {
                     //Console.WriteLine($"W {TimingInfo.qpcCompose} - {Margin} > {this.SourceForRenderDelay!.LastBufferArrivalTime} + {this.SourceForRenderDelay.BufferPeriodTimerTicks} (now {QPC})");
                     this.DispatchRenderGate.WaitOne(2);
+                    continue;
                     //Win32API.QueryPerformanceCounter(out ulong QPCAfter);
                     //Console.WriteLine($"Waited {(QPCAfter - QPC) / 10000.0}ms");
                 }
                 //else { Console.WriteLine($"N {TimingInfo.qpcCompose} - {Margin} < {this.SourceForRenderDelay!.LastBufferArrivalTime} + {this.SourceForRenderDelay.BufferPeriodTimerTicks} (now {QPC})"); }
+                break;
             }
             Update();
             Render();
