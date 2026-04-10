@@ -455,8 +455,9 @@ namespace ColorChord.NET
             else if (Component == Component.NoteFinder && NoteFinderInsts.Count == 1) { return NoteFinderInsts.First().Value; }
 
             int IndexSep2 = path.IndexOf('.', IndexSep1 + 1);
-            if (IndexSep2 < 0) { return null; }
-            string ComponentName = path.Substring(IndexSep1 + 1, IndexSep2 - IndexSep1 - 1);
+            string ComponentName;
+            if (IndexSep2 < 0) { ComponentName = path.Substring(IndexSep1 + 1); }
+            else { ComponentName = path.Substring(IndexSep1 + 1, IndexSep2 - IndexSep1 - 1); }
 
             if (Component == Component.Source) { return SourceInsts.TryGetValue(ComponentName, out IAudioSource? Source) ? Source : null; }
             else if (Component == Component.NoteFinder) { return NoteFinderInsts.TryGetValue(ComponentName, out NoteFinderCommon? NoteFinder) ? NoteFinder : null; }

@@ -7,12 +7,13 @@ using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Sources;
+using ColorChord.NET.API.Timing;
 using ColorChord.NET.Config;
 
 namespace ColorChord.NET.NoteFinder;
 
 /// <summary> Equivalent to the note finder found in the base C colorchord implementation, by cnlohr. </summary>
-public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
+public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr, ITimingSource
 {
     /// <summary> Whether to keep processing, or shut down operations.  </summary>
     private bool KeepGoing = true;
@@ -22,6 +23,8 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
 
     /// <summary> The audio data source we are attached to. </summary>
     private readonly IAudioSource AudioSource;
+
+    private readonly TimingSource TimingSourceTimeBased, TimingSourceBufferBased;
 
     // Things that are always the same.
     #region Constants
@@ -185,6 +188,8 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
     public BaseNoteFinder(string name, Dictionary<string, object> config)
     {
         Configurer.Configure(this, config);
+        this.TimingSourceTimeBased = new(this, ConvertPeriod);
+        this.TimingSourceBufferBased = new(this, x => x);
         this.AudioSource = Configurer.FindSource(config) ?? throw new Exception($"{nameof(Gen2NoteFinder)} \"{name}\" could not find the audio source to get data from.");
         this.AudioSource.AttachNoteFinder(this);
         SetSampleRate(SampleRate); // Changing the minimum frequency needs an update of the frequency bins, which is done by SetSampleRate().
@@ -204,6 +209,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
         {
             this.RawBinFrequencies[RawBinIndex] = (sampleRate / MinimumFrequency) / MathF.Pow(2, (float)RawBinIndex / BINS_PER_OCTAVE);
         }
+        this.TimingSourceTimeBased.RecalculatePeriods();
     }
 
     private int SampleRate = 44100;
@@ -238,6 +244,42 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
         if (controlID == 1) { SetSampleRate(this.SampleRate); }
     }
 
+    public void AddTimingReceiver(TimingConnection receiver)
+    {
+        if (receiver.RequestedPeriod.Unit == TimeUnit.Buffer)
+        {
+            lock (this.TimingSourceBufferBased) { this.TimingSourceBufferBased.AddReceiver(receiver); }
+        }
+        else
+        {
+            lock (this.TimingSourceTimeBased) { this.TimingSourceTimeBased.AddReceiver(receiver); }
+        }
+    }
+
+    public void RemoveTimingReceiver(TimingConnection receiver)
+    {
+        if (receiver.RequestedPeriod.Unit == TimeUnit.Buffer)
+        {
+            lock (this.TimingSourceBufferBased) { this.TimingSourceTimeBased.RemoveReceiver(receiver); }
+        }
+        else
+        {
+            lock (this.TimingSourceTimeBased) { this.TimingSourceTimeBased.RemoveReceiver(receiver); }
+        }
+    }
+
+    private void RunTimingReceivers(uint samplesAdded)
+    {
+        lock (this.TimingSourceTimeBased) { this.TimingSourceTimeBased.Increment(samplesAdded); }
+    }
+
+    private TimePeriod ConvertPeriod(TimePeriod input)
+    {
+        if (input.Unit == TimeUnit.Minimum || input.Unit == TimeUnit.Sample) { return input; }
+        else if (input.Unit == TimeUnit.Millisecond) { return new(input.Quantity * this.SampleRate / 1000F, TimeUnit.Sample); }
+        else { throw new Exception($"{nameof(Gen2NoteFinder)} only supports timing requests in units of Minimum, Samples, or Milliseconds"); }
+    }
+
     /// <summary> Runs until <see cref="KeepGoing"/> becomes false, processing incoming audio data. </summary>
     private void DoProcessing()
     {
@@ -264,6 +306,9 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr
                 this.CycleTimer.Restart();
                 Cycle();
                 this.CycleTimer.Stop();
+
+                this.TimingSourceBufferBased.Increment(1);
+                this.RunTimingReceivers(BufferSize); // TODO: Maybe do this more granularly
 
                 const float TIMER_IIR = 0.97F;
                 if (BufferSize > 32) { this.CycleTimeTicks = (this.CycleTimeTicks * TIMER_IIR) + ((float)this.CycleTimer.ElapsedTicks / BufferSize * (1F - TIMER_IIR)); }

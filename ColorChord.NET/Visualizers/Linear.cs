@@ -1,18 +1,21 @@
-﻿using ColorChord.NET.API;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+using System.Threading;
+using ColorChord.NET.API;
 using ColorChord.NET.API.Config;
 using ColorChord.NET.API.Controllers;
 using ColorChord.NET.API.NoteFinder;
 using ColorChord.NET.API.Outputs;
+using ColorChord.NET.API.Timing;
 using ColorChord.NET.API.Visualizers;
 using ColorChord.NET.API.Visualizers.Formats;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading;
 
 namespace ColorChord.NET.Visualizers;
 
-public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
+public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr, ITimingReceiver
 {
     /// <summary> A unique name for this visualizer instance, used for referring to it from other components. </summary>
     public string Name { get; private init; }
@@ -30,13 +33,8 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     [ConfigBool(ConfigNames.ENABLE, true)]
     public bool Enabled { get; set; }
 
-    /// <summary> How many times per second the output should be updated. </summary>
-    [Controllable("FrameRate", 2)]
-    [ConfigInt("FrameRate", 0, 1000, 60)]
-    public int FrameRate { get; set; } = 60;
-
-    /// <summary> The number of milliseconds to wait between output updates. </summary>
-    private int FramePeriod => 1000 / this.FrameRate;
+    [ConfigTimeSource]
+    private TimingConnection? TimeSource { get; set; }
 
     /// <summary> Whether the output should be treated as a line with ends, or a continuous circle with the ends joined. </summary>
     [Controllable("IsCircular")]
@@ -75,9 +73,9 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     public float SaturationAmplifier { get; set; }
 
     /// <summary> All outputs that need to be notified when new data is available. </summary>
-    private readonly List<IOutput> Outputs = new();
+    private readonly List<IOutput> Outputs = [];
 
-    private uint[] OutputDataDiscrete = Array.Empty<uint>();
+    private uint[] OutputDataDiscrete = [];
 
     private readonly ContinuousDataUnit[] OutputDataContinuous;
     private int OutputCountContinuous;
@@ -86,11 +84,11 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     /// <summary> Whether to continue processing, or stop threads and finish up in preparation for closing the application. </summary>
     private bool KeepGoing = true;
 
-    /// <summary>Used to make sure a controller changing a setting does not happen in the middle of a processing cycle.</summary>
-    private readonly object SettingUpdateLock = new();
+    private readonly AutoResetEvent OutputDispatchTrigger;
+    private Thread? OutputDispatchThread;
 
-    /// <summary> The thread on which input note data is processed by this visualizer. </summary>
-    private Thread? ProcessThread;
+    /// <summary>Used to make sure a controller changing a setting does not happen in the middle of a processing cycle.</summary>
+    private readonly Lock SettingUpdateLock = new();
 
     private readonly int NoteCount, BinsPerOctave;
 
@@ -102,52 +100,69 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
         this.NoteCount = this.NoteFinder.NoteCount;
         this.BinsPerOctave = this.NoteFinder.BinsPerOctave;
         this.OutputDataContinuous = new ContinuousDataUnit[this.NoteCount];
-        this.LastVectorCenters = new float[this.NoteCount];
         for (int i = 0; i < this.OutputDataContinuous.Length; i++) { this.OutputDataContinuous[i] = new ContinuousDataUnit(); }
+        this.OutputDispatchTrigger = new(false);
+        UpdateSize();
     }
 
     /// <summary> Used to update internal structures when the number of LEDs changes. </summary>
+    [MemberNotNull(nameof(OutputDataDiscrete), nameof(NoteChromas), nameof(NoteAmplitudes), nameof(BlockLocations), nameof(BlockNoteIDs), nameof(PrevBlockLocations), nameof(PrevBlockChromas))]
     private void UpdateSize()
     {
         this.OutputDataDiscrete = new uint[this.LEDCount];
-        this.LastLEDColours = new float[this.LEDCount];
-        this.LastLEDPositionsFiltered = new float[this.LEDCount];
-        this.LastLEDSaturations = new float[this.LEDCount];
+        this.NoteChromas = new float[this.NoteCount];
+        this.NoteAmplitudes = new InternalNoteAmplitude[this.NoteCount];
+        this.BlockLocations = new float[this.NoteCount + 1];
+        this.BlockNoteIDs = new short[this.NoteCount + 1];
+        this.PrevBlockLocations = new float[this.NoteCount + 1];
+        this.PrevBlockChromas = new float[this.NoteCount + 1];
     }
 
     public void Start()
     {
-        if (this.LEDCount <= 0) { Log.Error("Attempted to start Linear visualizer \"" + this.Name + "\" with invalid LED count."); return; }
+        if (this.TimeSource == null && this.NoteFinder is ITimingSource NoteFinderAsTiming) { this.TimeSource = new(NoteFinderAsTiming, new TimePeriod(1, TimeUnit.Buffer), this); }
         this.KeepGoing = true;
-        this.ProcessThread = new Thread(DoProcessing) { Name = "Linear " + this.Name };
-        this.ProcessThread.Start();
-        this.NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod);
+        if (this.TimeSource != null && !this.TimeSource.IsSynchronous)
+        {
+            this.OutputDispatchThread = new(RunOutputDispatch) { Name = $"{nameof(Linear)} '{this.Name}' Output Dispatch" };
+            this.OutputDispatchThread.Start();
+        }
     }
 
     public void Stop()
     {
+        this.TimeSource?.Remove();
         this.KeepGoing = false;
-        this.ProcessThread?.Join();
+        this.OutputDispatchTrigger.Set();
+        this.OutputDispatchThread?.Join();
     }
 
-    public void AttachOutput(IOutput output) { if (output != null) { this.Outputs.Add(output); } }
+    public void AttachOutput(IOutput output) { this.Outputs.Add(output); }
 
-    private void DoProcessing()
+    public void TimingCallback(object? sender)
     {
-        Stopwatch Timer = new();
+        Update();
+        if (this.TimeSource!.IsSynchronous) { DoOutputDispatch(); }
+        else { this.OutputDispatchTrigger.Set(); }
+    }
+
+    private void RunOutputDispatch()
+    {
         while (this.KeepGoing)
         {
-            Timer.Restart();
-            Update();
-            foreach(IOutput Output in this.Outputs) { Output.Dispatch(); } // TODO: If an output gets added while this is running, this crashes.
-            int WaitTime = (int)(this.FramePeriod - Timer.ElapsedMilliseconds);
-            if (WaitTime > 0) { Thread.Sleep(WaitTime); }
+            this.OutputDispatchTrigger.WaitOne();
+            DoOutputDispatch();
         }
+    }
+
+    private void DoOutputDispatch()
+    {
+        foreach (IOutput Out in this.Outputs) { Out.Dispatch(); }
     }
 
     public void SettingWillChange(int controlID)
     {
-        if (controlID == 1) { Monitor.Enter(this.SettingUpdateLock); }
+        if (controlID == 1) { this.SettingUpdateLock.Enter(); }
     }
 
     public void SettingChanged(int controlID)
@@ -155,9 +170,8 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
         if (controlID == 1)
         {
             UpdateSize();
-            Monitor.Exit(this.SettingUpdateLock);
+            this.SettingUpdateLock.Exit();
         }
-        else if (controlID == 2) { this.NoteFinder.AdjustOutputSpeed((uint)this.FramePeriod); }
     }
 
     public int GetCountDiscrete() => this.LEDCount;
@@ -168,220 +182,190 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
     public float GetAdvanceContinuous() => this.OutputAdvanceContinuous;
     public int MaxPossibleUnits { get => this.NoteCount; }
 
-    // These variables are only used to keep inter-frame info for Update(). Do not touch.
-    private float[] LastLEDColours = Array.Empty<float>();
-    private float[] LastLEDPositionsFiltered = Array.Empty<float>(); // Only used when IsCircular is true.
-    private float[] LastLEDSaturations = Array.Empty<float>();
-    private int PrevAdvance;
-    private readonly float[] LastVectorCenters; // Where the center-point of each block was last frame
 
-    private struct InternalNote : IComparable<InternalNote>
+    private struct InternalNoteAmplitude
     {
         /// <summary>The amplitudes of each note, time-smoothed</summary>
-        public float AmplitudeSmooth { get; set; }
+        public float Smooth;
         /// <summary>The amplitudes of each note, with minimal time-smoothing</summary>
-        public float AmplitudeFast { get; set; }
-        /// <summary>The locations of the notes on the scale, range 0 ~ 1</summary>
-        public float Position { get; set; }
-
-        public int CompareTo(InternalNote other) => this.Position.CompareTo(other.Position);
+        public float Fast;
     }
+
+    // These variables are only used to keep inter-frame info for Update(). Do not touch.
+    private float[] NoteChromas;
+    private InternalNoteAmplitude[] NoteAmplitudes;
+
+    private float[] BlockLocations;
+    private short[] BlockNoteIDs;
+    private short BlockCount;
+
+    private float[] PrevBlockLocations;
+    private float[] PrevBlockChromas;
+    private short PrevBlockCount;
 
     public void Update()
     {
-
         lock (this.SettingUpdateLock)
         {
-            InternalNote[] Notes = new InternalNote[this.NoteCount];
-            float AmplitudeSum = 0;
-
             if (this.OutputDataDiscrete.Length != this.LEDCount) { UpdateSize(); }
+            float AmplitudeSum = 0;
 
             // Populate data from the NoteFinder.
             for (int i = 0; i < this.NoteCount; i++)
             {
-                Notes[i].Position = this.NoteFinder.Notes[i].Position / this.BinsPerOctave;
-                Notes[i].AmplitudeSmooth = MathF.Pow(this.NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
-                Notes[i].AmplitudeFast = MathF.Pow(this.NoteFinder.Notes[i].Amplitude, this.LightSiding);
-                AmplitudeSum += Notes[i].AmplitudeSmooth;
+                NoteChromas[i] = this.NoteFinder.Notes[i].Position / this.BinsPerOctave;
+                NoteAmplitudes[i].Smooth = MathF.Pow(this.NoteFinder.Notes[i].AmplitudeFiltered, this.LightSiding);
+                NoteAmplitudes[i].Fast = MathF.Pow(this.NoteFinder.Notes[i].Amplitude, this.LightSiding);
+                AmplitudeSum += NoteAmplitudes[i].Smooth;
             }
 
             // Adjust AmplitudeSum to remove notes that are too weak to be included.
             float AmplitudeSumAdj = 0;
-            for (int i = 0; i < this.NoteCount; i++)
+            int AmpIndex = 0;
+            if (Avx2.IsSupported)
             {
-                Notes[i].AmplitudeSmooth -= this.LEDFloor * AmplitudeSum;
-                if (Notes[i].AmplitudeSmooth / AmplitudeSum < 0) // Note too weak, remove it from consideration.
+                Vector128<float> SumAdj = Vector128<float>.Zero;
+                while (AmpIndex + 4 <= this.NoteCount)
                 {
-                    Notes[i].AmplitudeSmooth = 0;
-                    Notes[i].AmplitudeFast = 0;
+                    Vector128<float> Floor = Vector128.Create(this.LEDFloor);
+                    Vector128<float> AmplitudeSumVec = Vector128.Create(AmplitudeSum);
+
+                    Vector256<float> Amplitudes = Vector256.LoadUnsafe(ref NoteAmplitudes[AmpIndex].Smooth);
+                    Vector128<float> Smooth = Sse.Shuffle(Amplitudes.GetLower(), Amplitudes.GetUpper(), 0b10001000);
+                    Vector128<float> SmoothShrunk = Sse.Subtract(Smooth, Sse.Multiply(Floor, AmplitudeSumVec));
+                    Vector256<float> AmplitudesModified = Avx.Blend(Amplitudes, Avx2.ConvertToVector256Int64(SmoothShrunk.AsUInt32()).AsSingle(), 0b01010101);
+
+                    Vector128<int> AmplitudeMaskInv = Sse2.ShiftRightArithmetic(SmoothShrunk.AsInt32(), 31);
+                    Vector128<float> MaskedSmooth = Sse.AndNot(AmplitudeMaskInv.AsSingle(), SmoothShrunk);
+                    Vector256<ulong> AmplitudeMaskInvBig = Avx2.ConvertToVector256Int64(AmplitudeMaskInv).AsUInt64();
+                    Vector256<float> MaskedAmplitudes = Avx.AndNot(AmplitudeMaskInvBig.AsSingle(), AmplitudesModified);
+                    MaskedAmplitudes.StoreUnsafe(ref NoteAmplitudes[AmpIndex].Smooth);
+                    SumAdj = Sse.Add(SumAdj, MaskedSmooth);
+                    AmpIndex += 4;
                 }
-                AmplitudeSumAdj += Notes[i].AmplitudeSmooth;
+                Vector128<float> SumAdjH = Sse3.HorizontalAdd(SumAdj, SumAdj);
+                AmplitudeSumAdj = SumAdjH[0] + SumAdjH[1];
+            }
+            while (AmpIndex < this.NoteCount) // TODO: if NoteCount is divisible by 4, can skip on AVX2-capable
+            {
+                NoteAmplitudes[AmpIndex].Smooth -= this.LEDFloor * AmplitudeSum;
+                if (NoteAmplitudes[AmpIndex].Smooth / AmplitudeSum < 0) // Note too weak, remove it from consideration.
+                {
+                    NoteAmplitudes[AmpIndex].Smooth = 0;
+                    NoteAmplitudes[AmpIndex].Fast = 0;
+                }
+                AmplitudeSumAdj += NoteAmplitudes[AmpIndex].Smooth;
+                AmpIndex++;
             }
             AmplitudeSum = AmplitudeSumAdj;
             // AmplitudeSum now only includes notes that are large enough (relative to others) to be worth displaying.
+            
+            if (this.IsOrdered) { Array.Sort(NoteChromas, NoteAmplitudes); } // Sort the notes by their location on the scale; map this to the line
 
-            float[] LEDColours = new float[this.LEDCount]; // The colour (range 0 ~ 1) of each LED in the chain.
-            float[] LEDAmplitudes = new float[this.LEDCount]; // The amplitude (time-smoothed) of each LED in the chain.
-            float[] LEDAmplitudesFast = new float[this.LEDCount]; // The amplitude (fast-updating) of each LED in the chain.
-
-            int LEDsFilled = 0; // How many LEDs have been assigned a colour.
-            float VectorPosition = 0; // Where in the continuous line we are (continuous equivalent of LEDsFilled).
-            this.OutputCountContinuous = 0;
-            float[] VectorCenters = new float[this.NoteCount];
-
-            if (this.IsOrdered) { Array.Sort(Notes); } // Sort the notes by their location on the scale; map this to the line
-
-            // Fill the LED slots with available notes.
+            // Convert notes to colour blocks
+            float CurrentBlockPosition = 0F;
+            this.BlockCount = 0;
             for (int NoteIndex = 0; NoteIndex < this.NoteCount; NoteIndex++)
             {
-                // How many of the LEDs should be taken up by this colour.
-                int LEDCountColour = (int)((Notes[NoteIndex].AmplitudeSmooth / AmplitudeSum) * this.LEDCount);
-                // Fill those LEDs with this note's data.
-                for (int LEDIndex = 0; LEDIndex < LEDCountColour && LEDsFilled < this.LEDCount; LEDIndex++)
+                if (NoteAmplitudes[NoteIndex].Smooth > 0F)
                 {
-                    LEDColours[LEDsFilled] = Notes[NoteIndex].Position;
-                    LEDAmplitudes[LEDsFilled] = Notes[NoteIndex].AmplitudeSmooth;
-                    LEDAmplitudesFast[LEDsFilled] = Notes[NoteIndex].AmplitudeFast;
-                    LEDsFilled++;
+                    this.BlockLocations[this.BlockCount] = CurrentBlockPosition;
+                    this.BlockNoteIDs[this.BlockCount] = (short)NoteIndex;
+                    float BlockSize = NoteAmplitudes[NoteIndex].Smooth / AmplitudeSum;
+                    CurrentBlockPosition += BlockSize;
+                    this.BlockCount++;
                 }
-
-                // For continuous outputs
-                float VectorSizeColour = (Notes[NoteIndex].AmplitudeSmooth / AmplitudeSum);
-                if (VectorSizeColour == 0 || float.IsNaN(VectorSizeColour)) { continue; }
-                this.OutputDataContinuous[this.OutputCountContinuous].Location = VectorPosition;
-                this.OutputDataContinuous[this.OutputCountContinuous].Size = VectorSizeColour;
-                VectorCenters[NoteIndex] = VectorPosition + (VectorSizeColour / 2);
-
-                float OutSaturation = (this.SteadyBright ? Notes[NoteIndex].AmplitudeSmooth : Notes[NoteIndex].AmplitudeFast) * this.SaturationAmplifier;
-                if (OutSaturation > 1) { OutSaturation = 1; }
-                if (OutSaturation > LEDLimit) { OutSaturation = LEDLimit; }
-
-                uint Colour = VisualizerTools.CCToRGB(Notes[NoteIndex].Position, 1.0F, OutSaturation);
-                this.OutputDataContinuous[this.OutputCountContinuous].R = (byte)((Colour >> 16) & 0xff);
-                this.OutputDataContinuous[this.OutputCountContinuous].G = (byte)((Colour >> 8) & 0xff);
-                this.OutputDataContinuous[this.OutputCountContinuous].B = (byte)((Colour) & 0xff);
-                this.OutputDataContinuous[this.OutputCountContinuous].Colour = Notes[NoteIndex].Position;
-
-                VectorPosition += VectorSizeColour;
-                this.OutputCountContinuous++;
             }
-
-            // If there are no notes to display, set the first to 0.
-            if (LEDsFilled == 0)
+            if (this.BlockCount != 0)
             {
-                LEDColours[0] = 0;
-                LEDAmplitudes[0] = 0;
-                LEDAmplitudesFast[0] = 0;
-                LEDsFilled++;
+                this.BlockLocations[this.BlockCount] = 1F;
+                this.BlockNoteIDs[this.BlockCount] = -1;
+                this.BlockCount++;
             }
 
-            // Fill the remaining LEDs at the end with the last present colour.
-            // If there are no notes to display, fills the strip with 0s.
-            // If there are notes, this should only fill the last few in case of rounding errors earlier.
-            for (; LEDsFilled < this.LEDCount; LEDsFilled++)
-            {
-                LEDColours[LEDsFilled] = LEDColours[LEDsFilled - 1];
-                LEDAmplitudes[LEDsFilled] = LEDAmplitudes[LEDsFilled - 1];
-                LEDAmplitudesFast[LEDsFilled] = LEDAmplitudesFast[LEDsFilled - 1];
-            }
-
-            // In case of a circular display, we need to try and keep the colours in the same locations between frames.
-            int Advance = 0; // How many LEDs to shift the output by to achieve minimal movement.
-
-            // Advance is not used in non-circular displays.
+            // Find best offset for circular mode
+            float ShiftAverage = 0F;
             if (this.IsCircular)
             {
-                // Used to compare inter-frame difference for different Advance values.
-                float MinDifference = 1e20F;
-
-                // Check every potential Advance value to find the best for this frame.
-                for (int ShiftQty = 0; ShiftQty < this.LEDCount; ShiftQty++)
+                for (int BlockIndex = 0; BlockIndex < this.BlockCount - 1; BlockIndex++)
                 {
-                    float ThisDistance = 0;
+                    if (this.BlockNoteIDs[BlockIndex] == -1) { continue; } // TODO: This shouldn't happen?
+                    float ChromaHere = NoteChromas[this.BlockNoteIDs[BlockIndex]];
+                    float SizeHere = this.BlockLocations[BlockIndex + 1] - this.BlockLocations[BlockIndex];
+                    float CenterHere = this.BlockLocations[BlockIndex] + (SizeHere * 0.5F);
 
-                    // Check how different the colours are at each LED compared to last frame.
-                    for (int LEDIndex = 0; LEDIndex < this.LEDCount; LEDIndex++)
+                    int ClosestBlockIndex = 0;
+                    float ClosestBlockChromaDiff = float.PositiveInfinity;
+                    for (int OtherBlock = 0; OtherBlock < this.PrevBlockCount - 1; OtherBlock++)
                     {
-                        int NewIndex = (LEDIndex + ShiftQty) % this.LEDCount;
-                        float ColourDifference = MinCircleDistance(LastLEDPositionsFiltered[LEDIndex], LEDColours[NewIndex]);
-                        ThisDistance += ColourDifference;
+                        float ChromaThere = PrevBlockChromas[OtherBlock];
+                        float ChromaDiff = MathF.Abs(ChromaHere - ChromaThere);
+                        if (ChromaDiff < ClosestBlockChromaDiff)
+                        {
+                            ClosestBlockIndex = OtherBlock;
+                            ClosestBlockChromaDiff = ChromaDiff;
+                        }
                     }
 
-                    // Compare the Advance value of this and last frame if we were to use ShiftQty as the new Advance.
-                    int AdvanceDifference = Math.Abs(PrevAdvance - ShiftQty);
-                    if (AdvanceDifference > this.LEDCount / 2) AdvanceDifference = this.LEDCount - AdvanceDifference;
+                    float SizeThere = this.PrevBlockLocations[ClosestBlockIndex + 1] - this.PrevBlockLocations[ClosestBlockIndex];
+                    float CenterThere = this.PrevBlockLocations[ClosestBlockIndex] + (SizeThere * 0.5F);
+                    float DirectDiff = CenterThere - CenterHere;
+                    float WrapDiff = ((CenterThere < CenterHere) ? CenterThere + 1F : CenterThere - 1F) - CenterHere;
+                    float MinDistance = (MathF.Abs(DirectDiff) < MathF.Abs(WrapDiff)) ? DirectDiff : WrapDiff;
+                    ShiftAverage += MinDistance * SizeHere;
+                }
+                ShiftAverage = (ShiftAverage + 1F) % 1F;
+            }
 
-                    float NormAdvance = (float)AdvanceDifference / this.LEDCount; // Normalized advance difference (range 0 ~ 1)
-                    ThisDistance += NormAdvance * NormAdvance;
+            // Populate LEDs
+            if (this.BlockCount == 0) { this.OutputDataDiscrete.AsSpan().Clear(); }
+            else
+            {
+                int LEDShift = (int)MathF.Round(ShiftAverage * this.LEDCount);
+                int LEDIndex = 0;
+                for (int BlockIndex = 0; BlockIndex < this.BlockCount - 1; BlockIndex++)
+                {
+                    short NoteIDHere = this.BlockNoteIDs[BlockIndex];
+                    float ChromaHere = this.NoteChromas[NoteIDHere];
+                    float SizeHere = this.BlockLocations[BlockIndex + 1] - this.BlockLocations[BlockIndex];
+                    int LEDCountHere = (int)MathF.Round(SizeHere * this.LEDCount);
+                    if (BlockIndex == this.BlockCount - 2) { LEDCountHere = this.LEDCount - LEDIndex; }
 
-                    if (ThisDistance < MinDifference) // We found a better shift distance.
+                    InternalNoteAmplitude AmplitudesHere = this.NoteAmplitudes[NoteIDHere];
+                    float OutSaturation = (this.SteadyBright ? AmplitudesHere.Smooth : AmplitudesHere.Fast) * this.SaturationAmplifier;
+                    OutSaturation = MathF.Min(OutSaturation, this.LEDLimit);
+                    uint ColourHere = VisualizerTools.CCToRGB(ChromaHere, 1.0F, OutSaturation);
+
+                    this.OutputDataContinuous[BlockIndex].Colour = ChromaHere;
+                    this.OutputDataContinuous[BlockIndex].Location = this.BlockLocations[BlockIndex];
+                    this.OutputDataContinuous[BlockIndex].Size = SizeHere;
+                    this.OutputDataContinuous[BlockIndex].R = (byte)((ColourHere >> 16) & 0xFF);
+                    this.OutputDataContinuous[BlockIndex].G = (byte)((ColourHere >> 8) & 0xFF);
+                    this.OutputDataContinuous[BlockIndex].B = (byte)(ColourHere & 0xFF);
+
+                    if (LEDCountHere <= 0) { continue; }
+                    int StartLED = (LEDIndex + LEDShift) % this.LEDCount;
+                    int EndLED = (LEDIndex + LEDShift + LEDCountHere) % this.LEDCount;
+                    if (EndLED <= StartLED) // wrap-around
                     {
-                        MinDifference = ThisDistance;
-                        Advance = ShiftQty;
+                        this.OutputDataDiscrete.AsSpan(StartLED).Fill(ColourHere);
+                        this.OutputDataDiscrete.AsSpan(0, EndLED).Fill(ColourHere);
                     }
+                    else { this.OutputDataDiscrete.AsSpan(StartLED, LEDCountHere).Fill(ColourHere); }
+                    LEDIndex += LEDCountHere;
                 }
-
-                // For continuous output mode
-                float VectorCenterOffset = 0;
-                for (int NoteIndex = 0; NoteIndex < this.NoteCount; NoteIndex++)
-                {
-                    VectorCenterOffset += (VectorCenters[NoteIndex] - LastVectorCenters[NoteIndex]) * Notes[NoteIndex].AmplitudeSmooth; // TODO: CONSIDER USINGBLOCK SIZE INSTEAD OF AMPLITUDE
-                }
-                //VectorCenterOffset /= (this.OutputCountContinuous + 2); // This is now an average offset.
-                const float IIR = 0.6F;
-                this.OutputAdvanceContinuous = (VectorCenterOffset * IIR) + (this.OutputAdvanceContinuous * (1 - IIR));
-                if (float.IsNaN(this.OutputAdvanceContinuous)) { this.OutputAdvanceContinuous = 0; }
             }
-            this.PrevAdvance = Advance;
+            this.OutputCountContinuous = Math.Max(0, this.BlockCount - 1);
+            this.OutputAdvanceContinuous = ShiftAverage;
 
-            // Shift the LEDs by Advance, then output.
-            for (int LEDIndex = 0; LEDIndex < this.LEDCount; LEDIndex++)
+            // Save off data for next cycle
+            this.BlockLocations.CopyTo(this.PrevBlockLocations);
+            this.PrevBlockCount = this.BlockCount;
+            for (int BlockIndex = 0; BlockIndex < this.PrevBlockChromas.Length; BlockIndex++)
             {
-                // The index, shifted by Advance.
-                int ShiftedIndex = (LEDIndex + Advance + this.LEDCount) % this.LEDCount;
-
-                float Saturation = LEDAmplitudes[ShiftedIndex] * this.SaturationAmplifier;
-                float SaturationFast = LEDAmplitudesFast[ShiftedIndex] * this.SaturationAmplifier;
-                if (SaturationFast > 1) { SaturationFast = 1; }
-
-                LastLEDColours[LEDIndex] = LEDColours[ShiftedIndex];
-                LastLEDSaturations[LEDIndex] = Saturation;
-
-                float OutSaturation = (this.SteadyBright ? Saturation : SaturationFast);
-                if (OutSaturation > 1) { OutSaturation = 1; }
-                if (OutSaturation > LEDLimit) { OutSaturation = LEDLimit; }
-
-                uint Colour = VisualizerTools.CCToRGB(LastLEDColours[LEDIndex], 1.0F, OutSaturation);
-
-                this.OutputDataDiscrete[LEDIndex] = Colour;
-            }
-
-            if (this.IsCircular)
-            {
-                for (int i = 0; i < this.LEDCount; i++)
-                {
-                    LastLEDPositionsFiltered[i] = (LastLEDPositionsFiltered[i] * 0.9F) + (LastLEDColours[i] * 0.1F);
-                }
-                for (int i = 0; i < this.NoteCount; i++) { LastVectorCenters[i] = VectorCenters[i]; }
+                short NoteID = this.BlockNoteIDs[BlockIndex];
+                this.PrevBlockChromas[BlockIndex] = NoteID > 0 ? this.NoteChromas[NoteID] : 0F;
             }
         }
-    }
-
-    /// <summary> Gets the shortest distance of two points around the circumference of a circle, where the circumference is 1.0. </summary>
-    /// <param name="a"> Location of point A. </param>
-    /// <param name="b"> Location of point B. </param>
-    /// <returns> The (positive) distance between the two points using the more direct route. </returns>
-    private static float MinCircleDistance(float a, float b)
-    {
-        // The distance by just going straight.
-        float DirectDiff = Math.Abs(a - b);
-
-        // The distance if we wrap around the "ends" of the circle.
-        float WrapDiff = (a < b) ? (a + 1) : (a - 1);
-        WrapDiff -= b;
-        WrapDiff = Math.Abs(WrapDiff);
-
-        return Math.Min(DirectDiff, WrapDiff);
     }
 }
