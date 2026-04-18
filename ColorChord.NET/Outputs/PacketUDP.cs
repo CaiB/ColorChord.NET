@@ -454,7 +454,7 @@ namespace ColorChord.NET.Outputs
             if (this.SendBuffer.Length < this.E131Template.Length + 512) { this.SendBuffer = new byte[this.E131Template.Length + 512]; }
             byte[] Output = this.SendBuffer;
 
-            this.E131Template.CopyTo(Output);
+            this.E131Template.AsSpan().CopyTo(Output);
 
             int DMPLength = SourceLength + 1 + 10; // data length, 1 for start code, 10 for all other DMP header data.
             int FrameLength = 77 + DMPLength; // 77 for frame header

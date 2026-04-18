@@ -359,7 +359,7 @@ public class Linear : IVisualizer, IDiscrete1D, IContinuous1D, IControllableAttr
             this.OutputAdvanceContinuous = ShiftAverage;
 
             // Save off data for next cycle
-            this.BlockLocations.CopyTo(this.PrevBlockLocations);
+            this.BlockLocations.AsSpan().CopyTo(this.PrevBlockLocations);
             this.PrevBlockCount = this.BlockCount;
             for (int BlockIndex = 0; BlockIndex < this.PrevBlockChromas.Length; BlockIndex++)
             {

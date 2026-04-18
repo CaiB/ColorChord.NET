@@ -126,7 +126,7 @@ public class Spectrum : ID3D12DisplayMode, IConfigurableAttr
         RootParameter1[] RootParameters = [RootDataParameter, SRVParam];
 
         Span<nint> DescriptorHeaps = [(nint)this.Host.BufferDescriptorHeap.Heap];
-        directCommandList.NativeList->SetDescriptorHeaps((uint)DescriptorHeaps.Length, (ID3D12DescriptorHeap**)DescriptorHeaps.GetPointer());
+        directCommandList.NativeList->SetDescriptorHeaps((uint)DescriptorHeaps.Length, (ID3D12DescriptorHeap**)((ReadOnlySpan<nint>)DescriptorHeaps).GetPointer());
         
         this.Shader = new(device, VertexInputs, "VS_Passthrough2.cso", "PS_Spectrum.cso", rootParameters: RootParameters);
 
