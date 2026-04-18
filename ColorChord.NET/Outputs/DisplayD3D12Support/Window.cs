@@ -1,82 +1,79 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;
 
 public class Window
 {
+    private readonly IntPtr Instance;
+    private readonly IntPtr BackgroundBrush;
+    private readonly ushort ClassAtom;
+    private readonly Win32API.WindowProcedure WindowProcObj;
+    private GCHandle WindowProcHandle;
+    private int InitialClientWidth = 800;
+    private int InitialClientHeight = 600;
+    
     public IntPtr Handle { get; private set; }
-    private IntPtr Instance;
-    public uint BackgroundColour { get; init; } = 0xCC000000; // 0xBBGGRR00
     public string WindowTitle { get; init; } = "Test Window";
-    private int InitialWidth = 800;
+    public uint BackgroundColour { get; init; } = 0xCC000000; // 0xBBGGRR00
+
+    public RectI32 ClientSize
+    {
+        get
+        {
+            if (this.Handle == 0) { return new(this.InitialClientWidth, this.InitialClientHeight); }
+            Win32API.GetClientRect(this.Handle, out RectI32 ClientRect);
+            return ClientRect;
+        }
+        set
+        {
+            if (this.Handle == 0)
+            {
+                this.InitialClientWidth = value.Width;
+                this.InitialClientHeight = value.Height;
+            }
+            else
+            {
+                Win32API.GetWindowRect(this.Handle, out RectI32 PrevWindowRect);
+                RectI32 NewRect = PrevWindowRect with
+                {
+                    Right = PrevWindowRect.Left + value.Width,
+                    Bottom = PrevWindowRect.Bottom + value.Height
+                };
+                Win32API.AdjustWindowRectEx(ref NewRect, (WindowStyle)Win32API.GetWindowLongW(this.Handle, WindowMemoryOffset.WindowStyle), false, (WindowStyleEx)Win32API.GetWindowLongW(this.Handle, WindowMemoryOffset.WindowStyleEx));
+                Win32API.MoveWindow(this.Handle, NewRect.Left, NewRect.Top, NewRect.Width, NewRect.Height, true);
+            }
+        }
+    }
     public int Width
     {
-        get
-        {
-            Win32API.GetClientRect(this.Handle, out RectI32 ClientRect);
-            return ClientRect.Right - ClientRect.Left;
-        }
+        get => this.ClientSize.Width;
         set
         {
-            if (this.Handle == 0) { this.InitialWidth = value; }
-            else
-            {
-                Win32API.GetWindowRect(this.Handle, out RectI32 PrevWindowRect);
-                RectI32 NewRect = new()
-                {
-                    Left = PrevWindowRect.Left, // TODO: is it fine to use window here?
-                    Right = PrevWindowRect.Left + value,
-                    Top = PrevWindowRect.Top,
-                    Bottom = PrevWindowRect.Bottom
-                };
-                Win32API.AdjustWindowRectEx(NewRect, (WindowStyle)Win32API.GetWindowLongW(this.Handle, WindowMemoryOffset.WindowStyle), false, (WindowStyleEx)Win32API.GetWindowLongW(this.Handle, WindowMemoryOffset.WindowStyleEx));
-                Win32API.MoveWindow(this.Handle, NewRect.Left, NewRect.Top, NewRect.Right - NewRect.Left, NewRect.Bottom - NewRect.Top, true);
-            }
+            RectI32 CurrentSize = this.ClientSize;
+            this.ClientSize = CurrentSize with { Right = CurrentSize.Left + value };
         }
     }
-    private int InitialHeight = 600;
     public int Height
     {
-        get
-        {
-            Win32API.GetClientRect(this.Handle, out RectI32 ClientRect);
-            return ClientRect.Bottom - ClientRect.Top;
-        }
+        get => this.ClientSize.Height;
         set
         {
-            if (this.Handle == 0) { this.InitialHeight = value; }
-            else
-            {
-                Win32API.GetWindowRect(this.Handle, out RectI32 PrevWindowRect);
-                RectI32 NewRect = new()
-                {
-                    Left = PrevWindowRect.Left, // TODO: is it fine to use window here?
-                    Right = PrevWindowRect.Right,
-                    Top = PrevWindowRect.Top,
-                    Bottom = PrevWindowRect.Top + value
-                };
-                Win32API.AdjustWindowRectEx(NewRect, (WindowStyle)Win32API.GetWindowLongW(this.Handle, WindowMemoryOffset.WindowStyle), false, (WindowStyleEx)Win32API.GetWindowLongW(this.Handle, WindowMemoryOffset.WindowStyleEx));
-                Win32API.MoveWindow(this.Handle, NewRect.Left, NewRect.Top, NewRect.Right - NewRect.Left, NewRect.Bottom - NewRect.Top, true);
-            }
+            RectI32 CurrentSize = this.ClientSize;
+            this.ClientSize = CurrentSize with { Bottom = CurrentSize.Top + value };
         }
     }
 
-    public readonly IntPtr BackgroundBrush;
-    private ushort ClassAtom;
-    private Win32API.WindowProcedure WindowProcObj;
-    private GCHandle WindowProcHandle;
-    private bool Destroying = false;
-
     public event EventHandler? OnResize, OnClose;
+    private bool Destroying = false;
 
     public Window()
     {
         this.Instance = Process.GetCurrentProcess().MainModule!.BaseAddress; // TODO: See if we can just get this passed in somehow - or use GetModuleHandleW
         this.BackgroundBrush = Win32API.CreateSolidBrush(this.BackgroundColour >>> 8);
         this.WindowProcObj = BaseWindowProcedure;
+        Win32API.SetProcessDPIAware();
 
         WindowClass Class = new()
         {
@@ -98,7 +95,12 @@ public class Window
 
     public void Create()
     {
-        this.Handle = Win32API.CreateWindowEx(WindowStyleEx.NoRedirectionBitmap, ClassAtom, this.WindowTitle, WindowStyle.OverlappedWindow | WindowStyle.Visible, 0, 0, InitialWidth, InitialHeight, IntPtr.Zero, IntPtr.Zero, this.Instance, IntPtr.Zero);
+        const WindowStyle INIT_STYLE = WindowStyle.OverlappedWindow | WindowStyle.Visible;
+        const WindowStyleEx INIT_STYLE_EX = WindowStyleEx.NoRedirectionBitmap;
+        RectI32 InitialSize = new(this.InitialClientWidth, this.InitialClientHeight);
+        Win32API.AdjustWindowRectEx(ref InitialSize, INIT_STYLE, false, INIT_STYLE_EX);
+
+        this.Handle = Win32API.CreateWindowEx(INIT_STYLE_EX, ClassAtom, this.WindowTitle, INIT_STYLE, int.MinValue, int.MinValue, InitialSize.Width, InitialSize.Height, IntPtr.Zero, IntPtr.Zero, this.Instance, IntPtr.Zero);
         if (this.Handle == IntPtr.Zero) { throw new Exception($"Creating the window resulted in error 0x{Marshal.GetLastWin32Error():X8}"); }
         ColorChord.OnStopped += DoDestroy;
     }
@@ -121,20 +123,7 @@ public class Window
                 if (this.Destroying && Message.MessageID == MessageID.WM_NULL) { Win32API.DestroyWindow(this.Handle); }
 
                 Win32API.TranslateMessage(Message);
-                Win32API.DispatchMessage(Message); // TODO: This seems wasteful, since it'll only ever go to this window's proc
-
-                // Do any additional handling here
-                switch (Message.MessageID)
-                {
-                    case MessageID.WM_NULL: continue;
-                    case MessageID.WM_QUERYENDSESSION:
-                        // TODO: Handle this
-                        break;
-                    case MessageID.WM_ENDSESSION:
-                        // TODO: Handle this
-                        break;
-
-                }
+                Win32API.DispatchMessage(Message);
             }
             else { throw new Exception("An error occurred in the message pump."); }
         }
@@ -152,9 +141,7 @@ public class Window
         switch (messageID)
         {
             case MessageID.WM_NULL: break;
-            case MessageID.WM_PAINT:
-                // TODO: Handle this event
-                break;
+            case MessageID.WM_PAINT: break;
             case MessageID.WM_SIZE:
                 this.OnResize?.Invoke(this, new()); // TODO: remove new
                 break;
@@ -163,11 +150,15 @@ public class Window
             case MessageID.WM_CLOSE:
                 this.OnClose?.Invoke(this, new());
                 return 0;
+            case MessageID.WM_QUERYENDSESSION:
+                this.OnClose?.Invoke(this, new());
+                return 1;
             case MessageID.WM_DESTROY:
                 Win32API.PostQuitMessage(0);
                 break;
-
+            default:
+                return Win32API.DefWindowProc(windowHandle, messageID, wParam, lParam);
         }
-        return Win32API.DefWindowProc(windowHandle, messageID, wParam, lParam);
+        return 0;
     }
 }

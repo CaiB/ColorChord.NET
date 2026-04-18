@@ -30,10 +30,33 @@ public readonly record struct Point
 /// <remarks>struct RECT in windef.h (via Windows.h)</remarks>
 public readonly record struct RectI32
 {
-    public readonly int Left { get; init; }
-    public readonly int Top { get; init; }
-    public readonly int Right { get; init; }
-    public readonly int Bottom { get; init; }
+    private readonly int B_Left;
+    private readonly int B_Top;
+    private readonly int B_Right;
+    private readonly int B_Bottom;
+
+    public readonly int Left { get => this.B_Left; init => this.B_Left = value; }
+    public readonly int Top { get => this.B_Top; init => this.B_Top = value; }
+    public readonly int Right { get => this.B_Right; init => this.B_Right = value; }
+    public readonly int Bottom { get => this.B_Bottom; init => this.B_Bottom = value; }
+    public readonly int Width { get => this.Right - this.Left; }
+    public readonly int Height { get => this.Bottom - this.Top; }
+
+    public RectI32(int width, int height)
+    {
+        this.Left = 0;
+        this.Right = width;
+        this.Top = 0;
+        this.Bottom = height;
+    }
+
+    public RectI32(int left, int top, int right, int bottom)
+    {
+        this.Left = left;
+        this.Top = top;
+        this.Right = right;
+        this.Bottom = bottom;
+    }
 }
 
 /// <summary>Contains the window class attributes that are registered by the RegisterClass function.</summary>

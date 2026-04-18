@@ -193,7 +193,7 @@ public static partial class Win32API
     /// <returns></returns>
     [LibraryImport("user32.dll", EntryPoint = "AdjustWindowRectEx")]
     [return: MarshalAs(UnmanagedType.I4)]
-    public static partial bool AdjustWindowRectEx(RectI32 rect, WindowStyle windowStyle, [MarshalAs(UnmanagedType.I4)] bool hasMenu, WindowStyleEx extendedWindowStyle);
+    public static partial bool AdjustWindowRectEx(ref RectI32 rect, WindowStyle windowStyle, [MarshalAs(UnmanagedType.I4)] bool hasMenu, WindowStyleEx extendedWindowStyle);
 
     /// <summary>Changes the position and dimensions of the specified window. For a top-level window, the position and dimensions are relative to the upper-left corner of the screen.</summary>
     /// <param name="windowHandle">A handle to the window.</param>
@@ -222,6 +222,12 @@ public static partial class Win32API
     [LibraryImport("user32.dll", EntryPoint = "DestroyWindow")]
     [return: MarshalAs(UnmanagedType.I4)]
     public static partial bool DestroyWindow(IntPtr windowHandle);
+
+    /// <summary>Sets the process-default DPI awareness to system-DPI awareness.</summary>
+    /// <returns>Whether the function succeeded.</returns>
+    [LibraryImport("user32.dll", EntryPoint = "SetProcessDPIAware")]
+    [return: MarshalAs(UnmanagedType.I4)]
+    public static partial bool SetProcessDPIAware();
 
     /// <summary>Waits until the specified object is in the signaled state, an I/O completion routine or asynchronous procedure call (APC) is queued to the thread, or the time-out interval elapses.</summary>
     /// <param name="handle">A handle to the object. If this handle is closed while the wait is still pending, the function's behavior is undefined. The handle must have the SYNCHRONIZE access right.</param>
