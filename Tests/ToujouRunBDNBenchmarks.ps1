@@ -29,7 +29,7 @@ try
     foreach ($Class in $BenchmarkClasses)
     {
         Write-Host "Running benchmarks in class '$Class'...";
-        & .\Benchmarks.exe --exporters json --filter "${Class}.*" --artifacts $ResultsDir --memory --disasm | Out-Null; #--job Long;
+        & .\Benchmarks.exe --exporters json --filter "${Class}.*" --artifacts $ResultsDir --memory --disasm --job Long | Out-Null;
 
         [string] $LogFile = Get-Item $(Join-Path $ResultsDir "${Class}*.log"); # TODO: Not sure if this is guaranteed unique
         if (!(Test-Path $LogFile)) { Write-Error 'No log file found'; continue; }
