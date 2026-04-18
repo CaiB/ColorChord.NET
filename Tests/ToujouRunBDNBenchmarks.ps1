@@ -9,6 +9,8 @@ using namespace System.IO;
 #$env:APPVEYOR_BUILD_VERSION = '0.0.0.0-toujou';
 #./DoAutobuild.ps1
 
+$InformationPreference = 'Continue';
+
 if (!(Test-Path '../BenchmarkResults' -PathType 'Container')) { New-Item -ItemType 'Directory' -Path '../BenchmarkResults' | Out-Null; }
 $ResultsDir = Resolve-Path '../BenchmarkResults';
 
@@ -20,10 +22,8 @@ Write-Host 'Build finished.';
 Push-Location './Tests/Benchmarks/PublishResult/';
 try
 {
-    [string[]] $BenchmarkClasses = $(& .\Benchmarks.exe --list flat) `
-        | ForEach-Object { if ($_ -Match '^ColorChord\.NET\.Tests\.Benchmarks\.([^.]+)\..*$') { $Matches[1]; } } `
-        | Select-Object -Unique `
-        | ForEach-Object { "ColorChord.NET.Tests.Benchmarks.$_"; };
+    Write-Information 'Found benchmarks:';
+    & .\Benchmarks.exe --list tree | Write-Information;
 
     Write-Host "Found $($BenchmarkClasses.Count) benchmark classes.";
     foreach ($Class in $BenchmarkClasses)
@@ -31,19 +31,18 @@ try
         Write-Host "Running benchmarks in class '$Class'...";
         & .\Benchmarks.exe --exporters json --filter "${Class}.*" --artifacts $ResultsDir --memory --disasm --job Long | Out-Null;
 
-        [string] $LogFile = Get-Item $(Join-Path $ResultsDir "${Class}*.log"); # TODO: Not sure if this is guaranteed unique
-        if (!(Test-Path $LogFile)) { Write-Error 'No log file found'; continue; }
-        [StreamReader] $LogReader = [File]::OpenText($LogFile);
-        [bool] $InLogExportSection = $false;
-        [string] $LogLine = $LogReader.ReadLine();
-        while (!$LogReader.EndOfStream)
-        {
-            if ($LogLine -EQ '// * Export *') { $InLogExportSection = $true; }
-            elseif ($InLogExportSection -AND [string]::IsNullOrWhiteSpace($LogLine)) { $InLogExportSection = $false; }
-            elseif ($InLogExportSection -AND ($LogLine -Match '^\s*(.*\.json)$')) { Write-Output $Matches[1]; }
-            $LogLine = $LogReader.ReadLine();
-        }
-        $LogReader.Dispose();
+    [string] $LogFile = Get-Item $(Join-Path $ResultsDir '*.log'); # TODO: Not sure if this is guaranteed unique
+    if ([string]::IsNullOrEmpty($LogFile)) { Write-Error 'No log file found'; continue; }
+    [StreamReader] $LogReader = [File]::OpenText($LogFile);
+    [bool] $InLogExportSection = $false;
+    [string] $LogLine = $LogReader.ReadLine();
+    while (!$LogReader.EndOfStream)
+    {
+        if ($LogLine -EQ '// * Export *') { $InLogExportSection = $true; }
+        elseif ($InLogExportSection -AND [string]::IsNullOrWhiteSpace($LogLine)) { $InLogExportSection = $false; }
+        elseif ($InLogExportSection -AND ($LogLine -Match '^\s*(.*\.json)$')) { Write-Output $Matches[1]; }
+        $LogLine = $LogReader.ReadLine();
     }
+    $LogReader.Dispose();
 }
 finally { Pop-Location; }
