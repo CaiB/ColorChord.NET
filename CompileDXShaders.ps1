@@ -15,6 +15,8 @@ param
 
 [string] $FXC = Join-Path $FXCPath 'fxc.exe';
 
+if (!(Test-Path $CompiledPath)) {New-Item $CompiledPath -ItemType 'Directory' | Out-Null; }
+
 Get-ChildItem $ShadersPath -Filter '*.hlsl' | ForEach-Object `
 {
     [string] $FileName = $_.Name;
