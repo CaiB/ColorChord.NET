@@ -546,10 +546,10 @@ public unsafe class DisplayD3D12 : IOutput, IThreadedInstance
                 DWMTimingInfo TimingInfo = new() { cbSize = (uint)sizeof(DWMTimingInfo) };
                 ThrowIfFailed(Win32API.DwmGetCompositionTimingInfo(0, ref TimingInfo));
                 Win32API.QueryPerformanceCounter(out ulong QPC);
-                uint Margin = (uint)(this.LatencyReductionMargin * 10000); // TODO: Set this based on how long recent frames took to render
+                int Margin = (int)(this.LatencyReductionMargin * 10000); // TODO: Set this based on how long recent frames took to render
 
                 this.DispatchRenderGate.Reset();
-                ulong NextRenderDeadline = ((TimingInfo.qpcCompose > QPC) ? TimingInfo.qpcCompose : (TimingInfo.qpcCompose + TimingInfo.qpcRefreshPeriod)) - Margin;
+                ulong NextRenderDeadline = (ulong)((long)((TimingInfo.qpcCompose > QPC) ? TimingInfo.qpcCompose : (TimingInfo.qpcCompose + TimingInfo.qpcRefreshPeriod)) - Margin);
                 ulong NextAudioBuffer = this.SourceForRenderDelay!.LastBufferArrivalTime + this.SourceForRenderDelay.BufferPeriodTimerTicks;
                 if (NextRenderDeadline > NextAudioBuffer)
                 {

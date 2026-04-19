@@ -26,6 +26,9 @@ public class RadialPoles : DisplayModeBase2D
     [ConfigInt("Repetitions", 1, 1000, 1)]
     public uint Repetitions;
 
+    [ConfigFloat("Advance", 0.0F, 1.0F, 0.0F)]
+    public float Advance;
+
     private struct RootData
     {
         public uint Width;
@@ -58,7 +61,7 @@ public class RadialPoles : DisplayModeBase2D
         Width = (uint)this.Host.WindowWidth,
         Height = (uint)this.Host.WindowHeight,
         PoleCount = (uint)this.RawDataIn.Length,
-        Advance = MathF.PI / 2F,
+        Advance = -(this.Advance * MathF.Tau) - MathF.PI / 2,
         ScaleFactor = this.ScaleFactor,
         Exponent = this.ScaleExponent,
         CenterBlank = this.CenterSize,

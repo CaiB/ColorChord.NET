@@ -268,3 +268,4 @@ Tests/LatencyTest/**/*.wav
 Tests/LatencyTest/**/*.xlsx
 Tests/LatencyTest/**/*.png
 Tests/LatencyTest/**/*.txt
+Tests/LatencyTest/**/*.json

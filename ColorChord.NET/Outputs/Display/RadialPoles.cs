@@ -25,6 +25,9 @@ public class RadialPoles : IDisplayMode, IConfigurableAttr
     [ConfigFloat("ScaleExponent", 0.0F, 10.0F, 1.6F)]
     public float ScaleExponent;
 
+    [ConfigFloat("Advance", 0.0F, 1.0F, 0.0F)]
+    public float Advance;
+
     private Shader? Shader;
 
     private float[] Geometry = new float[] // {[X,Y]} x 6
@@ -99,6 +102,7 @@ public class RadialPoles : IDisplayMode, IConfigurableAttr
         GL.Uniform1(this.LocationCenterBlank, this.CenterSize);
         this.LocationWidthOverride = this.Shader.GetUniformLocation("WidthOverride");
         this.LocationAdvance = this.Shader.GetUniformLocation("Advance");
+        GL.Uniform1(this.LocationAdvance, -this.Advance);
 
         // Prepare and upload vertex data
         GL.BindVertexArray(this.VertexArrayHandle);
