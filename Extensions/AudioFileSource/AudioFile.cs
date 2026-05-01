@@ -66,7 +66,7 @@ public class AudioFile : IAudioSource
 
     private void ReadOnThread()
     {
-        while (this.NoteFinder != null && this.KeepGoing && this.FilesToRead.Any())
+        while (this.NoteFinder != null && this.KeepGoing && this.FilesToRead.Count != 0)
         {
             string NewFile = this.FilesToRead[0];
             this.FilesToRead.RemoveAt(0);
@@ -78,7 +78,7 @@ public class AudioFile : IAudioSource
             int Channels = InputStream.WaveFormat.Channels;
             this.SampleRate = (uint)InputStream.WaveFormat.SampleRate;
             this.NoteFinder.SetSampleRate(InputStream.WaveFormat.SampleRate);
-            float[] FloatBuffer = Array.Empty<float>();
+            float[] FloatBuffer = [];
             while (this.KeepGoing && InputStream.HasData(sizeof(float)))
             {
                 if (!this.NoteFinder.IsBufferAvailableToWrite()) { Thread.Sleep(10); continue; }

@@ -2,19 +2,13 @@
 
 namespace ColorChord.NET.API.Controllers;
 
-public abstract class Controller : IConfigurableAttr
+public abstract class Controller(string name, Dictionary<string, object> config, IControllerInterface controllerInterface) : IConfigurableAttr
 {
     /// <summary>The name of this specific controller instance, must be unique.</summary>
-    public string Name { get; private init; }
+    public string Name { get; private init; } = name;
 
     /// <summary>The interface with which this controller interacts with ColorChord.NET through.</summary>
-    public IControllerInterface Interface { get; private init; }
-
-    public Controller(string name, Dictionary<string, object> config, IControllerInterface controllerInterface)
-    {
-        this.Name = name;
-        this.Interface = controllerInterface;
-    }
+    public IControllerInterface Interface { get; private init; } = controllerInterface;
 
     /// <summary>Called when the controller is started, after having its configurable settings configured.</summary>
     public abstract void Start();

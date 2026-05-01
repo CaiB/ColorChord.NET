@@ -15,7 +15,7 @@ using static Vortice.Win32.Graphics.Direct3D12.Apis;
 
 namespace ColorChord.NET.Outputs.DisplayD3D12Support;
 
-public abstract class DisplayModeBase2D : ID3D12DisplayMode, IConfigurableAttr
+public abstract class DisplayModeBase2D(DisplayD3D12 host, IVisualizer visualizer, Dictionary<string, object> config) : ID3D12DisplayMode, IConfigurableAttr
 {
     private readonly Vector2[] Vertices =
     [
@@ -25,12 +25,7 @@ public abstract class DisplayModeBase2D : ID3D12DisplayMode, IConfigurableAttr
     ];
     private VertexBuffer<Vector2>? VertexBuffer;
 
-    protected readonly DisplayD3D12 Host;
-    
-    public DisplayModeBase2D(DisplayD3D12 host, IVisualizer visualizer, Dictionary<string, object> config)
-    {
-        this.Host = host;
-    }
+    protected readonly DisplayD3D12 Host = host;
 
     protected unsafe InputElementDescription[] LoadGeometry(ID3D12Device2* device, CommandList copyCommandList)
     {

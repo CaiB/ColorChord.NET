@@ -374,7 +374,7 @@ namespace ColorChord.NET
             Environment.Exit(-2);
         }
 
-        private static void CreateInstances<T>(List<Dictionary<string, object>> configData, string defaultNamespace, Dictionary<string, T> output, string friendlyNameSingular, string friendlyNamePlural) where T : IConfigurableAttr
+        private static void CreateInstances<T>(List<Dictionary<string, object>> configData, string defaultNamespace, Dictionary<string, T> output, string friendlyNameSingular, string friendlyNamePlural) where T : class, IConfigurableAttr
         {
             if (configData.Count > 0) { Log.Info($"Creating {configData.Count} {(configData.Count == 1 ? friendlyNameSingular : friendlyNamePlural)}..."); }
             else { Log.Info($"No {friendlyNamePlural} were found in the config file."); }

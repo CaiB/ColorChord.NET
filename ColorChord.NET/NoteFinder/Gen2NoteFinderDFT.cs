@@ -13,7 +13,7 @@ namespace ColorChord.NET.NoteFinder;
 
 /// <summary> A carefully optimized DFT implementation that creates clean and responsive data. </summary>
 /// This implementation contains many quite particular choices, optimizations, and implementation details I worked on for years to fine-tune.
-/// Data is provided through the standard mechanism in <see cref="Gen2NoteFinder.Cycle"/>. This data is processed in <see cref="AddAudioData(short[], uint)"/>,
+/// Data is provided through the standard mechanism in <see cref="Gen2NoteFinder.Cycle"/>. This data is processed in <see cref="AddAudioData(ReadOnlySpan{short})"/>,
 /// which will periodically call <see cref="CalculateBins(uint)"/> to snapshot the state of the raw bins. It will also trigger any timing receivers that have
 /// subscribed to periodic events. Then, when a visualizer or other output mechanism wants to use the data, it will call <see cref="Gen2NoteFinder.UpdateOutputs"/>
 /// which in turn will call <see cref="CalculateOutput"/>. This will merge together all of the data that has been received since the last output cycle,
@@ -54,7 +54,7 @@ public sealed class Gen2NoteFinderDFT
     public uint BinsPerOctave { get; private init; }
 
     /// <summary> How long our sample window is. </summary>
-    public uint MaxPresentWindowSize { get; private init; } = 8192;
+    public uint MaxPresentWindowSize { get; private init; }
 
     /// <summary> The sample rate of the incoming audio signal, and our reference waveforms. </summary>
     /// <remarks> Use <see cref="UpdateSampleRate(uint)"/> to change this and trigger all needed internal changes. </remarks>
@@ -186,7 +186,7 @@ public sealed class Gen2NoteFinderDFT
         {
             float BinFrequency;
             uint ThisBufferSize;
-            float ThisOctaveStart = StartFrequency * MathF.Pow(2, Bin / BinsPerOctave);
+            float ThisOctaveStart = StartFrequency * MathF.Pow(2, (float)(Bin / BinsPerOctave)); // Specifically relying on integer division here
             BinFrequency = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin);
             float NextBinFrequencyUp = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin + this.TargetBinRange);
             float NextBinFrequencyDown = CalculateNoteFrequency(StartFrequency, BinsPerOctave, Bin - this.TargetBinRange);

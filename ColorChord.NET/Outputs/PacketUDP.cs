@@ -185,7 +185,10 @@ namespace ColorChord.NET.Outputs
         }
 
         public void Start() { }
-        public void Stop() { }
+        public void Stop()
+        {
+            this.Sender.Dispose();
+        }
 
         /// <summary>Takes a string, and converts it to a null-terminated UTF8 representation, within a length bound.</summary>
         /// <remarks>The array will be of length maxBytes, even if the string is shorter, and the remaining space will be filled with 0x00s.</remarks>

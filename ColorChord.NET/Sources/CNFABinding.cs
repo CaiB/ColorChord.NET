@@ -5,11 +5,12 @@ using ColorChord.NET.Config;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace ColorChord.NET.Sources
 {
-    public class CNFABinding : IAudioSource
+    public partial class CNFABinding : IAudioSource
     {
         public string Name { get; private init; }
         private NoteFinderCommon? NoteFinder;
@@ -17,20 +18,20 @@ namespace ColorChord.NET.Sources
         private CNFAConfig Driver;
         private IntPtr DriverPtr;
 
-        private CNFACallback Callback;
+        private readonly CNFACallback Callback;
         private GCHandle CallbackHandle;
 
         [ConfigString("Driver", "AUTO")]
-        private readonly string DriverMode = "AUTO";
+        private string DriverMode = "AUTO";
 
         [ConfigInt("SampleRate", 8000, 384000, 48000)]
-        private readonly int SuggestedSampleRate = 48000;
+        private int SuggestedSampleRate = 48000;
 
         [ConfigInt("ChannelCount", 1, 20, 2)]
-        private readonly int SuggestedChannelCount = 2;
+        private int SuggestedChannelCount = 2;
 
         [ConfigInt("BufferSize", 1, 10000, 480)]
-        private readonly int SuggestedBufferSize = 480;
+        private int SuggestedBufferSize = 480;
 
         [ConfigString("Device", "default")]
         private string DeviceRecord = "default";
@@ -48,7 +49,7 @@ namespace ColorChord.NET.Sources
         
         public void Start()
         {
-            this.DriverPtr = Initialize(this.DriverMode.ToUpper() == "AUTO" ? null : this.DriverMode.ToUpper(), "ColorChord.NET", Marshal.GetFunctionPointerForDelegate(this.Callback), this.SuggestedSampleRate, this.SuggestedSampleRate, this.SuggestedChannelCount, this.SuggestedChannelCount, this.SuggestedBufferSize, this.DevicePlay, this.DeviceRecord, IntPtr.Zero);
+            this.DriverPtr = Initialize(this.DriverMode.Equals("AUTO", StringComparison.OrdinalIgnoreCase) ? null : this.DriverMode.ToUpper(), "ColorChord.NET", Marshal.GetFunctionPointerForDelegate(this.Callback), this.SuggestedSampleRate, this.SuggestedSampleRate, this.SuggestedChannelCount, this.SuggestedChannelCount, this.SuggestedBufferSize, this.DevicePlay, this.DeviceRecord, IntPtr.Zero);
             this.Driver = Marshal.PtrToStructure<CNFAConfig>(this.DriverPtr);
             this.NoteFinder?.SetSampleRate(this.Driver.SampleRateRecord);
         }
@@ -92,7 +93,7 @@ namespace ColorChord.NET.Sources
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        internal struct CNFAConfig
+        internal readonly struct CNFAConfig
         {
             /// <summary> The function to call when you want to shut down the driver. </summary>
             internal readonly CloseFunction Close;
@@ -130,8 +131,9 @@ namespace ColorChord.NET.Sources
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         internal delegate int StatusFunction(IntPtr driver);
 
-        [DllImport("CNFA", CallingConvention = CallingConvention.Cdecl, EntryPoint = "CNFAInit", CharSet = CharSet.Ansi)]
-        internal static extern IntPtr Initialize(string? driverName, string ourName, IntPtr callback, int requestedSampleRatePlay, int requestedSampleRateRecord, int requestedChannelsPlay, int requestedChannelRecord, int suggestedBufferSize, string outputSelect, string inputSelect, IntPtr notUsed);
+        [LibraryImport("CNFA", EntryPoint = "CNFAInit")]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        internal static partial IntPtr Initialize([MarshalAs(UnmanagedType.LPStr)] string? driverName, [MarshalAs(UnmanagedType.LPStr)] string ourName, IntPtr callback, int requestedSampleRatePlay, int requestedSampleRateRecord, int requestedChannelsPlay, int requestedChannelRecord, int suggestedBufferSize, [MarshalAs(UnmanagedType.LPStr)] string outputSelect, [MarshalAs(UnmanagedType.LPStr)] string inputSelect, IntPtr notUsed);
 
         /// <summary> The delegate for the function you must implement to receive sound callbacks from CNFA. </summary>
         /// <param name="driver"> The <see cref="CNFAConfig"/> for the driver. </param>
@@ -140,6 +142,6 @@ namespace ColorChord.NET.Sources
         /// <param name="framesIn"> How many frames of input data are available. </param>
         /// <param name="framesOut"> How many frames of space are available for output data. </param>
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        internal delegate void CNFACallback([In] IntPtr driver, [In] IntPtr inputData, [In, Out] IntPtr outputData, [In] int framesIn, [In] int framesOut);
+        internal delegate void CNFACallback([In] IntPtr driver, [In] IntPtr inputData, [In, Out] IntPtr outputData, int framesIn, int framesOut);
     }
 }

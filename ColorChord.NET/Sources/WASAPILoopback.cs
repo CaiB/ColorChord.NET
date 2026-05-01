@@ -52,6 +52,7 @@ public class WASAPILoopback : IAudioSource
     private bool FormatIsPCM;
     private AutoResetEvent? AudioEvent;
     private GCHandle AudioEventHandle;
+    private readonly Lock DeviceChangeLock = new();
 
     public WASAPILoopback(string name, Dictionary<string, object> config)
     {
@@ -219,7 +220,7 @@ public class WASAPILoopback : IAudioSource
 
         // Set up the stream
         uint StreamFlags = AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_EVENTCALLBACK | 0x80000000; // 0x80000000 = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
-        StreamFlags |= (this.DeviceIsCapture == true) ? AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST : AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK;
+        StreamFlags |= (this.DeviceIsCapture ? AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_NOPERSIST : AUDCLNT_STREAMFLAGS_XXX.AUDCLNT_STREAMFLAGS_LOOPBACK);
 
         // TODO: Use InitializeSharedAudioStream instead of Initialize when using a microphone (doesn't work on loopback), this can reduce latency significantly! (e.g. 10ms -> 2.66ms)
         ErrorCode = this.Client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, StreamFlags, DefaultInterval, 0, IsRequestSupported ? RequestedFormatPtr : MixFormatPtr);
@@ -393,14 +394,14 @@ public class WASAPILoopback : IAudioSource
     protected void HandleDeviceChange()
     {
         Log.Info("WASAPI default device has changed, switching to new one.");
-        lock (this)
+        lock (this.DeviceChangeLock)
         {
             Stop();
             Start(true);
         }
     }
 
-    private class NotificationClient(WASAPILoopback parent) : IMMNotificationClient
+    private sealed class NotificationClient(WASAPILoopback parent) : IMMNotificationClient
     {
         private readonly WASAPILoopback Parent = parent;
 

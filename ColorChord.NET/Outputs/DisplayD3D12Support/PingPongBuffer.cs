@@ -18,6 +18,7 @@ public unsafe class PingPongBuffer<T> : IDisposable where T : unmanaged
     private bool CopyingToA = true;
     private readonly string? Name;
     private bool IsDisposed;
+    private readonly Lock RenderCopyMutex = new();
 
     public Format Format { get; private init; }
     public ID3D12Resource* RenderBuffer { get => this.CopyingToA ? this.BufferB : this.BufferA; }
@@ -80,7 +81,7 @@ public unsafe class PingPongBuffer<T> : IDisposable where T : unmanaged
     {
         if (this.BufferSize < (uint)data.Length * this.ElementSize) { throw new Exception($"{nameof(PingPongBuffer<T>)} was created with size {this.BufferSize} buffers, but an attempt was made to load {data.Length} items x {this.ElementSize}B, which does not fit into the buffer."); }
 
-        lock (this)
+        lock (this.RenderCopyMutex)
         {
             ID3D12Resource* CopyTarget = this.CopyingToA ? this.BufferA : this.BufferB;
             byte* UploadBufferPtr;
@@ -90,12 +91,12 @@ public unsafe class PingPongBuffer<T> : IDisposable where T : unmanaged
         }
     }
 
-    public void StartRender() => Monitor.Enter(this);
+    public void StartRender() => this.RenderCopyMutex.Enter();
 
     public void FinishRender()
     {
         this.CopyingToA = !this.CopyingToA;
-        Monitor.Exit(this);
+        this.RenderCopyMutex.Exit();
     }
 
     protected virtual void Dispose(bool disposing)

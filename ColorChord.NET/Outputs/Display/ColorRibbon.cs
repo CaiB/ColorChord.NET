@@ -9,6 +9,7 @@ using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace ColorChord.NET.Outputs.Display
 {
@@ -52,6 +53,7 @@ namespace ColorChord.NET.Outputs.Display
         private int LastUploadedPosition = 0;
 
         private uint[,] TextureData;
+        private readonly Lock TextureLock = new();
 
         private float[] AmplitudeData;
         private int AmplitudeDataIndex = 0;
@@ -262,7 +264,7 @@ namespace ColorChord.NET.Outputs.Display
             this.SpeedBoost = MathF.Pow(LowFreqData, 3);
             if(float.IsNaN(this.SpeedBoost)) { this.SpeedBoost = 1F; }
 
-            lock (this.TextureData)
+            lock (this.TextureLock)
             {
                 uint[] ColourData = this.DataSource.GetDataDiscrete();
                 for (int i = 0; i < ColourData.Length; i++)
@@ -364,7 +366,7 @@ namespace ColorChord.NET.Outputs.Display
 
             if (this.NewTexData)
             {
-                lock (this.TextureData)
+                lock (this.TextureLock)
                 {
                     if (this.LastUploadedPosition + this.NewLines > this.RibbonLength) // We have more data than remaining space. Split the data into 2, and write to the end & beginning of the texture.
                     {

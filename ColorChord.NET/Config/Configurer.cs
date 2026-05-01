@@ -62,11 +62,12 @@ public static class Configurer
         FieldInfo[] Fields = TargetType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
         PropertyInfo[] Properties = TargetType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
 
-        foreach(FieldInfo Field in Fields)
+        foreach (FieldInfo Field in Fields)
         {
             Attribute? Attr = Attribute.GetCustomAttribute(Field, typeof(ConfigAttribute));
-            if(Attr is null) { continue; } // Field without attribute, ignore
-            if(Attr is ConfigIntAttribute IntAttr)
+            if (Attr is null) { continue; } // Field without attribute, ignore
+            if (Field.IsInitOnly) { Log.Error($"Field {Field.Name} in {TargetType.FullName} is configurable, but set to init-only. It will not be configured."); continue; }
+            if (Attr is ConfigIntAttribute IntAttr)
             {
                 long Value = CheckInt(config, IntAttr);
 
@@ -82,7 +83,7 @@ public static class Configurer
                 
                 config.Remove(IntAttr.Name);
             }
-            else if(Attr is ConfigStringAttribute StrAttr)
+            else if (Attr is ConfigStringAttribute StrAttr)
             {
                 string Value = CheckString(config, StrAttr);
 
@@ -91,7 +92,7 @@ public static class Configurer
 
                 config.Remove(StrAttr.Name);
             }
-            else if(Attr is ConfigBoolAttribute BoolAttr)
+            else if (Attr is ConfigBoolAttribute BoolAttr)
             {
                 bool Value = CheckBool(config, BoolAttr);
 
@@ -100,7 +101,7 @@ public static class Configurer
 
                 config.Remove(BoolAttr.Name);
             }
-            else if(Attr is ConfigFloatAttribute FltAttr)
+            else if (Attr is ConfigFloatAttribute FltAttr)
             {
                 float Value = CheckFloat(config, FltAttr);
 
@@ -111,7 +112,7 @@ public static class Configurer
 
                 config.Remove(FltAttr.Name);
             }
-            else if(Attr is ConfigStringListAttribute ListAttr)
+            else if (Attr is ConfigStringListAttribute ListAttr)
             {
                 List<string> Value = CheckStringList(config, ListAttr);
 
@@ -131,10 +132,11 @@ public static class Configurer
             else { throw new NotImplementedException("Unsupported config type encountered: " + Attr?.GetType()?.FullName); }
         }
 
-        foreach(PropertyInfo Prop in Properties)
+        foreach (PropertyInfo Prop in Properties)
         {
             Attribute? Attr = Attribute.GetCustomAttribute(Prop, typeof(ConfigAttribute));
             if (Attr is null) { continue; } // Property without attribute, ignore
+            if (!Prop.CanWrite) { Log.Error($"Property {Prop.Name} in {TargetType.FullName} is configurable, but set to read-only. It will not be configured."); continue; }
             if (Attr is ConfigIntAttribute IntAttr)
             {
                 long Value = CheckInt(config, IntAttr);
@@ -262,7 +264,7 @@ public static class Configurer
     {
         IVisualizer? Visualizer = FindVisualizer(config);
         if (Visualizer == null) { return null; }
-        if (!acceptableFormat.IsAssignableFrom(Visualizer.GetType())) { Log.Error($"{target.GetType()?.Name} only supports {acceptableFormat.Name} visualizers, cannot use {Visualizer.GetType()?.Name}"); }
+        if (!Visualizer.GetType().IsInstanceOfType(acceptableFormat)) { Log.Error($"{target.GetType()?.Name} only supports {acceptableFormat.Name} visualizers, cannot use {Visualizer.GetType()?.Name}"); }
         return Visualizer;
     }
 
@@ -329,7 +331,7 @@ public static class Configurer
     private static float CheckFloat(Dictionary<string, object> config, ConfigFloatAttribute fltAttr)
     {
         float Value = fltAttr.DefaultValue;
-        if (config.ContainsKey(fltAttr.Name) && !float.TryParse(config[fltAttr.Name].ToString(), out Value))
+        if (config.TryGetValue(fltAttr.Name, out object? ValueObj) && !float.TryParse(ValueObj.ToString(), out Value))
         {
             Log.Warn($"Value of {fltAttr.Name} was invalid (expected float). Defaulting to {fltAttr.DefaultValue}.");
             Value = fltAttr.DefaultValue;
@@ -349,7 +351,7 @@ public static class Configurer
     private static long CheckInt(Dictionary<string, object> config, ConfigIntAttribute intAttr)
     {
         long Value = intAttr.DefaultValue;
-        if (config.ContainsKey(intAttr.Name) && !long.TryParse(config[intAttr.Name].ToString(), out Value))
+        if (config.TryGetValue(intAttr.Name, out object? ValueObj) && !long.TryParse(ValueObj.ToString(), out Value))
         {
             Log.Warn($"Value of {intAttr.Name} was invalid (expected integer). Defaulting to {intAttr.DefaultValue}.");
             Value = intAttr.DefaultValue;
@@ -369,9 +371,9 @@ public static class Configurer
     private static bool CheckBool(Dictionary<string, object> config, ConfigBoolAttribute boolAttr)
     {
         bool Value = boolAttr.DefaultValue;
-        if (config.ContainsKey(boolAttr.Name) && !bool.TryParse(config[boolAttr.Name].ToString(), out Value))
+        if (config.TryGetValue(boolAttr.Name, out object? ValueObj) && !bool.TryParse(ValueObj.ToString(), out Value))
         {
-            Log.Warn($"Value of {boolAttr.Name} was invalid (expected integer). Defaulting to {boolAttr.DefaultValue}.");
+            Log.Warn($"Value of {boolAttr.Name} was invalid (expected bool). Defaulting to {boolAttr.DefaultValue}.");
             Value = boolAttr.DefaultValue;
         }
         return Value;
@@ -383,8 +385,8 @@ public static class Configurer
     /// <returns>Either the configured value, or the default. No validity checking is done.</returns>
     private static string CheckString(Dictionary<string, object> config, ConfigStringAttribute strAttr)
     {
-        if(!config.ContainsKey(strAttr.Name)) { return strAttr.DefaultValue; }
-        string? Output = config[strAttr.Name].ToString();
+        if (!config.TryGetValue(strAttr.Name, out object? OutputObj)) { return strAttr.DefaultValue; }
+        string? Output = OutputObj.ToString();
         return Output ?? strAttr.DefaultValue;
     }
 
@@ -394,7 +396,7 @@ public static class Configurer
     /// <returns>Either the configured value, or an empty list. No validity checking is done on list items.</returns>
     private static List<string> CheckStringList(Dictionary<string, object> config, ConfigStringListAttribute strListAttr)
     {
-        if (!config.ContainsKey(strListAttr.Name) || config[strListAttr.Name] is not string[] Value) { return new(); }
+        if (!config.TryGetValue(strListAttr.Name, out object? ValueObj) || ValueObj is not string[] Value) { return []; }
         return new(Value);
     }
 

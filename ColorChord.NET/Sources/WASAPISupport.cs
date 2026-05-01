@@ -130,7 +130,7 @@ namespace Vannatech.CoreAudio.Structures
         /// <summary>Size, in bytes, of extra format information appended to the end of the structure.</summary>
         public ushort AppendedSize;
 
-        public static WaveFormatEx? FromPointer(IntPtr pointer) => (WaveFormatEx?)Marshal.PtrToStructure(pointer, typeof(WaveFormatEx));
+        public static WaveFormatEx? FromPointer(IntPtr pointer) => Marshal.PtrToStructure<WaveFormatEx>(pointer);
         public readonly bool IsExtensible() => this.Format == WaveFormatBasic.Extensible;
     }
 
@@ -175,7 +175,7 @@ namespace Vannatech.CoreAudio.Structures
             if (fallback is not WaveFormatEx Base) { return null; }
             if (!Base.IsExtensible()) { return null; }
             if (Base.AppendedSize < 22) { return null; } // Not large enough to contain Extensible
-            return (WaveFormatExtensible?)Marshal.PtrToStructure(pointer, typeof(WaveFormatExtensible));
+            return Marshal.PtrToStructure<WaveFormatExtensible>(pointer);
         }
         public readonly bool IsExtensible() => this.Format == WaveFormatBasic.Extensible;
     }

@@ -42,7 +42,7 @@ public class FakeConfigurer : IConfigurer
     {
         IVisualizer? Visualizer = FindVisualizer(config);
         if (Visualizer == null) { return null; }
-        if (!acceptableFormat.IsAssignableFrom(Visualizer.GetType())) { throw new Exception($"{target.GetType()?.Name} only supports {acceptableFormat.Name} visualizers, cannot use {Visualizer.GetType()?.Name}"); }
+        if (!Visualizer.GetType().IsInstanceOfType(acceptableFormat)) { throw new Exception($"{target.GetType()?.Name} only supports {acceptableFormat.Name} visualizers, cannot use {Visualizer.GetType()?.Name}"); }
         return Visualizer;
     }
 }

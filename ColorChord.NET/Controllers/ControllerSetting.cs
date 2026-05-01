@@ -145,7 +145,7 @@ public class ControllerSetting : ISetting
             if (ColorChord.SourceInsts.Count == 1) { Source = ColorChord.SourceInsts.First().Value; }
             else if (!ColorChord.SourceInsts.TryGetValue(componentName, out Source)) { return null; }
 
-            if (Source != null && Source is IControllableAttr ControllableSource) { return ControllableSource; }
+            if (Source is IControllableAttr ControllableSource) { return ControllableSource; }
             return null;
         }
         else if (componentType == Component.NoteFinder)
@@ -154,25 +154,25 @@ public class ControllerSetting : ISetting
             if (ColorChord.NoteFinderInsts.Count == 1) { NoteFinder = ColorChord.NoteFinderInsts.First().Value; }
             else if (!ColorChord.NoteFinderInsts.TryGetValue(componentName, out NoteFinder)) { return null; }
 
-            if (NoteFinder != null && NoteFinder is IControllableAttr ControllableNoteFinder) { return ControllableNoteFinder; }
+            if (NoteFinder is IControllableAttr ControllableNoteFinder) { return ControllableNoteFinder; }
             return null;
         }
         else if (componentType == Component.Visualizers)
         {
             if (!ColorChord.VisualizerInsts.TryGetValue(componentName, out IVisualizer? Visualizer)) { return null; }
-            if (Visualizer != null && Visualizer is IControllableAttr ControllableVisualizer) { return ControllableVisualizer; }
+            if (Visualizer is IControllableAttr ControllableVisualizer) { return ControllableVisualizer; }
             return null;
         }
         else if (componentType == Component.Outputs)
         {
             if (!ColorChord.OutputInsts.TryGetValue(componentName, out IOutput? Output)) { return null; }
-            if (Output != null && Output is IControllableAttr ControllableOutput) { return ControllableOutput; }
+            if (Output is IControllableAttr ControllableOutput) { return ControllableOutput; }
             return null;
         }
         else if (componentType == Component.Controllers)
         {
             if (!ColorChord.ControllerInsts.TryGetValue(componentName, out Controller? Controller)) { return null; }
-            if (Controller != null && Controller is IControllableAttr ControllableController) { return ControllableController; }
+            if (Controller is IControllableAttr ControllableController) { return ControllableController; }
             return null;
         }
         return null;
@@ -250,26 +250,13 @@ public class ControllerSetting : ISetting
 
     private static SettingType TypeToSettingType(Type type)
     {
-        switch (Type.GetTypeCode(type))
+        return Type.GetTypeCode(type) switch
         {
-            case TypeCode.Byte:
-            case TypeCode.SByte:
-            case TypeCode.UInt16:
-            case TypeCode.Int16:
-            case TypeCode.UInt32:
-            case TypeCode.Int32:
-            case TypeCode.UInt64:
-            case TypeCode.Int64: return SettingType.IntegralNumber;
-
-            case TypeCode.Single:
-            case TypeCode.Double:
-            case TypeCode.Decimal: return SettingType.DecimalNumber;
-
-            case TypeCode.String: return SettingType.String;
-
-            case TypeCode.Boolean: return SettingType.Bool;
-
-            default: return SettingType.None;
-        }
+            TypeCode.Byte or TypeCode.SByte or TypeCode.UInt16 or TypeCode.Int16 or TypeCode.UInt32 or TypeCode.Int32 or TypeCode.UInt64 or TypeCode.Int64 => SettingType.IntegralNumber,
+            TypeCode.Single or TypeCode.Double or TypeCode.Decimal => SettingType.DecimalNumber,
+            TypeCode.String => SettingType.String,
+            TypeCode.Boolean => SettingType.Bool,
+            _ => SettingType.None,
+        };
     }
 }

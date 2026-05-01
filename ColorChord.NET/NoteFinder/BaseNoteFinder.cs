@@ -144,7 +144,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr, ITimin
     /// <summary> Where in the <see cref="AudioBuffer"/> we are currently adding new audio data. </summary>
     public int AudioBufferHeadWrite { get; set; } = 0;
 
-    private Stopwatch CycleTimer = new();
+    private readonly Stopwatch CycleTimer = new();
     private float CycleTimeTicks;
     private uint CycleCount = 0;
 
@@ -173,16 +173,16 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr, ITimin
     public override float StartFrequency { get => this.MinimumFrequency; }
     public override int Octaves { get => OCTAVES; }
 
-    private Note[] P_Notes;
+    private readonly Note[] P_Notes;
     public override ReadOnlySpan<Note> Notes => P_Notes;
 
-    private int[] P_PersistentNoteIDs;
+    private readonly int[] P_PersistentNoteIDs;
     public override ReadOnlySpan<int> PersistentNoteIDs => P_PersistentNoteIDs;
 
-    private float[] P_OctaveBinValues;
+    private readonly float[] P_OctaveBinValues;
     public override ReadOnlySpan<float> OctaveBinValues => P_OctaveBinValues;
 
-    private float[] P_AllBinValues;
+    private readonly float[] P_AllBinValues;
     public override ReadOnlySpan<float> AllBinValues => P_AllBinValues;
 
     public BaseNoteFinder(string name, Dictionary<string, object> config)
@@ -610,7 +610,7 @@ public sealed class BaseNoteFinder : NoteFinderCommon, IControllableAttr, ITimin
         /// <summary> Compares the note amplitudes. </summary>
         /// <param name="other"> The note distribution to compare to. </param>
         /// <returns> </returns>
-        public int CompareTo(NoteDistribution other)
+        public readonly int CompareTo(NoteDistribution other)
         {
             if (this.Amplitude > other.Amplitude) { return -1; }
             else if (this.Amplitude < other.Amplitude) { return 1; }
